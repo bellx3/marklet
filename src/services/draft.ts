@@ -89,6 +89,24 @@ export async function draftSavedAt(uri: string): Promise<number | null> {
 }
 
 export async function clearDraft(uri: string): Promise<void> {
+    /*
+     * ★★ 대기 중인 쓰기를 **먼저 취소한다.** 안 그러면 지운 직후에 디바운스가 깨어나
+     *   방금 지운 초안을 되살린다. 저장 직후가 정확히 그 상황이다 —
+     *   마지막 타이핑에서 800ms 안에 [저장]을 누르면 pending 이 아직 살아 있다.
+     *
+     *   같은 파일에 저장했을 때는 초안 내용이 원본과 같아져서 resolveDraft 가 조용히
+     *   지워 주지만, **[새 이름으로 저장] 에서는 그렇지 않다.** 옛 URI 의 초안이 되살아나
+     *   나중에 그 파일을 열면 있지도 않은 "저장하지 않은 편집" 을 묻게 된다
+     *   (2026-08-04 코드 점검에서 발견).
+     */
+    if (pending?.uri === uri) {
+        pending = null;
+        if (timer !== null) {
+            clearTimeout(timer);
+            timer = null;
+        }
+    }
+
     const index = await loadIndex();
     const entry = index[uri];
     if (!entry) return;

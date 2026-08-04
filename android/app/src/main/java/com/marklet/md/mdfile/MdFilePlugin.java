@@ -313,6 +313,19 @@ public class MdFilePlugin extends Plugin {
             // ★ 주의: fos.close()를 부르지 않는다. fos를 닫으면 pfd의 FD가 함께 닫혀
             //   아래 pfd.close()가 예외를 던진다. FD 소유권은 pfd에 있다.
 
+            /*
+             * ★★ close를 finally에 미루고 먼저 resolve하지 마라.
+             *   프로바이더에 따라 **실제 커밋이 close 시점에** 일어난다(클라우드 계열).
+             *   거기서 실패하는데 JS가 이미 "성공"을 받았으면, 저장되지 않은 문서를
+             *   저장됐다고 알리게 된다 — 이 앱에서 제일 하면 안 되는 거짓말이다.
+             *   여기서 닫고, 닫히는 것까지 확인한 뒤에 성공을 알린다.
+             *
+             * ★ close가 실패해도 사용자의 문서는 안전하다. JS가 쓰기 전에 백업을 받아 두고
+             *   (services/save.ts 2단계), 실패하면 [백업 내용 보기]·[새 이름으로 저장]을 준다.
+             */
+            pfd.close();
+            pfd = null;
+
             JSObject ret = new JSObject();
             ret.put("bytesWritten", data.length);
             ret.put("uri", uri.toString());
