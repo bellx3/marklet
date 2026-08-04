@@ -64,10 +64,27 @@ export default defineConfig(({ mode }) => ({
         __APP_VERSION__: JSON.stringify(pkg.version),
     },
     esbuild: {
-        // 릴리스에서 console을 지운다.
-        // 대가: 릴리스 빌드에서는 웹 로그가 전혀 보이지 않는다.
-        // 그래서 성능 계측값은 콘솔이 아니라 앱 안 '진단' 화면에도 남긴다(12-3절).
-        drop: mode === 'production' ? ['console', 'debugger'] : [],
+        /*
+         * 릴리스에서 잡음 로그를 지운다. ★ 다만 **error 와 warn 은 남긴다.**
+         *
+         * 예전에는 `drop: ['console']` 로 전부 지웠는데, 2026-08-04에 그 대가를 치렀다 —
+         * 후원 버튼이 비활성으로 남는 문제를 쫓는데 **우리 쪽 진단이 하나도 안 남아 있었다.**
+         * 결국 플러그인의 네이티브 logcat 으로만 원인을 찾았다.
+         * 결제·저장처럼 **조용히 실패하면 사용자가 손해를 보는 경로**에 로그가 없으면
+         * 다음에도 똑같이 막막해진다.
+         *
+         * ★ logcat 은 안드로이드 4.1 부터 **다른 앱이 읽을 수 없다**(adb 로만 본다).
+         *   그래서 기기를 벗어나지 않는다는 약속과 어긋나지 않는다.
+         *   다만 그렇다고 **문서 내용을 로그에 흘리지는 마라** — mermaid.ts 참고.
+         *
+         * drop 이 아니라 pure 를 쓰는 이유: drop 은 console 전체를 통으로 지운다.
+         * pure 는 "부작용 없음"으로 표시만 하므로 결과를 안 쓰는 호출만 사라진다.
+         */
+        pure:
+            mode === 'production'
+                ? ['console.log', 'console.debug', 'console.info', 'console.trace']
+                : [],
+        drop: mode === 'production' ? ['debugger'] : [],
     },
     build: {
         // ★ capacitor.config.json 의 webDir 과 반드시 같아야 한다.

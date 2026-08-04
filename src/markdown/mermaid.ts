@@ -223,8 +223,13 @@ function fail(block: HTMLElement, message: string, src: string): void {
     }
     // 스크린 리더가 "그림"이 아니라 "못 그린 코드"로 읽도록 표시를 남긴다.
     block.setAttribute('aria-label', t.mermaid.sourceBelow(message));
-    // 진단용. 화면에는 안 보이지만 개발자가 adb logcat 으로 볼 수 있다.
-    console.warn('[mermaid]', message, '\n---\n', src.slice(0, 200));
+    /*
+     * 진단용. 화면에는 안 보이지만 개발자가 adb logcat 으로 볼 수 있다.
+     * ★ **원본 코드는 개발 빌드에서만 찍는다.** 릴리스에서도 warn 이 살아남게 바뀌었는데
+     *   (vite.config.ts), 여기는 사용자 문서의 한 조각이다. 실패한 이유만 남기면 충분하다.
+     */
+    if (import.meta.env.DEV) console.warn('[mermaid]', message, '\n---\n', src.slice(0, 200));
+    else console.warn('[mermaid]', message);
 }
 
 /** 스크린 리더용. 첫 줄(그래프 종류)만 읽어 준다. 없는 것보다 낫다. */

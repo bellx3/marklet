@@ -24,7 +24,8 @@
         "format": "prettier --write \"src/**/*.{ts,css,html}\"",
         "typecheck": "tsc --noEmit",
         "test": "vitest run",
-        "test:watch": "vitest"
+        "test:watch": "vitest",
+        "play:products": "node scripts/play-products.cjs"
     },
     "dependencies": {
         "@capacitor/android": "8.5.0",
