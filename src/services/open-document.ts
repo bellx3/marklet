@@ -53,6 +53,17 @@ export async function openDocument(doc: MdDocument): Promise<OpenOutcome> {
     } catch (e) {
         return { kind: 'error', message: describeReadError(e) };
     }
+
+    /*
+     * ★★ read() 는 describe(uri) 만 돌려준다 — **persisted 가 들어 있지 않다.**
+     *   여기서 doc 의 값을 이어 붙이지 않으면 pickFile()/listFolder() 가 알려 준
+     *   "이 URI 는 다시 열 수 있다" 가 통째로 사라진다. 결과는 두 가지다:
+     *     ① 갓 고른 파일이 최근 목록에 '읽기 전용 사본' 으로 표시된다 (거짓말)
+     *     ② rememberDoc 이 필요 없는 사본을 앱 저장소에 매번 만든다 (낭비)
+     *   2026-08-04 에뮬레이터에서 실제로 그랬다. 다음 실행의 reconcileRecents() 가
+     *   바로잡아 주기 때문에 '가끔 그런' 것처럼 보여서 더 늦게 찾았다.
+     */
+    full = { ...full, persisted: doc.persisted ?? full.persisted };
     return gateContent(full, full.content ?? '');
 }
 

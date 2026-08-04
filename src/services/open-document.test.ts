@@ -91,6 +91,25 @@ describe('openDocument — 크기 게이트', () => {
         expect(dialog.confirmDialog).not.toHaveBeenCalled();
     });
 
+    /*
+     * ★★ read() 는 describe(uri) 만 돌려준다 — persisted 가 들어 있지 않다.
+     *   그걸 이어 붙이지 않으면 pickFile()/listFolder() 가 알려 준
+     *   "다시 열 수 있다" 가 사라져서, 갓 고른 파일이 '읽기 전용 사본' 으로 뜨고
+     *   rememberDoc 이 필요 없는 사본을 매번 만든다(2026-08-04 에뮬레이터).
+     *   다음 실행의 reconcileRecents() 가 바로잡아 주기 때문에 더 늦게 찾았다.
+     */
+    it('★ 부른 쪽이 알려 준 persisted 를 잃지 않는다', async () => {
+        withContent('짧은 문서', 100);
+        const r = await openDocument({ ...DOC, persisted: true });
+        expect(r.kind === 'render' && r.doc.persisted).toBe(true);
+    });
+
+    it('read() 가 준 persisted 도 그대로 쓴다', async () => {
+        mdFile.read.mockResolvedValue({ ...DOC, size: 100, content: 'x', persisted: true });
+        const r = await openDocument(DOC);
+        expect(r.kind === 'render' && r.doc.persisted).toBe(true);
+    });
+
     it('512KB 를 넘으면 진행 표시를 켠다', async () => {
         withContent('x', PROGRESS_HINT_BYTES + 1);
         const r = await openDocument(DOC);

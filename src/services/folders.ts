@@ -69,7 +69,12 @@ export async function listFolder(folder: Folder): Promise<FolderListing> {
         const { files } = await MdFile.listFolder({ uri: folder.uri, maxDepth: 3 });
         // ★ 정렬 규칙을 'ko' 로 고정하지 마라 — 영어 사용자에게 한국어 규칙이 적용된다.
         files.sort((a, b) => a.name.localeCompare(b.name, localeTag()));
-        return { folder, files };
+        /*
+         * ★ 폴더 안의 파일은 **폴더의 트리 권한으로 다시 열린다.**
+         *   addFolder() 가 영속화되지 않은 폴더를 아예 거부하므로(위) 여기 온 파일은 전부 그렇다.
+         *   이 표시가 없으면 최근 목록에서 '읽기 전용 사본' 으로 뜨고 사본까지 만들어진다.
+         */
+        return { folder, files: files.map((f) => ({ ...f, persisted: true })) };
     } catch (e) {
         // ★ 권한이 만료된 폴더를 자동으로 지우지 마라. SD 카드를 잠깐 뺐을 뿐일 수 있다.
         return {

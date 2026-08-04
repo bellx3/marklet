@@ -160,6 +160,7 @@ export const ko: Catalog = {
         close: '닫기',
         fit: '맞춤',
         label: '다이어그램',
+        zoomHint: '탭하면 크게 보기',
     },
 
     frontmatter: {

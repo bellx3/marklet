@@ -121,7 +121,16 @@ export async function reconcileRecents(): Promise<RecentDoc[]> {
         return list;
     }
 
-    const merged = list.map((r) => ({ ...r, persisted: live.has(r.uri) }));
+    /*
+     * ★ 정확히 일치하는 것만 보면 **폴더 안의 파일이 전부 탈락한다.**
+     *   폴더는 트리 URI 하나로 권한을 받고(`.../tree/<트리ID>`),
+     *   그 안의 파일은 `.../tree/<트리ID>/document/<문서ID>` 처럼 트리 URI 로 시작한다.
+     *   즉 트리 권한이 살아 있으면 그 아래 파일도 다시 열린다.
+     */
+    const trees = [...live].filter((u) => u.includes('/tree/'));
+    const stillOpenable = (uri: string) => live.has(uri) || trees.some((t) => uri.startsWith(t));
+
+    const merged = list.map((r) => ({ ...r, persisted: stillOpenable(r.uri) }));
     await saveRecents(merged);
     return merged;
 }

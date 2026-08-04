@@ -61,6 +61,17 @@ export function setLanguage(setting: LangSetting): Lang {
      *   TalkBack 이 이 값으로 발음할 언어를 고르고, 브라우저가 줄바꿈 규칙을 고른다.
      */
     document.documentElement.lang = active;
+
+    /*
+     * ★★ CSS 는 카탈로그를 못 읽는다. `content:` 로 들어가는 글자는 여기서 넣어 줘야
+     *   번역에서 빠지지 않는다 — 2026-08-04에 영어 스크린샷을 찍다가
+     *   다이어그램 아래에 '탭하면 크게 보기' 가 한국어로 박혀 있는 걸 발견했다.
+     * ★ CSS <string> 이라 **따옴표까지 포함해서** 넣는다.
+     */
+    document.documentElement.style.setProperty(
+        '--i18n-zoom-hint',
+        JSON.stringify(t.diagram.zoomHint),
+    );
     return active;
 }
 

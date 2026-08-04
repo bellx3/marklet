@@ -25,7 +25,9 @@
         "typecheck": "tsc --noEmit",
         "test": "vitest run",
         "test:watch": "vitest",
-        "play:products": "node scripts/play-products.cjs"
+        "play:products": "node scripts/play-products.cjs",
+        "play:listing": "node scripts/play-listing.cjs",
+        "play:screenshots": "node scripts/play-screenshots.cjs"
     },
     "dependencies": {
         "@capacitor/android": "8.5.0",

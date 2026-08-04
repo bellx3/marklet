@@ -171,6 +171,8 @@ export const en = {
         close: 'Close',
         fit: 'Fit',
         label: 'Diagram',
+        /** ★ CSS ::after 로 들어간다. setLanguage() 가 --i18n-zoom-hint 에 넣는다. */
+        zoomHint: 'Tap to enlarge',
     },
 
     frontmatter: {

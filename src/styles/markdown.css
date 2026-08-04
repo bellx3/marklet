@@ -373,9 +373,15 @@ mark.md-hit.is-current {
     display: block;
     margin: 0 auto;
 }
-/* 탭하면 커진다는 것을 알려 준다. 라벨은 SVG 교체 시 지워지므로 여기에 둔다. */
+/*
+ * 탭하면 커진다는 것을 알려 준다. 라벨은 SVG 교체 시 지워지므로 여기에 둔다.
+ *
+ * ★★ 글자를 여기 직접 적지 마라. CSS 는 카탈로그를 못 읽으므로 **번역에서 빠진다** —
+ *   2026-08-04에 영어 스크린샷을 찍다가 한국어가 그대로 박혀 있는 걸 발견했다.
+ *   setLanguage() 가 --i18n-zoom-hint 를 채운다(src/i18n/index.ts).
+ */
 .mermaid-block[data-mermaid-state='done'] .mermaid-svg::after {
-    content: '탭하면 크게 보기';
+    content: var(--i18n-zoom-hint, '');
     display: block;
     margin-top: 0.35em;
     font-size: 0.78em;

@@ -205,6 +205,42 @@ describe('reconcileRecents', () => {
         mdFile.getPersistedUris.mockRejectedValue(new Error('not implemented'));
         expect((await reconcileRecents()).length).toBe(1);
     });
+
+    /*
+     * ★★ 폴더 안의 파일은 **트리 권한 하나**로 다시 열린다.
+     *   정확히 일치하는 URI 만 살아 있다고 보면 폴더의 파일이 전부 탈락해서
+     *   최근 목록에 '읽기 전용 사본' 으로 뜨고, 사본까지 만들어진다.
+     *   2026-08-04 에뮬레이터에서 실제로 그랬다.
+     */
+    it('★ 트리 권한이 있으면 그 아래 파일도 다시 열 수 있다고 본다', async () => {
+        const tree = 'content://p/tree/primary%3ADocs';
+        const child = `${tree}/document/primary%3ADocs%2Fnote.md`;
+        await rememberDoc(
+            { uri: child, name: 'note.md', size: 10, mimeType: 'text/markdown', writable: true },
+            '내용',
+            'folder',
+        );
+        mdFile.getPersistedUris.mockResolvedValue({
+            uris: [{ uri: tree, read: true, write: true, persistedTime: 0 }],
+        });
+
+        const list = await reconcileRecents();
+        expect(list.find((r) => r.uri === child)?.persisted).toBe(true);
+    });
+
+    it('트리가 달라지면 살아 있다고 보지 않는다', async () => {
+        const child = 'content://p/tree/A/document/A%2Fnote.md';
+        await rememberDoc(
+            { uri: child, name: 'note.md', size: 10, mimeType: 'text/markdown', writable: true },
+            '내용',
+            'folder',
+        );
+        mdFile.getPersistedUris.mockResolvedValue({
+            uris: [{ uri: 'content://p/tree/B', read: true, write: true, persistedTime: 0 }],
+        });
+
+        expect((await reconcileRecents()).find((r) => r.uri === child)?.persisted).toBe(false);
+    });
 });
 
 describe('removeRecent', () => {

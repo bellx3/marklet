@@ -104,6 +104,30 @@ describe('넓은 블록은 자기 상자 안에서 스크롤한다', () => {
     });
 });
 
+describe('★ CSS 안의 글자도 번역을 탄다', () => {
+    /*
+     * CSS 는 카탈로그를 못 읽는다. `content:` 에 글자를 직접 적으면 **번역에서 빠진다** —
+     * 2026-08-04에 영어 스크린샷을 찍다가 다이어그램 아래에
+     * '탭하면 크게 보기' 가 한국어로 박혀 있는 걸 발견했다.
+     * 사람이 읽는 글자는 `var(--i18n-*)` 로 받아야 한다(setLanguage 가 채운다).
+     */
+    it.each(['base.css', 'markdown.css', 'hljs.css', 'components.css', 'utilities.css'])(
+        '%s 의 content: 에 사람이 읽는 글자가 박혀 있지 않다',
+        (file) => {
+            const css = readCss(`./styles/${file}`);
+            const literal = [...css.matchAll(/content\s*:\s*(['"])([^'"]*)\1/g)]
+                .map((m) => m[2])
+                // 장식용 기호(따옴표·화살표 등)와 빈 문자열은 번역 대상이 아니다.
+                .filter((s) => /[가-힣]|[A-Za-z]{3,}/.test(s));
+            expect(literal, `${file} 에서 발견`).toEqual([]);
+        },
+    );
+
+    it('다이어그램 확대 안내는 CSS 변수로 받는다', () => {
+        expect(readCss('./styles/markdown.css')).toContain('var(--i18n-zoom-hint');
+    });
+});
+
 describe('디자인 토큰 (2026-08-04 종합 점검)', () => {
     it('간격·모서리 토큰이 base.css 에 있다', () => {
         const css = readCss('./styles/base.css');
