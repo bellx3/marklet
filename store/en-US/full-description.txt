@@ -1,0 +1,53 @@
+Marklet opens the .md files you already have — from your file manager, from a
+messenger, from your email — and shows them the way they were written.
+
+MADE FOR AI-GENERATED MARKDOWN
+Most Markdown these days comes out of an AI rather than a person, and it arrives
+full of tables, diagrams and math. Marklet opens that file as it is. No pasting
+into another app, no formatting falling apart on the way.
+
+WHAT IT RENDERS
+• Mermaid diagrams — flowcharts, sequence, class, ER, gantt and more
+• GFM tables that scroll sideways, so the last column is reachable
+• Math with KaTeX
+• Footnotes, task lists, syntax-highlighted code, YAML front matter
+
+BUILT FOR THE FILES YOU ALREADY HAVE
+• Open a .md from any app: file manager, mail, messenger, cloud storage
+  (.md, .markdown, .mkd)
+• Add a folder once and every .md inside it stays on your start screen,
+  including the ones you add later from your computer
+• Recent documents, so you can pick up where you left off
+
+FINDING YOUR WAY THROUGH A LONG DOCUMENT
+• Search inside the document and step through the matches
+• Table of contents — tap a heading to jump straight there
+• Search by file name, so a long list narrows down in a few keystrokes
+
+EDIT AND SAVE, CAREFULLY
+• Edit in a plain text editor and save straight back to the original file
+• Before writing, Marklet backs the original up. If the write fails you are told
+  what happened and offered a way out — never a silent failure
+• Your draft is saved automatically while you type
+
+READS WELL IN KOREAN
+• Korean line breaking that keeps words whole
+• Initial-consonant search: type ㅁㅋㄷㅇ to find 마크다운
+• Keep single line breaks, so notes written with Enter stay the way you wrote them
+
+COMFORTABLE TO READ
+• Light, dark, or follow your system setting
+• Set the text size to taste, with a live preview
+• English and Korean
+
+PRIVATE BY DEFAULT
+• No account, no sign-in, no analytics, no ads
+• No storage permission. Marklet only sees the files you pick
+• Remote images stay unloaded until you ask for them, so opening a document
+  never reaches out to an outside server
+• Your documents never leave your device
+• There is no server, so it works the same on a plane or underground
+
+FREE, WITH AN OPTIONAL TIP
+Every feature is free. Nothing is locked. If Marklet is useful you can leave a tip,
+and that is the only purchase in the app.
