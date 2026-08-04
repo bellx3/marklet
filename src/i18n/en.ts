@@ -133,9 +133,15 @@ export const en = {
             n === 1
                 ? 'You have supported this app once. Thank you so much. ☕'
                 : `You have supported this app ${n} times. Thank you so much. ☕`,
-        coffee: 'A coffee',
-        lunch: 'A lunch',
-        dinner: 'A dinner',
+        /*
+         * ★ Play Console 에 등록한 **상품 이름과 글자를 맞춘다.**
+         *   결제 확인창은 우리 라벨이 아니라 콘솔 이름을 보여 주므로,
+         *   버튼에 'A coffee' 라고 써 놓고 구글 창에 'Buy me a coffee' 가 뜨면
+         *   사용자는 다른 걸 누른 줄 안다. 한국어는 양쪽 다 '커피 한 잔' 이라 문제없다.
+         */
+        coffee: 'Buy me a coffee',
+        lunch: 'Buy me lunch',
+        dinner: 'Buy me dinner',
         thanksToast: 'Thank you! It really helps ☕',
         cancelled: 'Cancelled.',
         pending: 'A previous purchase is still being settled. Please try again in a moment.',

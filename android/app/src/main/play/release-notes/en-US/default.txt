@@ -1,4 +1,4 @@
-First internal build.
+Internal test build.
 
 - Opens Markdown files as they are: tables, Mermaid diagrams, math, footnotes, task lists
 - Add a folder once and every .md inside it stays listed
