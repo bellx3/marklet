@@ -1,0 +1,37 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // AGP 는 cap add android 가 생성한 값(8.13.0)을 유지한다. 문서 초판의 8.13.2 는
+        // 픽셀오아시스의 값이고, 중요한 것은 Gradle 8.x 와 맞물리는 것이다.
+        classpath 'com.android.tools.build:gradle:8.13.0'
+
+        // Gradle Play Publisher. 4.x는 Gradle 9.1+를 요구하므로 Gradle 8 호환인 3.12.1을 쓴다.
+        classpath 'com.github.triplet.gradle:play-publisher:3.12.1'
+
+        // ★ com.google.gms:google-services 를 되돌리지 마라.
+        //   cap add android 가 기본으로 넣지만 이 앱은 Firebase 를 쓰지 않는다(4-3절).
+        //   분석 SDK 를 넣으면 데이터 안전 신고가 "수집 없음"에서 무너진다.
+
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+    }
+}
+
+apply from: "variables.gradle"
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

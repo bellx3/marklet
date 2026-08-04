@@ -1,0 +1,452 @@
+/*
+ * 본문 타이포그래피. 읽기 앱이라 이게 곧 제품 품질이다.
+ * ★ 수치는 전부 확정값이다(02_기술_설계서.md 6-9절). 마음대로 바꾸지 마라.
+ */
+
+:root {
+    --md-font-size: 17px;
+    --md-line-height: 1.75;
+    --md-measure: 38rem;
+    --md-pad-x: 20px;
+
+    /* 본문 — 시스템 폰트만 쓴다. 한국어 웹폰트는 Regular 하나가 748KB다(실측). */
+    --md-font-body:
+        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR',
+        'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    /* 코드 — 한글이 섞이면 시스템이 Noto Sans KR 로 폴백하도록 마지막에 넣는다. */
+    --md-font-code:
+        ui-monospace, 'SFMono-Regular', 'Roboto Mono', 'DejaVu Sans Mono', Consolas, monospace,
+        'Noto Sans KR';
+
+    --md-bg: #fbfbf9;
+    --md-fg: #22252a;
+    --md-fg-muted: #5c626b;
+    --md-link: #0b62c4;
+    --md-border: #e3e4e0;
+    --md-code-bg-inline: #f0f0ec;
+    --md-code-bg-block: #f6f6f3;
+    --md-quote-bar: #c9cbc5;
+    --md-hit-bg: #ffe89a;
+    --md-hit-bg-current: #ffc94d;
+    --md-hit-outline: #b8860b;
+    --md-warn-fg: #8a5a00;
+    --md-warn-bg: #fdf4e3;
+    --md-warn-bar: #d9a441;
+}
+
+[data-theme='dark'] {
+    --md-bg: #16181c;
+    --md-fg: #d6d9de;
+    --md-fg-muted: #9aa0a9;
+    --md-link: #6fb3f2;
+    --md-border: #2c3037;
+    --md-code-bg-inline: #22262d;
+    --md-code-bg-block: #1b1e24;
+    --md-quote-bar: #3a404a;
+    --md-hit-bg: #6b5300;
+    --md-hit-bg-current: #a37c00;
+    --md-hit-outline: #ffd75e;
+    --md-warn-fg: #e8c37a;
+    --md-warn-bg: #2a2317;
+    --md-warn-bar: #a3792c;
+}
+
+.md-body {
+    max-width: var(--md-measure);
+    margin: 0 auto;
+    padding: 0 var(--md-pad-x) 96px;
+    background: var(--md-bg);
+    color: var(--md-fg);
+    font-family: var(--md-font-body);
+    font-size: var(--md-font-size);
+    line-height: var(--md-line-height);
+    letter-spacing: -0.003em;
+    /* ★ 한국어에서 어절 중간을 끊지 않는다. 체감이 가장 큰 한 줄이다. */
+    word-break: keep-all;
+    /* 단, 긴 URL·긴 영단어는 끊어야 화면 밖으로 안 나간다. */
+    overflow-wrap: break-word;
+    line-break: normal;
+    /* 앱에서 글자 크기를 직접 조절하므로 OS 자동 확대는 끈다. */
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+}
+
+.md-body p {
+    margin: 0 0 0.9em;
+}
+
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4,
+.md-body h5,
+.md-body h6 {
+    margin: 1.8em 0 0.6em;
+    line-height: 1.35;
+    font-weight: 700;
+    /* 목차에서 점프했을 때 헤딩이 상단 바에 가리지 않게 */
+    scroll-margin-top: 64px;
+}
+.md-body h1 {
+    font-size: 1.7em;
+}
+.md-body h2 {
+    font-size: 1.4em;
+}
+.md-body h3 {
+    font-size: 1.2em;
+}
+.md-body h4 {
+    font-size: 1.05em;
+}
+.md-body h5,
+.md-body h6 {
+    font-size: 1em;
+    color: var(--md-fg-muted);
+}
+.md-body > .md-chunk:first-child > :first-child {
+    margin-top: 0;
+}
+
+.md-body a {
+    color: var(--md-link);
+    /* 색만으로 링크를 구분하지 않는다 — 색각 이상 대응(10-3절) */
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+}
+
+.md-body code {
+    font-family: var(--md-font-code);
+    font-size: 0.88em;
+    background: var(--md-code-bg-inline);
+    padding: 0.12em 0.34em;
+    border-radius: 4px;
+}
+.md-body pre {
+    background: var(--md-code-bg-block);
+    border: 1px solid var(--md-border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 0 0 1.1em;
+    line-height: 1.55;
+    /* 코드는 본문과 반대 — 줄바꿈하지 않고 가로 스크롤 */
+    white-space: pre;
+    overflow-x: auto;
+    word-break: normal;
+    -webkit-overflow-scrolling: touch;
+}
+.md-body pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.88em;
+}
+
+.md-body blockquote {
+    margin: 0 0 1.1em;
+    padding: 0.1em 0 0.1em 14px;
+    border-left: 3px solid var(--md-quote-bar);
+    color: var(--md-fg-muted);
+}
+
+.md-body .table-scroll {
+    overflow-x: auto;
+    margin: 0 0 1.1em;
+    -webkit-overflow-scrolling: touch;
+}
+.md-body table {
+    border-collapse: collapse;
+    width: max-content;
+    min-width: 100%;
+    font-size: 0.94em;
+}
+.md-body th,
+.md-body td {
+    border: 1px solid var(--md-border);
+    padding: 7px 11px;
+    text-align: left;
+}
+.md-body th {
+    background: var(--md-code-bg-inline);
+    font-weight: 600;
+}
+
+/*
+ * ★★ 디스플레이 수식은 반드시 자기 상자 안에서 가로 스크롤해야 한다.
+ *
+ *   KaTeX 는 $$...$$ 를 .katex-display 로 그리는데 폭을 제한하지 않는다.
+ *   행렬·cases 처럼 넓은 수식이 있으면 **문서 전체가 화면보다 넓어진다.**
+ *   그러면 레이아웃 뷰포트가 같이 넓어져서 position:fixed 가 화면이 아니라
+ *   그 넓어진 뷰포트를 기준으로 놓인다 — 다이얼로그·토스트·확대 보기가
+ *   화면 밖으로 밀려 **버튼을 누를 수 없게 된다.**
+ *
+ *   2026-08-03 실측(에뮬레이터 Android 16, 1080px 화면):
+ *     예제 문서의 collatz cases 수식이 485px → window.innerWidth 411 → 485,
+ *     확인 다이얼로그의 [확인] 버튼이 화면 오른쪽 밖으로 잘렸다.
+ *
+ *   overflow-y 는 hidden 이 아니라 clip 을 쓴다. hidden 은 스크롤 컨테이너를 만들어
+ *   분수·적분 기호의 위아래가 잘리는 경우가 있다.
+ */
+.md-body .katex-display {
+    overflow-x: auto;
+    overflow-y: clip;
+    /* 스크롤이 생겨도 위아래 기호가 상자 벽에 붙지 않게 */
+    padding-top: 2px;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.md-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+}
+.md-body hr {
+    border: 0;
+    border-top: 1px solid var(--md-border);
+    margin: 2em 0;
+}
+.md-body ul,
+.md-body ol {
+    margin: 0 0 1.1em;
+    padding-left: 1.4em;
+}
+.md-body li {
+    margin: 0.25em 0;
+}
+
+/* 체크박스 — DOMPurify 가 <input> 을 지우므로 CSS 로 그린다 */
+.md-body .contains-task-list {
+    list-style: none;
+    padding-left: 0.2em;
+}
+.md-body .task-list-item {
+    position: relative;
+    padding-left: 1.6em;
+}
+.md-body .task-list-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.42em;
+    width: 1em;
+    height: 1em;
+    border: 1.5px solid var(--md-fg-muted);
+    border-radius: 3px;
+}
+.md-body .task-list-item.checked::before {
+    background: var(--md-link);
+    border-color: var(--md-link);
+}
+.md-body .task-list-item.checked::after {
+    content: '';
+    position: absolute;
+    left: 0.3em;
+    top: 0.55em;
+    width: 0.32em;
+    height: 0.62em;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.md-chunk {
+    display: block;
+}
+.md-plain {
+    font-family: var(--md-font-code);
+    font-size: 0.9em;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/*
+ * 검색 하이라이트 (8-6절).
+ * ★ 현재 항목은 색만 바꾸지 않고 외곽선도 함께 준다 — 노란색 두 가지는 구분이 어렵다.
+ */
+mark.md-hit {
+    background: var(--md-hit-bg);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+mark.md-hit.is-current {
+    background: var(--md-hit-bg-current);
+    outline: 2px solid var(--md-hit-outline);
+}
+
+.md-block-label {
+    font-size: 0.82em;
+    color: var(--md-fg-muted);
+    margin: 0 0 0.3em;
+}
+/*
+ * 다이어그램을 못 그렸을 때. 눈에 띄되 겁주지 않는다 —
+ * 사용자 잘못이 아니라 '문서가 그렇게 쓰여 있다'는 안내다.
+ */
+.md-block-label--error {
+    color: var(--md-warn-fg);
+    background: var(--md-warn-bg);
+    border-left: 3px solid var(--md-warn-bar);
+    border-radius: 0 4px 4px 0;
+    padding: 6px 10px;
+    margin-bottom: 0.5em;
+}
+.md-image-placeholder {
+    display: block;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px;
+    margin: 0 0 1.1em;
+    border: 1px dashed var(--md-border);
+    border-radius: 8px;
+    background: var(--md-code-bg-block);
+    color: var(--md-fg-muted);
+    font: inherit;
+    text-align: left;
+}
+
+.md-body .footnotes {
+    margin-top: 2.5em;
+    padding-top: 1em;
+    border-top: 1px solid var(--md-border);
+    font-size: 0.92em;
+    color: var(--md-fg-muted);
+}
+.md-body .footnote-ref a {
+    text-decoration: none;
+}
+
+.md-frontmatter {
+    margin: 0 0 1.5em;
+    border: 1px solid var(--md-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.md-frontmatter summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 0.92em;
+    color: var(--md-fg-muted);
+    background: var(--md-code-bg-inline);
+    /* 터치 타깃 최소 48dp (10-1절) */
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+}
+.md-frontmatter table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+.md-frontmatter th,
+.md-frontmatter td {
+    padding: 6px 14px;
+    text-align: left;
+    vertical-align: top;
+}
+.md-frontmatter th {
+    width: 30%;
+    color: var(--md-fg-muted);
+    font-weight: 600;
+}
+
+/*
+ * Mermaid — 인라인은 '폭에 맞춰 한눈에', 탭하면 확대 보기(T6).
+ *
+ * ★ 초판은 표와 똑같이 "넘치면 가로 스크롤"이었는데 2026-08-03 실기기에서 뒤집었다.
+ *   시퀀스 다이어그램이 폰 화면보다 넓어서, 스크롤만으로는 **밀 수 있다는 것 자체를
+ *   알 수 없고** 전체 구조도 안 보였다. 다이어그램의 핵심 정보는 '전체 모양'이다.
+ *   표는 셀 단위로 읽으므로 스크롤이 맞지만 다이어그램은 다르다.
+ */
+.mermaid-block {
+    margin: 1.2em 0;
+}
+.mermaid-svg {
+    /* 폭에 맞춰 축소한다. 넘치면 그때만 스크롤. */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    cursor: zoom-in;
+}
+.mermaid-svg svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+/* 탭하면 커진다는 것을 알려 준다. 라벨은 SVG 교체 시 지워지므로 여기에 둔다. */
+.mermaid-block[data-mermaid-state='done'] .mermaid-svg::after {
+    content: '탭하면 크게 보기';
+    display: block;
+    margin-top: 0.35em;
+    font-size: 0.78em;
+    color: var(--md-fg-muted);
+    text-align: right;
+}
+
+/* ── 다이어그램 확대 보기 (T6) ── */
+.diagram-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    background: var(--md-bg);
+}
+.diagram-viewer__bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    padding-top: calc(8px + var(--safe-top));
+    border-bottom: 1px solid var(--md-border);
+    background: var(--md-code-bg-inline);
+}
+.diagram-viewer__bar button {
+    /* 터치 타깃 최소 48dp (10-1절) */
+    min-width: 48px;
+    min-height: 48px;
+    padding: 0 12px;
+    border: 1px solid var(--md-border);
+    border-radius: 8px;
+    background: var(--md-bg);
+    color: var(--md-fg);
+    font: inherit;
+    font-size: 1rem;
+}
+.diagram-viewer__close {
+    margin-right: auto;
+}
+.diagram-viewer__pct {
+    min-width: 4.5em;
+    text-align: center;
+    color: var(--md-fg-muted);
+    font-size: 0.9rem;
+}
+.diagram-viewer__pane {
+    flex: 1;
+    overflow: auto;
+    /* 한 손가락은 우리가 pan 하고, 두 손가락 핀치는 브라우저에 맡긴다 */
+    touch-action: pinch-zoom;
+    cursor: grab;
+    -webkit-overflow-scrolling: touch;
+}
+.diagram-viewer__pane:active {
+    cursor: grabbing;
+}
+.diagram-viewer__stage {
+    transform-origin: 0 0;
+    width: max-content;
+    padding: 12px;
+}
+
+/* 문서 내 검색 하이라이트 (8-6절) */
+mark.md-hit {
+    background: var(--md-hit-bg);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+mark.md-hit.is-current {
+    background: var(--md-hit-bg-current);
+    outline: 2px solid var(--md-hit-outline);
+}

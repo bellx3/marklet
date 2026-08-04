@@ -1,0 +1,9 @@
+First internal build.
+
+- Opens Markdown files as they are: tables, Mermaid diagrams, math, footnotes, task lists
+- Add a folder once and every .md inside it stays listed
+- Search by file name and inside the open document
+- Edit and save back to the original file, with a backup taken first
+- Share as a file, as plain text, or as Markdown source
+- English and Korean, light and dark
+- No ads, no accounts, and documents never leave the device

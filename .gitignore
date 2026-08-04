@@ -1,0 +1,33 @@
+node_modules/
+ios/
+
+# Capacitor
+.capacitor/
+
+# 로컬 환경 설정
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+www/
+dist/
+build/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# 자격증명이 섞이기 쉬운 임시 메모
+.docs/_temp.md
+
+# 검증하면서 찍은 화면·스크래치 파일
+.tmp-*

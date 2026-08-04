@@ -1,0 +1,120 @@
+apply plugin: 'com.android.application'
+
+// ---------------------------------------------------------------------------
+// 버전: package.json을 단일 소스로 사용합니다.
+// versionName은 그대로, versionCode는 major*10000 + minor*100 + patch로 계산합니다.
+// (예: 1.0.15 -> 10015) 같은 버전을 두 번 올릴 수 없으므로 재배포 시 patch를 올리세요.
+// ★ version은 반드시 세 자리다. "1.0"으로 두면 tokenize가 2개를 돌려주고 구조 분해에서 죽는다.
+// ★ minor·patch가 99를 넘으면 안 된다. 1.0.100은 10100이 되어 1.1.0과 충돌한다.
+// ---------------------------------------------------------------------------
+def packageJson = new groovy.json.JsonSlurper().parseText(rootProject.file('../package.json').text)
+def appVersionName = packageJson.version
+def (verMajor, verMinor, verPatch) = appVersionName.tokenize('.').collect { it.toInteger() }
+def appVersionCode = verMajor * 10000 + verMinor * 100 + verPatch
+
+// ---------------------------------------------------------------------------
+// 서명 자격증명: 추적되지 않는 keystore.properties에서 읽습니다.
+// 파일이 없으면 릴리스 빌드가 서명 없이 생성됩니다 (디버그 빌드는 영향 없음).
+// 이 분기가 없으면 새 PC에서 clone 직후 gradlew가 무조건 실패합니다.
+// ---------------------------------------------------------------------------
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+def hasSigningConfig = keystorePropertiesFile.exists()
+if (hasSigningConfig) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+} else {
+    logger.warn("⚠️ keystore.properties가 없어 릴리스 빌드가 서명되지 않습니다. keystore.properties.example을 참고하세요.")
+}
+
+android {
+    namespace = "com.marklet.md"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.marklet.md"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode appVersionCode
+        versionName appVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            if (hasSigningConfig) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (hasSigningConfig) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // Play 앱 서명을 사용하므로 스토어 설치본과 서명이 달라 덮어쓸 수 없습니다.
+            // 패키지명을 분리해 스토어 버전을 지우지 않고 나란히 설치·테스트합니다.
+            // ★ 파생 함정 3개:
+            //   1) am start 의 컴포넌트 이름이 비대칭이 된다 (com.marklet.md.debug/com.marklet.md.MainActivity)
+            //   2) logcat 대상 패키지명이 다르다
+            //   3) 디버그 빌드에서는 인앱결제가 동작하지 않는다 (Play가 모르는 패키지)
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+    // ★ flatDir 을 되돌리지 마라. cap add android 가 기본으로 넣지만
+    //   capacitor-cordova-android-plugins/src/main/libs 가 비어 있어 필요 없고,
+    //   Gradle 8 이 매 빌드마다 경고를 쏟는다. (2026-08-03 확인: 그 폴더에 .aar/.jar 0개)
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+// ---------------------------------------------------------------------------
+// Play Console 업로드 자동화 (Gradle Play Publisher)
+// 서비스 계정 키(play-service-account.json)가 있을 때만 활성화됩니다.
+// ★ 서비스 계정에 프로덕션 권한을 주지 마라. releaseStatus COMPLETED 라 100% 즉시 공개다.
+// ---------------------------------------------------------------------------
+def playCredentialsFile = rootProject.file('play-service-account.json')
+if (playCredentialsFile.exists()) {
+    apply plugin: 'com.github.triplet.play'
+
+    play {
+        serviceAccountCredentials.set(playCredentialsFile)
+        defaultToAppBundles.set(true)
+        // 기본은 내부 테스트 트랙 — 프로덕션 배포는 --track production으로 지정
+        track.set('internal')
+        releaseStatus.set(com.github.triplet.gradle.androidpublisher.ReleaseStatus.COMPLETED)
+    }
+} else {
+    logger.lifecycle("ℹ️ play-service-account.json이 없어 Play 업로드 태스크가 비활성화되었습니다.")
+}
+
+apply from: 'capacitor.build.gradle'
+
+// ★ google-services 블록을 되돌리지 마라.
+//   cap add android 가 google-services.json 을 찾는 try/catch 를 넣지만
+//   이 앱은 Firebase 를 쓰지 않는다. 푸시 알림도 안 만든다(01_제품_결정서.md 4.3절).

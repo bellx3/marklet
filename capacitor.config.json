@@ -1,0 +1,25 @@
+{
+    "appId": "com.marklet.md",
+    "appName": "Marklet",
+    "webDir": "www",
+    "server": {
+        "androidScheme": "https"
+    },
+    "plugins": {
+        "SplashScreen": {
+            "launchShowDuration": 1000,
+            "backgroundColor": "#FBFBF9",
+            "showSpinner": false,
+            "androidSpinnerStyle": "small"
+        },
+        "StatusBar": {
+            "overlaysWebView": false
+        },
+        "SystemBars": {
+            "insetsHandling": "css"
+        }
+    },
+    "android": {
+        "adjustMarginsForEdgeToEdge": "disable"
+    }
+}

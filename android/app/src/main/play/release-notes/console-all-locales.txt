@@ -1,0 +1,22 @@
+<en-US>
+First internal build.
+
+- Opens Markdown files as they are: tables, Mermaid diagrams, math, footnotes, task lists
+- Add a folder once and every .md inside it stays listed
+- Search by file name and inside the open document
+- Edit and save back to the original file, with a backup taken first
+- Share as a file, as plain text, or as Markdown source
+- English and Korean, light and dark
+- No ads, no accounts, and documents never leave the device
+</en-US>
+<ko-KR>
+첫 내부 빌드입니다.
+
+- 마크다운 파일을 그대로 엽니다: 표, Mermaid 다이어그램, 수식, 각주, 체크박스
+- 폴더를 한 번 등록해 두면 그 안의 .md 가 계속 목록에 뜹니다
+- 파일 이름 검색(초성도 됩니다)과 문서 안 검색
+- 원본 파일에 바로 저장합니다. 저장 전에 백업을 먼저 받습니다
+- 파일로 · 보이는 대로 · 마크다운 원문으로 공유
+- 한국어와 영어, 라이트와 다크
+- 광고도 계정도 없고, 문서는 기기를 벗어나지 않습니다
+</ko-KR>

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:appCategory="productivity"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <!-- (0) 런처 -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- (A) MIME이 제대로 오는 경우: content:// 와 file:// 양쪽 -->
+            <!--     같은 intent-filter 안의 여러 <data>는 '짝'이 아니라 '조합'으로 매칭된다. -->
+            <!--     아래는 {content, file} x {markdown, x-markdown, plain} = 6가지를 모두 잡는다. -->
+            <!--     ★ 2026-08-03 실기기 측정으로 검증된 필터다. 삼성 내 파일·Drive·카카오톡·Gmail -->
+            <!--       네 곳이 전부 content:// + text/markdown 으로 보낸다(5-7절). -->
+            <intent-filter android:label="@string/open_with_label">
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="text/x-markdown" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <!-- (B) MIME을 모르는 경우(octet-stream 등) - file:// 한정 -->
+            <!--     pathPattern으로 확장자를 직접 검사한다. file:// 에서만 신뢰할 수 있다. -->
+            <!--     안드로이드 pathPattern의 '.*'는 백트래킹을 하지 않아서 -->
+            <!--     경로 중간에 점이 있으면 매칭에 실패한다. 그래서 점 개수만큼 패턴을 늘어놓는다. -->
+            <!--     (예: /sdcard/my.docs/note.md 는 '.*\.md' 하나만으로는 매칭되지 않는다) -->
+            <intent-filter android:label="@string/open_with_label">
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+
+                <data android:pathPattern=".*\\.md" />
+                <data android:pathPattern=".*\\..*\\.md" />
+                <data android:pathPattern=".*\\..*\\..*\\.md" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.md" />
+                <data android:pathPattern=".*\\.markdown" />
+                <data android:pathPattern=".*\\..*\\.markdown" />
+                <data android:pathPattern=".*\\..*\\..*\\.markdown" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.markdown" />
+                <data android:pathPattern=".*\\.mdown" />
+                <data android:pathPattern=".*\\.mkd" />
+            </intent-filter>
+
+            <!-- (C) MIME이 아예 없는 인텐트 (type == null) -->
+            <!--     mimeType을 지정한 필터는 type이 null인 인텐트와 매칭되지 않으므로 따로 둔다. -->
+            <intent-filter android:label="@string/open_with_label">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="file" />
+
+                <data android:pathPattern=".*\\.md" />
+                <data android:pathPattern=".*\\..*\\.md" />
+                <data android:pathPattern=".*\\..*\\..*\\.md" />
+                <data android:pathPattern=".*\\.markdown" />
+                <data android:pathPattern=".*\\..*\\.markdown" />
+            </intent-filter>
+
+            <!-- (D) content:// + octet-stream : 최선의 노력. 기대치를 낮게 잡아라. -->
+            <!--     ★ 2026-08-03 측정에서는 네 경로 어디서도 octet-stream 이 나오지 않았다. -->
+            <!--       그래도 남기는 이유: minSdk 26(Android 8) 구버전 MIME 테이블에 .md 가 -->
+            <!--       없으면 발신 앱이 octet-stream 으로 떨어뜨릴 수 있고, 그 기기를 검증할 -->
+            <!--       방법이 없다. 자세한 판단은 5-7절. -->
+            <intent-filter android:label="@string/open_with_label">
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+
+            <!-- (E) 공유(ACTION_SEND) — Gmail·카카오톡·Drive의 '공유' 버튼 -->
+            <intent-filter android:label="@string/share_to_label">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="text/x-markdown" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+
+        </activity>
+
+        <!-- ★★ FileProvider 를 지우지 마라. **파일 공유가 이걸 쓴다**(5-8절).
+             MdFilePlugin.shareFile() 이 문서를 cacheDir/share 로 복사한 뒤
+             이 프로바이더의 URI 로 내보낸다. 원본 SAF URI 를 그대로 넘기면
+             카카오톡 같은 앱이 받지 못한다(2026-08-04 실측).
+             file_paths.xml 의 cache-path 도 함께 필요하다. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!-- Permissions -->
+    <!-- ★ 저장소 권한을 하나도 선언하지 않는다. SAF와 인텐트 URI는 권한이 필요 없다.
+         MANAGE_EXTERNAL_STORAGE 를 요청하지 마라 — 논의 끝났다(15장 13번). -->
+    <!-- ★ AD_ID 를 넣지 마라. 광고가 없는데 데이터 안전 신고 대상이 된다. -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="com.android.vending.BILLING" />
+</manifest>

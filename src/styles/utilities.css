@@ -1,0 +1,17 @@
+/*
+ * ★★ 반드시 마지막에 import 한다 (11-3절). 순서가 바뀌면 숨김이 깨진다.
+ *
+ *   Overlay 는 hidden 속성을 상태의 단일 소스로 쓴다(9-4절). 그런데 컴포넌트 CSS 가
+ *   display 를 지정하면 UA 기본 규칙 [hidden]{display:none} 을 이긴다.
+ *   그러면 "숨겼는데 화면에 보이고 눌러도 반응이 없는" 상태가 된다 —
+ *   픽셀오아시스에서 6개 클래스 중 5개가 실제로 그 상태였다.
+ *
+ * ★ .hidden / [hidden] 을 페이드 애니메이션 용도로 쓰지 마라.
+ *   페이드는 .is-open / .is-leaving 같은 별도 이름으로 분리한다.
+ */
+[hidden] {
+    display: none !important;
+}
+.is-hidden {
+    display: none !important;
+}

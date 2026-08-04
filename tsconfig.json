@@ -1,0 +1,26 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "useDefineForClassFields": true,
+        "module": "ESNext",
+        "lib": ["ESNext", "DOM", "DOM.Iterable"],
+        "skipLibCheck": true,
+        /*
+         * ★ "node" 는 styles.test.ts 가 node:fs 로 CSS 파일을 직접 읽기 때문이다(11-3절).
+         *   앱 코드에서 node API 를 쓰라는 뜻이 아니다 — 번들에 들어가면 웹뷰에서 죽는다.
+         */
+        "types": ["vitest/globals", "node"],
+        /* Bundler mode */
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        /* Linting */
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true
+    },
+    "include": ["src"]
+}

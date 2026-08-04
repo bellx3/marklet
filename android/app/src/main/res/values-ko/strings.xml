@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      한국 기기의 "연결 프로그램" 목록에 뜨는 문구.
+
+      ★ app_name / title_activity_main 을 여기 넣지 마라.
+        한국어에서도 앱 이름은 'Marklet' 이다. 한글 음차 '마크렛'은 2026-08-03에 폐기했다 —
+        한국어로 검색하면 결과가 전부 마인크래프트다(01_제품_결정서.md 7.3절).
+      ★ package_name / custom_url_scheme 도 복사하지 마라. Capacitor 가 만든 값과
+        어긋날 때 원인을 찾기 어려운 오류가 난다.
+    -->
+    <string name="open_with_label">마크다운으로 열기</string>
+    <string name="share_to_label">Marklet으로 보내기</string>
+</resources>

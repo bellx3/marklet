@@ -1,0 +1,976 @@
+/*
+ * 공통 부품 — 상단바 · 화면 · 시트 · 목록 · 버튼 · 토스트 · 다이얼로그 · 편집기.
+ *
+ * ★ 11-3절의 CSS import 순서: base → markdown → hljs → components → utilities.
+ *   utilities.css 는 항상 마지막이다.
+ *
+ * ★★ 여백·모서리·그림자는 base.css 의 토큰(--sp-*, --r-*, --shadow-*)만 쓴다.
+ *   여기에 10px·14px 같은 새 숫자를 적지 마라. 값이 흩어지면 화면마다 리듬이 어긋나고,
+ *   그게 '정돈되지 않은' 느낌의 정체다(2026-08-04 점검).
+ */
+
+/* ─────────────────────────── 화면 · 상단 바 ─────────────────────────── */
+
+.screen {
+    min-height: 100%;
+}
+
+/*
+ * ★ .app-topbar 의 고정 위치·상단 안전영역은 base.css 가 갖는다.
+ *   여기서 padding 단축 속성을 쓰면 그 padding-top 이 0 으로 덮여 펀치홀과 겹친다.
+ *   개별 속성으로만 써라(2026-08-03에 한 번 겪었다).
+ */
+.app-topbar {
+    display: flex;
+    gap: var(--sp-1);
+    align-items: center;
+    padding-right: var(--sp-2);
+    padding-bottom: var(--sp-2);
+    padding-left: var(--sp-2);
+    background: var(--md-bg);
+    border-bottom: 1px solid var(--md-border);
+    font:
+        15px/1.3 var(--md-font-body),
+        sans-serif;
+    color: var(--md-fg);
+}
+
+.topbar-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0 var(--sp-1);
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    /* 긴 파일 이름이 버튼들을 화면 밖으로 밀어내면 안 된다 */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.topbar-title--doc {
+    font-weight: 550;
+    font-size: 16px;
+}
+
+/*
+ * ★ 뷰어 상단 바만 간격을 0 으로 좁힌다.
+ *   2026-08-04 실기기(디스플레이 확대를 켜서 **384px**)에서 잰 것:
+ *   버튼 5개 × 48 = 240px 이 나가고 제목에 남는 폭이 **100px** 이었다.
+ *   `한글입력시험.md` 가 `한글입력시…` 로 잘렸다.
+ *   아이콘 버튼은 48px 안에 20px 글리프라 좌우로 이미 14px 씩 비어 있다 —
+ *   gap 을 지워도 붙어 보이지 않고, 제목이 28px 를 되찾는다(안드로이드 앱 바의 기본 배치다).
+ *   ★ 홈 상단 바에는 걸지 마라 — 거기는 제목·검색창·설정이 서로 다른 부품이라 틈이 필요하다.
+ */
+.viewer-bar {
+    gap: 0;
+    padding-right: var(--sp-1);
+    padding-left: var(--sp-1);
+}
+
+/*
+ * 홈 상단 바만 줄바꿈을 허용한다.
+ * ★ 시스템 글꼴을 '가장 크게'(배율 2.0)로 둔 사용자에게는 제목·검색창·설정이
+ *   한 줄에 안 들어가고 앱 이름이 'Ma…' 로 잘렸다(2026-08-03 실측).
+ *   접근성 설정을 켠 사용자가 앱 이름조차 못 읽는 건 곤란하다.
+ *   검색창에 큰 flex-basis 를 줘서 자리가 모자라면 통째로 다음 줄로 내려가게 한다.
+ *   ★ 뷰어 상단 바에는 걸지 마라 — 아이콘들이 두 줄로 흩어진다.
+ */
+.home-topbar {
+    flex-wrap: wrap;
+}
+.home-topbar .search-input {
+    flex: 1 1 14rem;
+}
+
+/*
+ * 문서 위에 뜨는 작은 메뉴. 시트를 만들 만큼 크지 않다.
+ *
+ * ★★ position: sticky 로 두지 마라. sticky 는 **흐름 안에 자리를 차지한다** —
+ *   그래서 메뉴가 열릴 때마다 본문이 그 높이만큼 아래로 밀렸다(2026-08-04 사용자 보고).
+ *   absolute 라야 자리를 차지하지 않고 겹쳐 뜬다.
+ * ★ 기준 상자는 .app-topbar 다(sticky = 위치 지정된 조상). 메뉴는 그 자식이어야 한다.
+ *   화면이나 .screen 을 기준으로 잡으면 스크롤할 때 바만 붙어 있고 메뉴는 딸려 올라간다.
+ */
+.more-menu {
+    position: absolute;
+    top: calc(100% + var(--sp-1));
+    right: var(--sp-2);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 12rem;
+    max-width: min(16rem, calc(100vw - var(--sp-5)));
+    padding: var(--sp-1) 0;
+    background: var(--surface);
+    border: 1px solid var(--md-border);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-2);
+}
+
+/*
+ * 메뉴 밖 아무 데나 눌러도 닫히게 하는 투명 판.
+ * ★ 메뉴(z-index 2)보다 아래, 바의 버튼들(auto = 0)보다 위에 둔다 —
+ *   그래야 메뉴가 열려 있는 동안 상단 바 버튼이 실수로 눌리지 않는다.
+ * ★ .app-topbar 안에 있지만 fixed 는 뷰포트 기준이다(sticky 는 fixed 의 기준 상자를
+ *   만들지 않는다 — transform·filter 만 만든다). 그래서 화면 전체를 덮는다.
+ */
+.menu-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+}
+
+.menu-item {
+    min-height: var(--tap);
+    padding: var(--sp-3) var(--sp-4);
+    border: 0;
+    background: none;
+    color: var(--md-fg);
+    font:
+        15px/1.4 var(--md-font-body),
+        sans-serif;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.menu-item:active {
+    background: var(--md-code-bg-inline);
+}
+
+/* ★ 항목마다 줄을 그으면 목록이 격자로 보인다. 묶음 사이에만 긋는다. */
+.menu-sep {
+    height: 1px;
+    margin: var(--sp-1) 0;
+    background: var(--md-border);
+}
+
+/* 사본 · 읽기 전용 안내. 색만으로 구분하지 않도록 문구가 상황을 말한다. */
+.viewer-notice {
+    padding: var(--sp-3) var(--md-pad-x);
+    background: var(--md-warn-bg);
+    color: var(--md-warn-fg);
+    border-bottom: 1px solid var(--md-warn-bar);
+    font:
+        14px/1.5 var(--md-font-body),
+        sans-serif;
+    word-break: keep-all;
+}
+
+/* 부팅 실패 화면 — 흰 화면으로 남기지 않기 위한 것 */
+.fatal {
+    padding: var(--sp-5);
+    padding-top: calc(var(--sp-5) + var(--safe-top));
+    font:
+        16px/1.7 system-ui,
+        sans-serif;
+    word-break: keep-all;
+}
+
+/*
+ * 진행 표시. ★ 오버레이가 아니라 한 줄이다 — 첫 화면은 이미 읽을 수 있는 상태이므로
+ *   본문을 가리면 안 된다. "그리는 중"이지 "못 쓰는 중"이 아니다.
+ */
+.viewer-busy {
+    position: sticky;
+    top: 0;
+    z-index: 9;
+    padding: var(--sp-2) var(--md-pad-x);
+    background: var(--md-code-bg-inline);
+    border-bottom: 1px solid var(--md-border);
+    color: var(--md-fg-muted);
+    font:
+        13px/1.4 var(--md-font-body),
+        sans-serif;
+    text-align: center;
+}
+
+/* ─────────────────────────── 검색 바 (T2) ─────────────────────────── */
+
+.search-bar {
+    display: flex;
+    gap: var(--sp-1);
+    align-items: center;
+    padding-right: var(--sp-2);
+    padding-bottom: var(--sp-2);
+    padding-left: var(--sp-2);
+    background: var(--md-bg);
+    border-bottom: 1px solid var(--md-border);
+}
+
+.search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 40px;
+    /* ★ 좌우를 --sp-4 로 두면 안내 문구가 잘린다(384px 화면 실측). 알약이라 12px 로도 넉넉하다. */
+    padding: var(--sp-2) var(--sp-3);
+    /* 테두리 대신 채운 면으로 구분한다. 선이 하나 줄면 화면이 조용해진다. */
+    border: 1px solid transparent;
+    border-radius: var(--r-full);
+    background: var(--md-code-bg-inline);
+    color: var(--md-fg);
+    font:
+        15px/1.3 var(--md-font-body),
+        sans-serif;
+    /* ★ <input> 은 부모의 text-align 을 상속하지 않는다(9-5절). 명시한다. */
+    text-align: left;
+    /* ★ 삼성 웹뷰가 type=search 에 자기 모양(둥근 테두리·지우기 X)을 입힌다. 지운다. */
+    appearance: none;
+}
+.search-input::placeholder {
+    color: var(--md-fg-muted);
+}
+/*
+ * ★ 글자 입력칸은 공용 포커스 링(base.css)을 쓰지 않는다.
+ *   알약 모양 바깥에 사각 링이 겹쳐 그려져서 지저분하다(2026-08-04 에뮬레이터).
+ *   테두리 색만 바꾼다 — 캐럿이 이미 '여기 입력 중'을 말하고 있다.
+ */
+.search-input:focus-visible {
+    outline: none;
+    border-color: var(--md-link);
+}
+
+.search-counter {
+    flex: 0 0 auto;
+    /* '0/0' ~ '99/99' 를 담되 더 넓히지 않는다. 넓히면 입력칸이 줄어든다. */
+    min-width: 3.5em;
+    text-align: center;
+    color: var(--md-fg-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 14px;
+}
+
+/* ─────────────────────────── 시작 화면 (S2) ─────────────────────────── */
+
+.home-body {
+    display: block;
+    max-width: var(--md-measure);
+    margin: 0 auto;
+    padding: var(--sp-4) var(--md-pad-x) var(--sp-6);
+}
+
+/*
+ * ★ 그리드다. flex + wrap 이면 자리가 모자랄 때 '둘 + 하나'로 접혀서
+ *   세 번째 버튼만 폭이 달라진다(2026-08-04 실기기에서 실제로 그렇게 보였다).
+ *   그리드는 글자 배율이 커져 두 줄이 되어도 세 칸이 같은 크기로 함께 자란다.
+ */
+.home-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-5);
+}
+
+/*
+ * ★ 인접 형제(+)가 아니라 모든 절에 건다. 설정 화면의 '앱 정보'는 앞이 설정 줄이라
+ *   + 규칙에 안 걸려서 제목이 윗줄에 딱 붙어 있었다(2026-08-04 에뮬레이터).
+ *   블록 마진은 합쳐지므로 시작 화면에서 간격이 두 배가 되지는 않는다.
+ */
+.home-section {
+    margin-top: var(--sp-5);
+}
+.home-section-title {
+    margin: 0 0 var(--sp-1);
+    /* 목록 행·설정 줄의 안쪽 여백과 같은 값 — 글자 왼쪽 끝이 한 줄로 맞는다. */
+    padding-left: var(--sp-3);
+    font:
+        600 13px/1.4 var(--md-font-body),
+        sans-serif;
+    color: var(--md-fg-muted);
+    letter-spacing: 0.04em;
+}
+
+.home-list {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ─────────────────────────── 목록 ─────────────────────────── */
+
+/*
+ * ★ 행마다 구분선을 긋지 않는다. 줄이 촘촘히 반복되면 목록이 표처럼 보인다 —
+ *   행 사이 여백과 두 줄 구조만으로 충분히 구분된다.
+ */
+.list-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    min-height: var(--tap);
+    border: 0;
+    border-radius: var(--r-md);
+    background: none;
+    color: var(--md-fg);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.list-item:active {
+    background: var(--md-code-bg-inline);
+}
+
+/*
+ * 항목 안의 '누르면 열리는' 영역. 삭제 버튼과 나란히 놓인다.
+ * ★ 세로로 쌓는다. 예전에는 이름 옆에 메타·배지를 가로로 늘어놓았는데,
+ *   배지가 있는 항목만 다음 줄로 접혀서 목록 높이가 들쭉날쭉했다(2026-08-04).
+ */
+.list-main {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: var(--sp-1);
+    min-height: var(--tap);
+    padding: var(--sp-2) var(--sp-3);
+    border: 0;
+    border-radius: var(--r-md);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.list-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 16px;
+}
+/* 이름 아래 보조 줄 — 시각·크기·배지가 여기 모인다. 배지가 없어도 줄은 있다. */
+.list-sub {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-width: 0;
+    overflow: hidden;
+}
+.list-meta {
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--md-fg-muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+.list-remove {
+    flex: 0 0 auto;
+    color: var(--md-fg-muted);
+}
+
+.list-empty,
+.list-error,
+.sheet-empty {
+    margin: var(--sp-2) 0 var(--sp-3);
+    padding: 0 var(--sp-3);
+    color: var(--md-fg-muted);
+    font-size: 14px;
+    word-break: keep-all;
+}
+.list-error {
+    color: var(--md-warn-fg);
+}
+
+.folder-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-top: var(--sp-3);
+    padding-left: var(--sp-3);
+    color: var(--md-fg-muted);
+    font-size: 14px;
+    font-weight: 600;
+}
+.folder-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/*
+ * 배지. ★ 색만으로 뜻을 전하지 않는다 — 글자가 상황을 말한다
+ *   ("읽기 전용 사본", "다시 열 수 없음").
+ */
+.badge {
+    flex: 0 0 auto;
+    padding: 0 var(--sp-2);
+    border: 1px solid var(--md-warn-bar);
+    border-radius: var(--r-full);
+    background: var(--md-warn-bg);
+    color: var(--md-warn-fg);
+    font-size: 12px;
+    /* 알약 높이는 패딩이 아니라 행간이 만든다 — 여백 토큰을 벗어나지 않으려고. */
+    line-height: 1.7;
+    white-space: nowrap;
+}
+.badge--supporter {
+    border-color: var(--md-link);
+    background: transparent;
+    color: var(--md-link);
+}
+
+/* ─────────────────────────── 설정 줄 ─────────────────────────── */
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    width: 100%;
+    min-height: 56px;
+    /* ★ 좌우 여백을 목록 행과 같게 둔다 — 두 화면의 글자 왼쪽 끝이 어긋나 보였다. */
+    padding: var(--sp-3);
+    border: 0;
+    border-bottom: 1px solid var(--md-border);
+    background: none;
+    color: var(--md-fg);
+    font: inherit;
+    text-align: left;
+}
+.setting-row--nav,
+.setting-row--toggle {
+    cursor: pointer;
+}
+.setting-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    min-width: 0;
+}
+.setting-label {
+    font-size: 16px;
+}
+.setting-hint {
+    color: var(--md-fg-muted);
+    font-size: 13px;
+    line-height: 1.5;
+    word-break: keep-all;
+}
+.setting-value {
+    flex: 0 0 auto;
+    color: var(--md-fg-muted);
+}
+/* › 는 글꼴마다 크기·세로 위치가 제각각이라 아이콘으로 바꿨다. */
+.setting-chevron {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    color: var(--md-fg-muted);
+}
+
+.size-preview {
+    margin: var(--sp-1) 0 var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--md-border);
+    border-radius: var(--r-md);
+    background: var(--md-code-bg-block);
+    color: var(--md-fg-muted);
+    line-height: 1.7;
+    word-break: keep-all;
+}
+
+/* 세그먼트 (테마 · 글자 크기) */
+.seg {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    flex: 0 0 auto;
+}
+.seg-item {
+    min-width: var(--tap);
+    min-height: var(--tap);
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--md-border);
+    border-radius: var(--r-sm);
+    background: var(--md-bg);
+    color: var(--md-fg);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+/* ★ 선택 상태를 색으로만 알리지 않는다. 테두리 굵기와 굵은 글자를 함께 쓴다. */
+.seg-item.is-on {
+    border-color: var(--md-link);
+    border-width: 2px;
+    color: var(--md-link);
+    font-weight: 700;
+}
+.seg-item:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+.seg-label {
+    min-width: 3.5em;
+    text-align: center;
+    color: var(--md-fg-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* 스위치 — 기본 체크박스를 키워서 쓴다. 커스텀 스위치는 TalkBack 이 못 읽는 경우가 있다. */
+.switch {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    margin: var(--sp-2);
+    accent-color: var(--md-link);
+}
+
+/* ─────────────────────────── 후원 (S5) ─────────────────────────── */
+
+.tip-intro,
+.tip-thanks {
+    margin: var(--sp-2) 0 var(--sp-4);
+    line-height: 1.7;
+    word-break: keep-all;
+}
+.tip-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-5);
+}
+.tip-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    width: 100%;
+}
+.tip-price {
+    color: var(--md-fg-muted);
+    font-variant-numeric: tabular-nums;
+}
+.btn-primary .tip-price {
+    color: inherit;
+}
+
+/* ─────────────────────────── 진단 ─────────────────────────── */
+
+.diag-list {
+    display: flex;
+    flex-direction: column;
+}
+.diag-row {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-3);
+    padding: var(--sp-2) 0;
+    border-bottom: 1px solid var(--md-border);
+    font-size: 14px;
+}
+.diag-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--md-font-code);
+}
+.diag-ms {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+.diag-at {
+    flex: 0 0 auto;
+    color: var(--md-fg-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ─────────────────────────── 시트 (T1 · T3) ─────────────────────────── */
+
+.sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: var(--scrim);
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+.sheet-backdrop.is-open {
+    opacity: 1;
+}
+
+.sheet {
+    width: 100%;
+    max-width: 32rem;
+    /* 화면을 다 덮지 않는다. 뒤가 보여야 '시트'로 읽힌다. */
+    max-height: 80%;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    background: var(--surface);
+    color: var(--md-fg);
+    box-shadow: var(--shadow-2);
+    transform: translateY(16px);
+    transition: transform 200ms ease;
+    /* 제스처 바를 피한다 */
+    padding-bottom: var(--safe-bottom);
+}
+.sheet-backdrop.is-open .sheet {
+    transform: translateY(0);
+}
+
+.sheet-head {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-5);
+    border-bottom: 1px solid var(--md-border);
+}
+.sheet-title {
+    flex: 1 1 auto;
+    margin: 0;
+    font:
+        600 17px/1.4 var(--md-font-body),
+        sans-serif;
+    letter-spacing: -0.01em;
+}
+.sheet-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: var(--sp-1) var(--sp-4) var(--sp-5);
+}
+
+/*
+ * 목차 항목. ★ 행 높이를 48px 아래로 내리지 마라(10-1절).
+ *   계층은 들여쓰기로만 표현한다.
+ */
+.toc-item {
+    width: 100%;
+    padding: var(--sp-3) var(--sp-2);
+    border-radius: var(--r-sm);
+}
+.toc-item:active {
+    background: var(--md-code-bg-inline);
+}
+.toc-item[data-level='2'] {
+    padding-left: 18px;
+}
+.toc-item[data-level='3'] {
+    padding-left: 36px;
+}
+.toc-item[data-level='4'] {
+    padding-left: 54px;
+}
+.toc-item[data-level='5'],
+.toc-item[data-level='6'] {
+    padding-left: 72px;
+}
+
+/* ─────────────────────────── 편집기 (S3) ─────────────────────────── */
+
+/*
+ * 편집 화면 안내 줄. ★ 경고가 아니라 안내다 — 사용자가 잘못한 게 아니라
+ *   설정이 그렇게 돼 있을 뿐이다. 색을 위험색으로 쓰지 마라.
+ */
+.editor-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    flex: 0 0 auto;
+    padding: var(--sp-2) var(--md-pad-x);
+    background: var(--md-warn-bg);
+    color: var(--md-warn-fg);
+    border-bottom: 1px solid var(--md-warn-bar);
+    font:
+        13px/1.45 var(--md-font-body),
+        sans-serif;
+    word-break: keep-all;
+}
+.editor-hint-btn {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: var(--sp-2) var(--sp-3);
+    border: 1px solid var(--md-warn-bar);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/*
+ * ★ 편집 화면만 전체 높이를 고정한다. 상단 바 높이를 CSS 변수로 빼서 계산하면
+ *   글자 크기·안전영역에 따라 어긋난다. flex 로 남는 높이를 주는 쪽이 항상 맞다.
+ */
+.screen-editor {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+}
+
+.editor-area {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    /* 키보드가 올라온 만큼 줄인다 — 높이가 줄면 브라우저가 캐럿을 알아서 보이게 유지한다 */
+    margin-bottom: var(--kb-inset, 0px);
+    box-sizing: border-box;
+    padding: var(--sp-3) var(--md-pad-x);
+    border: 0;
+    resize: none;
+    background: var(--md-bg);
+    color: var(--md-fg);
+    font-family: var(--md-font-code);
+    font-size: var(--md-font-size);
+    line-height: 1.7;
+    /* 편집기는 원문을 다루므로 keep-all 을 쓰지 않는다 — 줄 번호 감각이 흐트러진다 */
+    word-break: normal;
+    overflow-wrap: anywhere;
+}
+
+/* ─────────────────────────── 버튼 ─────────────────────────── */
+
+/*
+ * 10-1절: 모든 조작 요소는 최소 48×48dp.
+ */
+.btn {
+    min-height: var(--tap);
+    min-width: var(--tap);
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--md-border);
+    border-radius: var(--r-md);
+    background: var(--md-bg);
+    color: var(--md-fg);
+    font:
+        15px/1.3 var(--md-font-body),
+        sans-serif;
+    cursor: pointer;
+}
+.btn:active {
+    background: var(--md-code-bg-inline);
+}
+
+/*
+ * 아이콘 + 글자 버튼(시작 화면 세 칸).
+ *
+ * ★ 글자 배율이 크면 두 줄로 접힌다. flex-wrap 을 켜 두고 가운데로 모아서
+ *   접혀도 세 칸의 균형이 유지되게 한다 — 접히는 것 자체는 안전장치다.
+ * ★★ 다만 **기본 배율에서는 접히면 안 된다.** 영어로 바꿨더니 `Add folder` 만
+ *   두 줄이 됐다(2026-08-04 실기기 384px). 재 보니 필요 93px / 쓸 수 있는 폭 92px —
+ *   딱 1px 모자랐다. 간격과 좌우 여백을 한 단계씩 줄여 11px 의 여유를 만들었다.
+ *   ★ 여기 값을 다시 키우려거든 **영어로 켜고 384px 에서 재 봐라.**
+ *     한국어(`폴더 추가`)는 짧아서 안 걸린다.
+ */
+.btn-action {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-1);
+    padding: var(--sp-3) var(--sp-1);
+    font-size: 14px;
+    font-weight: 500;
+    word-break: keep-all;
+}
+
+.btn-primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 600;
+}
+.btn-primary:active {
+    background: var(--accent);
+    /* 라이트는 어두워지고 다크는 밝아져야 '눌렸다'로 읽힌다. 한 줄로 양쪽을 덮는다. */
+    filter: contrast(0.85);
+}
+
+/*
+ * 되돌릴 수 없는 동작. ★ 색만으로 구분하지 않는다 — 버튼 글자가 무슨 일이 일어나는지
+ * 직접 말해야 한다("삭제", "저장 안 함"). 색맹 사용자에게 색은 없는 정보다.
+ */
+.btn-danger {
+    border-color: #c0392b;
+    background: #c0392b;
+    color: #fff;
+}
+[data-theme='dark'] .btn-danger {
+    border-color: #e05c4c;
+    background: #e05c4c;
+    color: #1a0f0d;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/*
+ * ★ 색이 채워진 버튼 위에서는 포커스 링을 파랑으로 두지 마라.
+ *   빨간 [비우기] 버튼에 파란 테두리가 겹쳐서 두 색이 다투는 것처럼 보였다
+ *   (2026-08-04 다크 모드). 버튼 자기 글자색을 쓰면 어느 배경에서도 읽힌다.
+ */
+.btn-primary:focus-visible,
+.btn-danger:focus-visible {
+    outline-color: currentColor;
+}
+
+/* 상단 바에 들어가는 버튼은 바 높이를 밀지 않도록 낮춘다. 타깃은 44px 를 지킨다. */
+.btn-compact {
+    min-height: 44px;
+    padding: var(--sp-2) var(--sp-4);
+}
+
+/*
+ * 아이콘 버튼. ★ 보이는 것은 20px 짜리 글리프지만 타깃은 48×48 이다(10-1절).
+ *   글리프를 키워 타깃을 채우지 마라 — 작고 얇아야 정돈돼 보인다.
+ */
+.icon-btn {
+    flex: 0 0 auto;
+    width: var(--tap);
+    height: var(--tap);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: var(--r-full);
+    color: var(--md-fg);
+    font: inherit;
+    cursor: pointer;
+}
+.icon-btn:active {
+    background: var(--md-code-bg-inline);
+}
+.icon-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.icon-btn:disabled:active {
+    background: none;
+}
+
+/* ─────────────────────────── 토스트 ─────────────────────────── */
+
+/*
+ * #toast-root 는 index.html 에 항상 있고, 내용이 없을 때는 보이지 않아야 한다.
+ * ★ display:none 으로 감추지 마라. aria-live 영역이 DOM 에서 사라졌다 나타나면
+ *   TalkBack 이 변경을 못 읽는 경우가 있다. 투명도와 pointer-events 로만 감춘다.
+ */
+#toast-root {
+    position: fixed;
+    /*
+     * ★ left:50% + transform 으로 가운데 맞추지 마라. 폭을 지정하지 않은 fixed 상자는
+     *   '축소해서 맞추기(shrink-to-fit)'로 폭을 정하는데, 그때 쓸 수 있는 폭이
+     *   '담는 상자 폭 − left' 로 계산된다. left:50% 면 화면의 **절반**만 쓴다.
+     *   2026-08-03 실측: 화면 411px 인데 토스트가 205.7px 로 접혔다.
+     *   → left/right 를 양쪽에 주고 margin:auto + width:fit-content 로 가운데 맞춘다.
+     *     transform 은 오르내리는 애니메이션에만 쓴다.
+     */
+    left: calc(var(--sp-4) + var(--safe-left));
+    right: calc(var(--sp-4) + var(--safe-right));
+    /* 제스처 바 위. 하단 안전영역을 넘어서면 안 된다. */
+    bottom: calc(var(--sp-5) + var(--safe-bottom));
+    z-index: 1000;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: min(100%, 26rem);
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--r-md);
+    background: #22252a;
+    color: #f4f4f2;
+    font:
+        15px/1.45 var(--md-font-body),
+        sans-serif;
+    /* 긴 한국어 문장이 어색하게 끊기지 않도록 */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    text-align: center;
+    box-shadow: var(--shadow-2);
+
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+}
+
+#toast-root.is-open {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+[data-theme='dark'] #toast-root {
+    background: #343941;
+    color: #eceef1;
+}
+
+/* 오류는 색으로도 구분되지만, 색이 유일한 신호가 되지 않도록 문구가 상황을 말해야 한다. */
+#toast-root.toast-error {
+    background: #7a1f16;
+    color: #ffe9e5;
+}
+#toast-root.toast-success {
+    background: #14532d;
+    color: #e6f6ec;
+}
+
+/* ─────────────────────────── 다이얼로그 ─────────────────────────── */
+
+.dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* 안전영역 안쪽에 놓아 펀치홀·제스처 바와 겹치지 않게 한다. */
+    padding: calc(var(--sp-4) + var(--safe-top)) calc(var(--sp-4) + var(--safe-right))
+        calc(var(--sp-4) + var(--safe-bottom)) calc(var(--sp-4) + var(--safe-left));
+    background: var(--scrim);
+}
+
+.dialog {
+    width: 100%;
+    max-width: 24rem;
+    /* 본문이 길면 다이얼로그 안에서 스크롤한다. 화면 밖으로 나가면 버튼을 못 누른다. */
+    max-height: 100%;
+    overflow-y: auto;
+    padding: var(--sp-5);
+    border-radius: var(--r-lg);
+    background: var(--surface);
+    color: var(--md-fg);
+    box-shadow: var(--shadow-2);
+}
+
+.dialog-title {
+    margin: 0 0 var(--sp-3);
+    font:
+        600 18px/1.4 var(--md-font-body),
+        sans-serif;
+    word-break: keep-all;
+}
+
+.dialog-body {
+    margin: 0 0 var(--sp-5);
+    color: var(--md-fg-muted);
+    font:
+        15px/1.6 var(--md-font-body),
+        sans-serif;
+    /* 5-5절 안내문에 \n 이 들어간다. 줄바꿈을 살린다. */
+    white-space: pre-wrap;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+}
+
+.dialog-actions {
+    display: flex;
+    gap: var(--sp-2);
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
