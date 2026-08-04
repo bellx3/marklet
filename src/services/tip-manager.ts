@@ -187,7 +187,17 @@ class TipManagerClass {
     renderPrices(): void {
         const store = window.CdvPurchase?.store;
         for (const id of TIP_PRODUCT_IDS) {
-            const price = store?.get(id)?.getOffer?.()?.pricingPhases?.[0]?.formattedPrice ?? '';
+            /*
+             * ★★ 필드 이름은 `price` 다. `formattedPrice` 가 아니다.
+             *   플러그인의 PricingPhase 는 사람이 읽는 값을 `price` 에 담는다
+             *   (store.d.ts 의 "Price formatted for humans").
+             *   `formattedPrice` 는 **네이티브 브리지 쪽 이름**(formatted_price)이라
+             *   JS 객체에는 없다 — 읽으면 undefined 가 되고, 그러면 아래에서
+             *   '가격을 못 받았다'로 판정해 **버튼이 영원히 비활성으로 남는다.**
+             *   2026-08-04 실기기에서 확인: 로그에는 ₩1,500 이 내려와 있는데
+             *   화면의 후원 버튼 셋이 전부 회색이었다.
+             */
+            const price = store?.get(id)?.getOffer?.()?.pricingPhases?.[0]?.price ?? '';
             document.querySelectorAll(`[data-tip-price="${id}"]`).forEach((el) => {
                 el.textContent = price;
             });

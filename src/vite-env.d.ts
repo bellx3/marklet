@@ -16,11 +16,34 @@ declare const __APP_VERSION__: string;
 
 /* ── cordova-plugin-purchase 13.x ───────────────────────────── */
 
+/**
+ * 가격 한 단계.
+ *
+ * ★★ 사람이 읽는 값은 **`price`** 다. `formattedPrice` 가 **아니다.**
+ *   `formatted_price` 는 네이티브 브리지 쪽 이름이고, JS 객체까지 오면 `price` 가 된다
+ *   (node_modules/cordova-plugin-purchase/www/store.d.ts 의 PricingPhase —
+ *    "Price formatted for humans").
+ *
+ *   여기 이름을 틀리게 적어 두면 **타입이 오히려 잘못된 코드를 지켜 준다.**
+ *   2026-08-04에 그 일이 실제로 있었다: 이 선언이 `formattedPrice` 라서
+ *   `renderPrices()` 가 undefined 를 읽었고, 후원 버튼 셋이 영원히 비활성이었다.
+ *   목까지 같은 이름으로 맞춰져 있어 테스트도 초록불이었다(11-1절 1번 함정).
+ *
+ *   ★ 이 선언이 진짜 플러그인과 맞는지는 tip-manager.test.ts 가 store.d.ts 를
+ *     직접 읽어서 확인한다. 손으로 고치지 말고 그 테스트를 먼저 봐라.
+ */
+interface CdvPurchasePricingPhase {
+    /** 사람이 읽는 가격 문자열. 예: `₩1,500` */
+    price: string;
+    priceMicros?: number;
+    currency?: string;
+}
+
 interface CdvPurchaseOffer {
     id: string;
     canPurchase: boolean;
     order: () => Promise<void>;
-    pricingPhases?: { formattedPrice: string }[];
+    pricingPhases?: CdvPurchasePricingPhase[];
 }
 
 interface CdvPurchaseProduct {

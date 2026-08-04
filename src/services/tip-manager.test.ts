@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /*
  * 11-2절 #15 ~ #18.
@@ -63,7 +65,8 @@ function setupStore(): {
                 id: 'o',
                 canPurchase: true,
                 order: vi.fn(async () => {}),
-                pricingPhases: [{ formattedPrice: '₩1,200' }],
+                // ★ 필드 이름은 `price` 다. 아래 '진짜 플러그인과 맞는가' 테스트가 지킨다.
+                pricingPhases: [{ price: '₩1,200' }],
             }),
         })),
         when: vi.fn(() => chain),
@@ -223,5 +226,44 @@ describe('TipManager — 소모성 팁', () => {
         await TipManager.init();
         await TipManager.buy('tip_coffee');
         expect(toast.info).toHaveBeenCalled();
+    });
+});
+
+/**
+ * ★★ 목이 진짜 플러그인과 어긋나지 않았는지 **설치된 타입 정의를 직접 읽어** 확인한다.
+ *
+ * 2026-08-04에 이걸로 실제 사고가 났다. `vite-env.d.ts` 가 가격 필드를
+ * `formattedPrice` 로 잘못 선언했고, 목도 같은 이름으로 맞춰져 있어서
+ * **테스트는 초록불인데 실기기에서는 후원 버튼 셋이 영원히 비활성**이었다.
+ * 로그에는 ₩1,500 이 멀쩡히 내려와 있었다.
+ *
+ * 손으로 쓴 타입은 이렇게 원본과 대조하지 않으면 **잘못된 코드를 지켜 주는 쪽**으로 굳는다.
+ */
+describe('★ 손으로 쓴 타입이 진짜 플러그인과 맞는가', () => {
+    const dts = readFileSync(
+        join(process.cwd(), 'node_modules/cordova-plugin-purchase/www/store.d.ts'),
+        'utf8',
+    );
+
+    /** `interface PricingPhase { ... }` 본문만 떼어 낸다. */
+    const pricingPhase = /interface PricingPhase \{([\s\S]*?)\n {4}\}/.exec(dts)?.[1] ?? '';
+
+    it('PricingPhase 를 찾을 수 있다 (플러그인 구조가 바뀌면 여기서 먼저 깨진다)', () => {
+        expect(pricingPhase).not.toBe('');
+    });
+
+    it('사람이 읽는 가격 필드 이름은 price 다', () => {
+        expect(pricingPhase).toMatch(/^\s*price:\s*string;/m);
+    });
+
+    it('formattedPrice 라는 필드는 없다', () => {
+        expect(pricingPhase).not.toContain('formattedPrice');
+    });
+
+    it('우리 선언도 같은 이름을 쓴다', () => {
+        const ours = readFileSync(join(process.cwd(), 'src/vite-env.d.ts'), 'utf8');
+        const block = /interface CdvPurchasePricingPhase \{([\s\S]*?)\n\}/.exec(ours)?.[1] ?? '';
+        expect(block).toMatch(/price:\s*string;/);
+        expect(block).not.toMatch(/formattedPrice\s*:/);
     });
 });
