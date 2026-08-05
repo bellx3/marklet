@@ -1,10 +1,11 @@
-Thank you for testing. This release fixes things that were hard to see.
+Korean search did not work at all. Fixed — please give it a try.
 
-• App start is nearly twice as fast
-• Less stutter while scrolling a long document
-• Back from a zoomed diagram no longer closes the document too
-• Search now covers the whole of a long document
-• Diagram text was invisible in dark theme
-• Closed a path where edits in progress could be lost
+• Typing Korean in Find by name now shows results as you type
+  (initial consonants work too)
+• Find in document works the same way. Until now it only
+  searched after you pressed space or enter.
+• Folders with very many files say when only part is shown
+• Temporary copies left after saving are cleaned up
+• Settings, then five taps on the version, shows storage used
 
-Please try Back and Search a few times. Report anything odd to the address at the bottom of Settings.
+Report anything odd to the address at the bottom of Settings.
