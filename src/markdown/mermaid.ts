@@ -293,5 +293,12 @@ function fail(block: HTMLElement, message: string, src: string): void {
 /** 스크린 리더용. 첫 줄(그래프 종류)만 읽어 준다. 없는 것보다 낫다. */
 function mermaidAriaLabel(src: string): string {
     const first = src.trim().split('\n')[0]?.slice(0, 40) ?? '';
-    return `${t.mermaid.blockLabel}${first ? ` (${first})` : ''}`;
+    /*
+     * ★★ "탭하면 크게 보기" 를 여기에도 넣는다.
+     *   화면에서는 CSS ::after 로 알려 주는데(markdown.css), **의사요소는 접근성 트리에
+     *   올라가지 않는다.** 그래서 소리로 듣는 사람에게는 확대할 수 있다는 사실이
+     *   아예 전달되지 않았다 — 다이어그램은 폰 화면보다 넓어서 확대가 거의 필수인데도.
+     *   (2026-08-05 TalkBack 켜고 uiautomator 트리로 확인)
+     */
+    return `${t.mermaid.blockLabel}${first ? ` (${first})` : ''}, ${t.diagram.zoomHint}`;
 }

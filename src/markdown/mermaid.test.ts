@@ -179,3 +179,33 @@ describe('★ 테마', () => {
         expect(initialize).toHaveBeenCalledTimes(3);
     });
 });
+
+describe('★ 소리로 읽히는 이름', () => {
+    beforeEach(() => {
+        shouldFail = false;
+    });
+
+    it('다이어그램 종류와 확대 안내를 함께 읽어 준다', async () => {
+        const host = container();
+        await upgradeMermaidBlocks(host);
+
+        const label = host.querySelector('.mermaid-svg')?.getAttribute('aria-label') ?? '';
+        expect(label).toContain(t.mermaid.blockLabel);
+        expect(label).toContain('flowchart LR');
+        /*
+         * ★★ 화면에서는 CSS ::after 가 "탭하면 크게 보기" 를 보여 주는데
+         *   **의사요소는 접근성 트리에 안 올라간다.** 여기 없으면 소리로 듣는 사람은
+         *   확대할 수 있다는 걸 알 방법이 없다 — 다이어그램은 폰 화면보다 넓다.
+         */
+        expect(label).toContain(t.diagram.zoomHint);
+    });
+
+    it('그림으로 인지되고 포커스가 간다', async () => {
+        const host = container();
+        await upgradeMermaidBlocks(host);
+
+        const holder = host.querySelector<HTMLElement>('.mermaid-svg')!;
+        expect(holder.getAttribute('role')).toBe('img');
+        expect(holder.tabIndex).toBe(0);
+    });
+});
