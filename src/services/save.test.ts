@@ -22,6 +22,7 @@ const fs = {
     mkdir: vi.fn(),
     writeFile: vi.fn(),
     readFile: vi.fn(),
+    deleteFile: vi.fn(),
 };
 
 vi.mock('../plugins/md-file', () => ({
@@ -36,6 +37,7 @@ vi.mock('@capacitor/filesystem', () => ({
         mkdir: (o: unknown) => fs.mkdir(o),
         writeFile: (o: unknown) => fs.writeFile(o),
         readFile: (o: unknown) => fs.readFile(o),
+        deleteFile: (o: unknown) => fs.deleteFile(o),
     },
     Directory: { Data: 'DATA' },
     Encoding: { UTF8: 'utf8' },
@@ -55,6 +57,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     fs.mkdir.mockResolvedValue(undefined);
     fs.writeFile.mockResolvedValue(undefined);
+    fs.deleteFile.mockResolvedValue(undefined);
 });
 
 describe('saveDocument — 원본을 망가뜨리지 않는 순서', () => {
@@ -161,5 +164,61 @@ describe('isCloudUri', () => {
         expect(isCloudUri('content://com.android.externalstorage.documents/document/1')).toBe(
             false,
         );
+    });
+});
+
+describe('★ 백업 뒷정리', () => {
+    it('저장에 성공하면 백업을 지운다', async () => {
+        mdFile.read
+            .mockResolvedValueOnce({ ...DOC, content: '옛 내용' })
+            .mockResolvedValueOnce({ ...DOC, content: '새 내용' });
+        mdFile.write.mockResolvedValue({ bytesWritten: 9, uri: DOC.uri });
+
+        const r = await saveDocument(DOC, '새 내용');
+
+        expect(r.ok).toBe(true);
+        /*
+         * ★★ 여기까지 왔다는 것은 되읽어 검증까지 통과했다는 뜻이다.
+         *   옛 내용을 들고 있을 이유가 없다. 안 지우면 **저장에 성공할 때마다**
+         *   옛 내용 전체가 한 벌씩 앱 저장소에 영구히 쌓인다.
+         */
+        expect(fs.deleteFile).toHaveBeenCalledWith(
+            expect.objectContaining({ path: backupName(DOC.uri) }),
+        );
+    });
+
+    it('★★ 쓰기가 실패하면 백업을 절대 지우지 않는다', async () => {
+        mdFile.read.mockResolvedValueOnce({ ...DOC, content: '옛 내용' });
+        mdFile.write.mockRejectedValue(Object.assign(new Error('nope'), { code: 'EIO' }));
+
+        const r = await saveDocument(DOC, '새 내용');
+
+        expect(r.ok).toBe(false);
+        // 여기서 이 파일은 사용자의 유일한 밧줄이다 — [백업 내용 보기] 가 이걸 읽는다.
+        expect(fs.deleteFile).not.toHaveBeenCalled();
+        expect(r.ok === false && r.backupPath).toBe(backupName(DOC.uri));
+    });
+
+    it('★★ 검증이 실패해도 백업을 지우지 않는다', async () => {
+        mdFile.read
+            .mockResolvedValueOnce({ ...DOC, content: '옛 내용' })
+            .mockResolvedValueOnce({ ...DOC, content: '엉뚱한 내용' });
+        mdFile.write.mockResolvedValue({ bytesWritten: 9, uri: DOC.uri });
+
+        const r = await saveDocument(DOC, '새 내용');
+
+        expect(r.ok).toBe(false);
+        expect(fs.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('백업 지우기가 실패해도 저장은 성공으로 알린다', async () => {
+        mdFile.read
+            .mockResolvedValueOnce({ ...DOC, content: '옛 내용' })
+            .mockResolvedValueOnce({ ...DOC, content: '새 내용' });
+        mdFile.write.mockResolvedValue({ bytesWritten: 9, uri: DOC.uri });
+        fs.deleteFile.mockRejectedValue(new Error('지울 수 없음'));
+
+        // ★ "저장됐는데 실패했다" 는 앞뒤 안 맞는 말이다. 뒷정리 실패는 삼킨다.
+        await expect(saveDocument(DOC, '새 내용')).resolves.toMatchObject({ ok: true });
     });
 });

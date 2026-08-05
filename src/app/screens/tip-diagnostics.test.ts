@@ -17,6 +17,7 @@ const h = vi.hoisted(() => ({
     cleared: 0,
     copied: [] as string[],
     clipboardFails: { value: false },
+    buckets: [] as Array<{ name: string; files: number; bytes: number }>,
 }));
 
 vi.mock('../../services/tip-manager', async (importOriginal) => {
@@ -51,6 +52,14 @@ vi.mock('../../services/tip-manager', async (importOriginal) => {
     };
 });
 
+vi.mock('../../services/storage-usage', async (importOriginal) => {
+    const real = await importOriginal<typeof import('../../services/storage-usage')>();
+    return {
+        formatBytes: real.formatBytes,
+        measureStorage: async () => h.buckets,
+    };
+});
+
 vi.mock('../../utils/perf', () => ({
     getSamples: () => h.samples,
     clearSamples: () => {
@@ -72,6 +81,11 @@ beforeEach(() => {
     h.cleared = 0;
     h.copied.length = 0;
     h.clipboardFails.value = false;
+    h.buckets = [
+        { name: 'snapshot', files: 29, bytes: 29 * 1024 * 1024 },
+        { name: 'backup', files: 2, bytes: 28 * 1024 },
+        { name: 'draft', files: 0, bytes: 0 },
+    ];
 
     Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
@@ -279,5 +293,75 @@ describe('진단 화면 (12-3절)', () => {
         const pre = document.querySelector('pre.md-plain');
         expect(pre, '복사 실패했는데 펼쳐 주지도 않았다').not.toBeNull();
         expect(pre!.textContent).toContain('doc:parse');
+    });
+});
+
+describe('★ 앱이 보관 중인 사본', () => {
+    function mount() {
+        const screen = createDiagnostics(() => {});
+        document.body.appendChild(screen.root);
+        return screen;
+    }
+
+    /** 계측표 뒤에 오는 두 번째 .diag-list 가 저장소 표다. */
+    function storageRows(): string[][] {
+        const lists = [...document.querySelectorAll('.diag-list')];
+        const table = lists[lists.length - 1];
+        return [...table.querySelectorAll('.diag-row')].map((r) => [
+            r.querySelector('.diag-name')!.textContent!,
+            r.querySelector('.diag-ms')!.textContent!,
+            r.querySelector('.diag-at')!.textContent!,
+        ]);
+    }
+
+    it('갈래별로 크기와 개수를 보여 준다', async () => {
+        const screen = mount();
+        screen.refresh();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        /*
+         * ★★ 이 앱은 사용자 파일을 건드리지 않는 대신 앱 안에 사본을 만든다.
+         *   그런데 그건 안드로이드 '앱 정보 → 저장공간' 에만 숫자로 뜬다 —
+         *   사용자도 우리도 무엇이 얼마나 쌓였는지 알 방법이 없었다.
+         */
+        expect(storageRows()).toEqual([
+            [t.diagnostics.bucketSnapshot, '29.0 MB', '29'],
+            [t.diagnostics.bucketBackup, '28 KB', '2'],
+            [t.diagnostics.bucketDraft, '0 B', '0'],
+        ]);
+    });
+
+    it('★ 복사 글에도 사본 크기가 들어간다', async () => {
+        h.samples.push({ name: 'doc:parse', ms: 1, at: 1_700_000_000_000 });
+        const screen = mount();
+        screen.refresh();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        [...document.querySelectorAll<HTMLButtonElement>('.home-actions .btn')]
+            .find((b) => b.textContent === t.diagnostics.copy)!
+            .click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // 문의를 받았을 때 이 한 덩이만 있으면 되게 한다.
+        expect(h.copied[0]).toContain('snapshot');
+        expect(h.copied[0]).toContain('29.0 MB');
+    });
+
+    it('아무것도 안 쌓였으면 0 으로 보여 준다 — 줄을 감추지 않는다', async () => {
+        h.buckets = [
+            { name: 'snapshot', files: 0, bytes: 0 },
+            { name: 'backup', files: 0, bytes: 0 },
+            { name: 'draft', files: 0, bytes: 0 },
+        ];
+        const screen = mount();
+        screen.refresh();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // 줄이 없으면 "안 쟀다" 인지 "0 이다" 인지 알 수 없다.
+        expect(storageRows()).toHaveLength(3);
     });
 });

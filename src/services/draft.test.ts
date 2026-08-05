@@ -49,6 +49,19 @@ vi.mock('@capacitor/filesystem', () => ({
         deleteFile: async ({ path }: { path: string }) => {
             files.delete(path);
         },
+        // ★ 실제 플러그인처럼 폴더가 없으면 던진다. 조용히 빈 목록을 주면
+        //   "폴더 없음" 갈래를 시험한 적이 없게 된다.
+        readdir: async ({ path }: { path: string }) => {
+            // ★ 이것도 네이티브 왕복이다. 즉답으로 두면 정리가 쓰기보다 항상 먼저 끝나
+            //   **겹침이 아예 안 생긴다** — 목이 구현보다 순해지는 그 함정이다(11장).
+            await hop();
+            const prefix = `${path}/`;
+            const names = [...files.keys()]
+                .filter((p) => p.startsWith(prefix))
+                .map((p) => ({ name: p.slice(prefix.length), type: 'file' }));
+            if (names.length === 0) throw new Error('ENOENT');
+            return { files: names };
+        },
     },
     Directory: { Data: 'DATA' },
     Encoding: { UTF8: 'utf8' },
@@ -58,7 +71,7 @@ vi.mock('@capacitor/app', () => ({
     App: { addListener: async () => ({ remove: () => {} }) },
 }));
 
-const { scheduleDraftSave, flushDraft, readDraft, draftSavedAt, clearDraft } =
+const { scheduleDraftSave, flushDraft, readDraft, draftSavedAt, clearDraft, pruneDraftOrphans } =
     await import('./draft');
 
 beforeEach(() => {
@@ -208,5 +221,64 @@ describe('★ 쓰기가 겹칠 때', () => {
         await Promise.all([f1, f2]);
 
         expect(await readDraft('content://a')).toBe('두 번째');
+    });
+});
+
+describe('★ 닿을 수 없는 초안 정리', () => {
+    it('목록이 가리키지 않는 파일을 지운다', async () => {
+        scheduleDraftSave('content://a', '살아 있는 초안');
+        await flushDraft();
+
+        // v1.0.3 이하에서 목록이 덮여 쓰여 남은 파일을 흉내 낸다.
+        files.set('draft/orphan1.md', '아무도 못 읽는 글');
+        files.set('draft/orphan2.md', '이것도');
+        expect(files.size).toBe(3);
+
+        await pruneDraftOrphans();
+
+        /*
+         * ★★ 이런 파일은 readDraft 가 목록을 거쳐서만 찾으므로 **영원히 아무도 못 읽는다.**
+         *   자리만 차지한다.
+         */
+        expect(files.size).toBe(1);
+        expect(await readDraft('content://a')).toBe('살아 있는 초안');
+    });
+
+    it('★★ 살아 있는 초안은 건드리지 않는다', async () => {
+        scheduleDraftSave('content://a', 'A');
+        await flushDraft();
+        scheduleDraftSave('content://b', 'B');
+        await flushDraft();
+
+        await pruneDraftOrphans();
+
+        expect(await readDraft('content://a')).toBe('A');
+        expect(await readDraft('content://b')).toBe('B');
+    });
+
+    it('★★★ 쓰기 중에 끼어들어도 방금 쓴 초안을 지우지 않는다', async () => {
+        bridge.delayMs = 10;
+
+        scheduleDraftSave('content://a', '지금 쓰는 중');
+        const writing = flushDraft();
+        // 파일은 써졌는데 목록이 아직 안 갱신된 그 틈을 노린다.
+        const pruning = pruneDraftOrphans();
+
+        await vi.advanceTimersByTimeAsync(500);
+        await Promise.all([writing, pruning]);
+        bridge.delayMs = 0;
+
+        /*
+         * ★★ 정리를 쓰기 큐에 안 태우면 여기서 사용자 글이 사라진다 —
+         *   "목록에 없네" 하고 방금 쓴 파일을 지운다. 지우는 쪽이 데이터를
+         *   없애는 방향이라 겹침 사고 중에서도 제일 나쁘다.
+         */
+        expect(await readDraft('content://a'), '방금 쓴 초안이 정리에 지워졌다').toBe(
+            '지금 쓰는 중',
+        );
+    });
+
+    it('초안 폴더가 없어도 터지지 않는다', async () => {
+        await expect(pruneDraftOrphans()).resolves.toBeUndefined();
     });
 });

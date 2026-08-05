@@ -154,6 +154,11 @@ export const ko: Catalog = {
         copied: '복사했습니다.',
         copyFailed: '복사할 수 없어 화면에 펼쳤습니다. 길게 눌러 선택해 주세요.',
         empty: '아직 측정값이 없습니다. 문서를 한 번 열어 보세요.',
+        storage: '앱이 보관 중인 사본',
+        storageHint: '문의하실 때 이 숫자를 함께 알려 주시면 도움이 됩니다.',
+        bucketSnapshot: '다시 못 여는 문서의 사본',
+        bucketBackup: '저장 전 백업',
+        bucketDraft: '저장하지 않은 편집',
     },
 
     diagram: {

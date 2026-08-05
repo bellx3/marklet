@@ -152,6 +152,48 @@ async function removeDraft(uri: string): Promise<void> {
     await Filesystem.deleteFile({ path: entry.path, directory: Directory.Data }).catch(() => {});
 }
 
+/**
+ * 목록이 가리키지 않는 초안 파일을 지운다.
+ *
+ * ★★ 이런 파일은 **닿을 수 없다.** readDraft 는 목록을 거쳐서만 파일을 찾으므로,
+ *   목록에 없는 파일은 영원히 아무도 못 읽는다 — 자리만 차지한다.
+ *   v1.0.3 이하에서 쓰기가 겹쳐 목록이 덮여 쓰인 기기에 실제로 남아 있을 수 있다.
+ *
+ * ★ 개수나 나이로 지우지 않는다. 그건 **저장 안 된 사용자 글을 조용히 버리는 것**이라
+ *   이 앱이 하면 안 되는 일이다. 여기서 지우는 것은 이미 닿을 수 없게 된 것뿐이다.
+ *
+ * ★★ 반드시 쓰기 큐에 태운다. 안 그러면 이런 순서가 난다 —
+ *     ① writeDraft 가 파일을 쓴다
+ *     ② (목록 갱신 전) 정리가 끼어들어 "목록에 없네" 하고 **방금 쓴 초안을 지운다**
+ *     ③ 목록에는 있는데 파일이 없다
+ *   지우는 쪽이 데이터를 없애는 방향이라 더 나쁘다.
+ */
+export function pruneDraftOrphans(): Promise<void> {
+    writeQueue = writeQueue.then(removeOrphanDrafts, removeOrphanDrafts);
+    return writeQueue;
+}
+
+async function removeOrphanDrafts(): Promise<void> {
+    try {
+        const index = await loadIndex();
+        const known = new Set(Object.values(index).map((e) => e.path));
+
+        const { files } = await Filesystem.readdir({
+            path: 'draft',
+            directory: Directory.Data,
+        });
+
+        for (const f of files) {
+            const path = `draft/${f.name}`;
+            if (known.has(path)) continue;
+            await Filesystem.deleteFile({ path, directory: Directory.Data }).catch(() => {});
+            console.warn('닿을 수 없는 초안을 정리했다:', path);
+        }
+    } catch {
+        // 폴더가 아직 없거나 읽지 못했다. 정리는 하면 좋은 것이지 꼭 해야 하는 것이 아니다.
+    }
+}
+
 async function loadIndex(): Promise<DraftIndex> {
     try {
         const { value } = await Preferences.get({ key: INDEX_KEY });

@@ -1,4 +1,5 @@
 import { getSamples, clearSamples } from '../../utils/perf';
+import { measureStorage, formatBytes, type StorageBucket } from '../../services/storage-usage';
 import { Toast } from '../../utils/toast';
 import { iconButton } from '../icons';
 import { t, localeTag } from '../../i18n';
@@ -53,15 +54,73 @@ export function createDiagnostics(onBack: () => void): DiagnosticsScreen {
         refresh();
     });
 
+    /*
+     * ── 앱이 보관 중인 사본.
+     *
+     * ★★ 이 앱은 사용자 파일을 건드리지 않는 대신 앱 안에 사본을 만든다.
+     *   그런데 그건 안드로이드 '앱 정보 → 저장공간' 에만 숫자로 뜬다 —
+     *   사용자는 무엇이 얼마나 쌓였는지 알 방법이 없고, 문의를 받아도 물어볼 게 없었다.
+     */
+    const storage = document.createElement('div');
+    storage.className = 'diag-list';
+
+    const storageTitle = document.createElement('h2');
+    storageTitle.className = 'home-section-title';
+    storageTitle.textContent = t.diagnostics.storage;
+
+    const storageHint = document.createElement('p');
+    storageHint.className = 'setting-hint';
+    storageHint.textContent = t.diagnostics.storageHint;
+
     actions.append(copy, clear);
-    main.append(actions, table);
+    main.append(actions, table, storageTitle, storage, storageHint);
     root.append(bar, main);
+
+    const BUCKET_LABEL: Record<string, string> = {
+        snapshot: t.diagnostics.bucketSnapshot,
+        backup: t.diagnostics.bucketBackup,
+        draft: t.diagnostics.bucketDraft,
+    };
+
+    function renderStorage(buckets: StorageBucket[]): void {
+        storage.replaceChildren();
+        for (const b of buckets) {
+            const row = document.createElement('div');
+            row.className = 'diag-row';
+
+            const name = document.createElement('span');
+            name.className = 'diag-name';
+            name.textContent = BUCKET_LABEL[b.name] ?? b.name;
+
+            const size = document.createElement('span');
+            size.className = 'diag-ms';
+            size.textContent = formatBytes(b.bytes);
+
+            const count = document.createElement('span');
+            count.className = 'diag-at';
+            count.textContent = `${b.files}`;
+
+            row.append(name, size, count);
+            storage.appendChild(row);
+        }
+    }
 
     function asText(): string {
         const lines = getSamples().map(
             (s) => `${new Date(s.at).toISOString()}\t${s.name}\t${s.ms.toFixed(1)}ms`,
         );
-        return [`Marklet ${__APP_VERSION__}`, navigator.userAgent, '', ...lines].join('\n');
+        // ★ 사본 크기도 함께 넣는다. 문의를 받았을 때 이 한 덩이만 있으면 되게 한다.
+        const storageLines = lastBuckets.map(
+            (b) => `${b.name}\t${b.files}개\t${formatBytes(b.bytes)}`,
+        );
+        return [
+            `Marklet ${__APP_VERSION__}`,
+            navigator.userAgent,
+            '',
+            ...lines,
+            '',
+            ...storageLines,
+        ].join('\n');
     }
 
     async function copyAll(): Promise<void> {
@@ -79,7 +138,16 @@ export function createDiagnostics(onBack: () => void): DiagnosticsScreen {
         }
     }
 
+    /** 마지막으로 잰 사본 크기. 복사 글에도 함께 넣는다. */
+    let lastBuckets: StorageBucket[] = [];
+
     function refresh(): void {
+        // ★ 파일 목록 읽기는 느릴 수 있다. 화면을 붙잡지 않는다.
+        void measureStorage().then((b) => {
+            lastBuckets = b;
+            renderStorage(b);
+        });
+
         table.replaceChildren();
         const samples = getSamples();
         if (samples.length === 0) {

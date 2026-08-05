@@ -165,6 +165,11 @@ export const en = {
         copied: 'Copied.',
         copyFailed: 'Could not copy, so the values are shown below. Long-press to select them.',
         empty: 'No measurements yet. Try opening a document first.',
+        storage: 'Copies kept by the app',
+        storageHint: 'Including these numbers in a report helps a lot.',
+        bucketSnapshot: 'Copies of documents that cannot be reopened',
+        bucketBackup: 'Backups taken before saving',
+        bucketDraft: 'Unsaved edits',
     },
 
     diagram: {

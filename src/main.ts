@@ -8,7 +8,7 @@ import './styles/utilities.css';
 import { loadSettings, watchSystemTheme } from './services/settings';
 import { t, setLanguage } from './i18n';
 import { TipManager } from './services/tip-manager';
-import { installDraftFlushHooks } from './services/draft';
+import { installDraftFlushHooks, pruneDraftOrphans } from './services/draft';
 import { initRouter } from './app/router';
 import { initDocumentEntry } from './services/document-entry';
 import { reconcileRecents } from './services/recents';
@@ -44,6 +44,13 @@ async function boot(): Promise<void> {
     await installDraftFlushHooks();
     void reconcileRecents().then(() => shell.refreshRecents());
     void TipManager.init(); // deviceready 를 기다리므로 await 하지 않는다
+
+    /*
+     * ★ 닿을 수 없게 된 초안 파일 정리. 첫 화면 뒤에 조용히 돈다 —
+     *   부팅을 붙잡을 값어치가 없고, 실패해도 아무 일도 안 일어난다.
+     */
+
+    void pruneDraftOrphans();
 }
 
 async function hideSplash(): Promise<void> {
