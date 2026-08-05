@@ -88,6 +88,33 @@ export function choiceDialog(o: {
             overlay.hide();
         };
 
+        /*
+         * 기본 포커스를 어디에 둘 것인가.
+         *
+         * 보통은 마지막(=가장 오른쪽, 주) 버튼이다 — 사용자가 하려던 일이 대개 그것이다.
+         *
+         * ★★ 그런데 그게 **되돌릴 수 없는** 버튼이면 안 된다.
+         *   하드웨어 키보드의 Enter 한 번이나 TalkBack 의 '활성화' 한 번으로
+         *   쓰던 글이 사라진다. 화면을 손으로 누르는 사람에게는 안 보이는 차이지만
+         *   잃는 것은 똑같다. 설계서가 정한 규칙이기도 하다 —
+         *   "'버리기'를 기본 선택으로 두지 마라. 실수로 누르면 되돌릴 수 없다."
+         *
+         *   위험한 갈래가 하나라도 있으면 **안전한 쪽 중 마지막**을 잡는다.
+         *   전부 위험하면 아무 데도 두지 않는다(그때는 제목부터 읽힌다).
+         */
+        // ★ findLastIndex 를 쓰지 마라 — ES2023 이고 빌드 타깃은 es2020 이라
+        //   폴리필되지 않는다. 구형 WebView 에서 **다이얼로그가 통째로 터진다.**
+        let focusIndex = o.actions.length - 1;
+        if (o.actions.some((a) => a.destructive)) {
+            focusIndex = -1;
+            for (let i = o.actions.length - 1; i >= 0; i--) {
+                if (!o.actions[i].destructive) {
+                    focusIndex = i;
+                    break;
+                }
+            }
+        }
+
         o.actions.forEach((a, i) => {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -95,8 +122,7 @@ export function choiceDialog(o: {
                 a.destructive ? ' btn-danger' : ''
             }`;
             btn.textContent = a.label;
-            // 마지막(=가장 오른쪽) 버튼이 기본 포커스다.
-            if (i === o.actions.length - 1) btn.dataset.autofocus = '';
+            if (i === focusIndex) btn.dataset.autofocus = '';
             btn.addEventListener('click', () => finish(a.value));
             actions.appendChild(btn);
         });
