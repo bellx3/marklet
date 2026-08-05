@@ -1,16 +1,11 @@
-Thank you for testing Marklet.
+Thank you for testing Marklet. Please try each of these once.
 
-Please try each of these once — it helps a lot.
-
-• Open a .md from another app (file manager, messenger, mail)
-• Add a folder, then check its documents stay on the start screen
+• Open a .md from another app (files, messenger, mail)
+• Add a folder, then check its documents stay listed
 • Open a document with tables, diagrams and math
-• Edit and save one, then check the original file is intact
-• Find a file by initial consonants (ㅁㅋㄷㅇ → 마크다운)
+• Edit and save one, then check the original is intact
+• Find a file by initial consonants (ㅁㅋㄷㅇ)
 
-Fixed in this build
-• New app icon
-• The tip button could not be tapped
-• A discarded draft could come back
+Fixed: new app icon; tip button could not be tapped; a discarded draft came back.
 
-If something looks wrong, write to the address at the bottom of Settings. Saying which document it happened with makes it much easier to find.
+Something wrong? Write to the address at the bottom of Settings.
