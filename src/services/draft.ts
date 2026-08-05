@@ -35,16 +35,40 @@ export function scheduleDraftSave(uri: string, content: string): void {
     timer = setTimeout(() => void flushDraft(), DEBOUNCE_MS);
 }
 
+/**
+ * 앞선 쓰기가 끝날 때까지 줄을 세운다.
+ *
+ * ★★ 목록(index)은 **읽고-고치고-쓴다.** Preferences 는 JS↔네이티브 왕복이라
+ *   두 flush 가 겹치면 나중 것이 앞 것을 못 본 채 목록을 통째로 덮어쓴다.
+ *   그러면 초안 **파일은 남는데 목록이 가리키지 않는다** — readDraft 가 null 을
+ *   돌려주니 "저장하지 않은 편집" 을 묻지도 않고, 사용자가 친 글이 조용히
+ *   닿을 수 없는 곳으로 간다. 잃은 줄도 모르니 신고조차 안 된다.
+ *
+ *   겹치는 경로가 실제로 있다 — leaveEditor() 는 flushDraft() 를 기다리지 않고
+ *   띄우고(그게 맞다, 화면을 붙잡을 이유가 없다), 곧바로 새 문서 편집이 시작된다.
+ *   (2026-08-05 테스트로 재현)
+ */
+let writeQueue: Promise<void> = Promise.resolve();
+
 /** 디바운스를 무시하고 즉시 쓴다. */
-export async function flushDraft(): Promise<void> {
+export function flushDraft(): Promise<void> {
     if (timer !== null) {
         clearTimeout(timer);
         timer = null;
     }
     const job = pending;
     pending = null;
-    if (!job) return;
+    if (!job) return writeQueue;
 
+    // ★ 앞 작업이 실패해도 줄이 끊기면 안 된다.
+    writeQueue = writeQueue.then(
+        () => writeDraft(job),
+        () => writeDraft(job),
+    );
+    return writeQueue;
+}
+
+async function writeDraft(job: { uri: string; content: string }): Promise<void> {
     const path = draftPath(job.uri);
     try {
         await Filesystem.mkdir({
@@ -107,6 +131,19 @@ export async function clearDraft(uri: string): Promise<void> {
         }
     }
 
+    /*
+     * ★ 지우기도 목록을 읽고-고치고-쓴다. 쓰기와 같은 줄에 세우지 않으면
+     *   진행 중인 초안 저장과 겹쳐 서로의 변경을 덮어쓴다 — 지운 초안이
+     *   되살아나거나, 남아야 할 초안이 목록에서 사라진다.
+     */
+    writeQueue = writeQueue.then(
+        () => removeDraft(uri),
+        () => removeDraft(uri),
+    );
+    return writeQueue;
+}
+
+async function removeDraft(uri: string): Promise<void> {
     const index = await loadIndex();
     const entry = index[uri];
     if (!entry) return;
