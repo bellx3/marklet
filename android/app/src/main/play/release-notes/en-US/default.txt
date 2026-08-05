@@ -6,6 +6,6 @@ Thank you for testing Marklet. Please try each of these once.
 • Edit and save one, then check the original is intact
 • Find a file by initial consonants (ㅁㅋㄷㅇ)
 
-Fixed: new app icon; tip button could not be tapped; a discarded draft came back.
+Fixed: math broke on reopening a document; tip button could not be tapped; a discarded draft came back.
 
 Something wrong? Write to the address at the bottom of Settings.
