@@ -23,14 +23,28 @@ export function looksLikeMermaid(source: string): boolean {
 const RENDER_TIMEOUT_MS = 5000;
 
 let mermaidApi: typeof import('mermaid').default | null = null;
-let loadFailed = false;
+
+/**
+ * 실패한 시도의 횟수. **영구 차단이 아니라 한도다.**
+ *
+ * ★★ 예전에는 `loadFailed = true` 로 한 번 실패하면 영영 잠갔다. 그러면
+ *   저메모리 기기에서 900KB 청크가 한 번 미끄러졌을 때 **앱을 다시 켜기 전까지
+ *   모든 문서의 다이어그램이 죽는다.** 사용자는 코드 블록만 보고 고장으로 읽는다.
+ *   원인이 일시적인 경우가 대부분이므로 다음 문서에서 다시 해 볼 값어치가 있다.
+ *
+ * ★ 그렇다고 무제한으로 다시 하지도 않는다. 정말 안 되는 기기에서 문서를 열 때마다
+ *   900KB 를 다시 받으려 들면 그게 더 나쁘다. 몇 번 해 보고 그만둔다.
+ */
+let loadFailures = 0;
+const MAX_LOAD_ATTEMPTS = 3;
 
 /**
  * 청크를 받아 초기화한다. 두 번 불러도 한 번만 로드된다.
  * ★ 실패를 던지지 않는다. null 을 돌려주고 호출자는 코드 블록을 그대로 둔다.
  */
 async function ensureMermaid(): Promise<typeof import('mermaid').default | null> {
-    if (mermaidApi || loadFailed) return mermaidApi;
+    if (mermaidApi) return mermaidApi;
+    if (loadFailures >= MAX_LOAD_ATTEMPTS) return null;
     try {
         const mod = await import('mermaid');
         const api = mod.default;
@@ -55,9 +69,15 @@ async function ensureMermaid(): Promise<typeof import('mermaid').default | null>
         return api;
     } catch (err) {
         console.error('Mermaid 로드 실패:', err);
-        loadFailed = true;
+        loadFailures += 1;
         return null;
     }
+}
+
+/** 로드 실패 횟수를 되돌린다. 테스트 전용. */
+export function __resetMermaidLoadForTest(): void {
+    mermaidApi = null;
+    loadFailures = 0;
 }
 
 function isDark(): boolean {

@@ -194,7 +194,10 @@ public class MdFilePlugin extends Plugin {
             }
 
             byte[] bytes = bos.toByteArray();
-            Decoded decoded = decodeText(bytes);
+            TextDecoding.Result decoded = TextDecoding.decode(bytes);
+            if (!"UTF-8".equals(decoded.charset)) {
+                Log.i(TAG, "UTF-8 디코딩 실패율이 높아 " + decoded.charset + " 로 폴백했다");
+            }
 
             JSObject ret = describe(uri);
             ret.put("content", decoded.text);
@@ -209,57 +212,6 @@ public class MdFilePlugin extends Plugin {
         }
     }
 
-    private static class Decoded {
-        final String text;
-        final String charset;
-        Decoded(String text, String charset) { this.text = text; this.charset = charset; }
-    }
-
-    /**
-     * UTF-8을 먼저 시도하고, 치환 문자(U+FFFD)가 과하면 EUC-KR(CP949)로 다시 디코드한다.
-     *
-     * 한국어 사용자의 오래된 .md/.txt 는 CP949 인 경우가 실제로 있다. UTF-8 로만 읽으면
-     * 화면이 통째로 깨져 보이고 사용자는 "앱이 고장났다"고 판단한다.
-     * 판정은 보수적으로 — 정상 UTF-8 문서에는 U+FFFD 가 사실상 0개다.
-     */
-    private static Decoded decodeText(byte[] bytes) {
-        int off = 0;
-        // BOM 제거. 윈도우에서 만든 .md 에 흔하다.
-        if (bytes.length >= 3
-                && (bytes[0] & 0xFF) == 0xEF
-                && (bytes[1] & 0xFF) == 0xBB
-                && (bytes[2] & 0xFF) == 0xBF) {
-            off = 3;
-        }
-
-        String utf8 = new String(bytes, off, bytes.length - off, StandardCharsets.UTF_8);
-        if (replacementRatio(utf8) < 0.01) {
-            return new Decoded(utf8, "UTF-8");
-        }
-
-        try {
-            Charset cp949 = Charset.forName("EUC-KR");
-            String alt = new String(bytes, off, bytes.length - off, cp949);
-            if (replacementRatio(alt) < replacementRatio(utf8)) {
-                Log.i(TAG, "UTF-8 디코딩 실패율이 높아 EUC-KR 로 폴백했다");
-                return new Decoded(alt, "EUC-KR");
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "EUC-KR 폴백 실패: " + e.getMessage());
-        }
-        return new Decoded(utf8, "UTF-8");
-    }
-
-    /** 앞부분 표본에서 U+FFFD 비율. 전체를 훑으면 큰 파일에서 느리다. */
-    private static double replacementRatio(String s) {
-        int limit = Math.min(s.length(), 8192);
-        if (limit == 0) return 0;
-        int bad = 0;
-        for (int i = 0; i < limit; i++) {
-            if (s.charAt(i) == '�') bad++;
-        }
-        return (double) bad / limit;
-    }
 
     // ────────────────────────────────────────────────────────────
     // 쓰기  ← @capacitor/filesystem 이 못 하는 부분
