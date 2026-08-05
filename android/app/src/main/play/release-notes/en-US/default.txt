@@ -1,11 +1,10 @@
-Thank you for testing Marklet. Please try each of these once.
+Thank you for testing. This release fixes things that were hard to see.
 
-• Open a .md from another app (files, messenger, mail)
-• Add a folder, then check its documents stay listed
-• Open a document with tables, diagrams and math
-• Edit and save one, then check the original is intact
-• Find a file by initial consonants (ㅁㅋㄷㅇ)
+• App start is nearly twice as fast
+• Less stutter while scrolling a long document
+• Back from a zoomed diagram no longer closes the document too
+• Search now covers the whole of a long document
+• Diagram text was invisible in dark theme
+• Closed a path where edits in progress could be lost
 
-Fixed: math broke on reopening a document; tip button could not be tapped; a discarded draft came back.
-
-Something wrong? Write to the address at the bottom of Settings.
+Please try Back and Search a few times. Report anything odd to the address at the bottom of Settings.
