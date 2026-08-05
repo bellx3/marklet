@@ -226,11 +226,31 @@ export function createHome(cb: HomeCallbacks): HomeScreen {
         }
     }
 
+    /**
+     * ★★ 새로고침은 겹친다. 몇 군데서 부르는지 세어 보면 안다 —
+     *   시작 화면 복귀 · 설정에서 나오기 · 폴더 추가 직후 · 문서 목록 변경.
+     *   그런데 폴더 읽기는 SAF I/O 라 폴더가 크면 몇 초씩 걸린다.
+     *
+     *   세대 번호가 없으면 **먼저 시작한 느린 요청이 나중 결과를 덮는다.**
+     *   사용자 눈에는 방금 추가한 폴더가 목록에서 사라진 것으로 보인다 —
+     *   "폴더 추가가 안 먹었다". 원인은 화면 어디에도 안 남는다.
+     *   (2026-08-05 테스트로 재현)
+     */
+    let refreshSeq = 0;
+
     async function refresh(): Promise<void> {
-        recents = await loadRecents();
+        const seq = ++refreshSeq;
+
+        const nextRecents = await loadRecents();
         const folders = await loadFolders();
         // 폴더는 병렬로 읽는다. 하나가 느려도 나머지가 먼저 나온다.
-        listings = await Promise.all(folders.map((f) => listFolder(f)));
+        const nextListings = await Promise.all(folders.map((f) => listFolder(f)));
+
+        // 내가 기다리는 동안 더 새 요청이 시작됐다면 그쪽이 맞다. 조용히 물러난다.
+        if (seq !== refreshSeq) return;
+
+        recents = nextRecents;
+        listings = nextListings;
         rerender();
     }
 
