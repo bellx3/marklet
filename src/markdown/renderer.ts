@@ -3,7 +3,6 @@ import anchor from 'markdown-it-anchor';
 import footnote from 'markdown-it-footnote';
 import taskLists from 'markdown-it-task-lists';
 import { isSafeUrl } from './sanitize';
-import { highlightCode } from './highlight';
 
 /**
  * CJS/ESM 상호운용 래퍼.
@@ -42,7 +41,8 @@ export function createMarkdownIt(opts: RendererOptions): MarkdownIt {
         linkify: true, // 맨 URL 자동 링크. 비용 1MB당 +25ms(실측). AI 문서에 URL이 많아 켠다.
         breaks: opts.breaks,
         typographer: false, // 한국어에 스마트 따옴표는 이득이 없고 CPU만 쓴다.
-        highlight: highlightCode,
+        // ★ highlight 를 여기서 걸지 마라 — 거는 순간 hljs(22.6KB)가 초기 번들에 딸려 온다.
+        //   코드가 있는 문서에서만 ensureHighlight(md) 로 붙인다(highlight.ts).
     });
 
     // ★ 반드시 덮어쓴다 — 기본값은 capacitor:// 를 통과시킨다.

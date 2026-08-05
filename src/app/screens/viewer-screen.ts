@@ -7,6 +7,7 @@ import {
     type RenderHandle,
 } from '../../markdown/render-pipeline';
 import { looksLikeMath, ensureMath } from '../../markdown/math';
+import { looksLikeCode, ensureHighlight } from '../../markdown/highlight';
 import { looksLikeMermaid, upgradeMermaidBlocks } from '../../markdown/mermaid';
 import { bindDocumentLinks } from './viewer';
 import { bindDiagramZoom, closeDiagramViewer } from './diagram-viewer';
@@ -261,8 +262,15 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
         const { frontmatter, body: markdown } = parseDocument(content);
         const md = createMarkdownIt({ breaks: getSettings().breaks });
 
-        // 2. ★ 수식이 있으면 parse 전에 KaTeX 를 붙여야 한다. 렌더 도중이면 앞 청크에 안 들어간다.
-        if (looksLikeMath(markdown)) await ensureMath(md);
+        /*
+         * 2. ★ 무거운 것들은 parse 전에 붙인다. 렌더 도중이면 앞 청크에 안 들어간다.
+         *   둘 다 문서에 실제로 있을 때만 받는다 — 코드 없는 문서는 hljs 를 아예 안 받는다.
+         *   ★ 나란히 기다린다. 순서대로 await 하면 둘 다 있는 문서에서 두 배로 늦다.
+         */
+        await Promise.all([
+            looksLikeMath(markdown) ? ensureMath(md) : null,
+            looksLikeCode(markdown) ? ensureHighlight(md) : null,
+        ]);
 
         if (frontmatter) frontmatterSlot.appendChild(renderFrontmatter(frontmatter));
 

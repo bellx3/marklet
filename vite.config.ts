@@ -104,6 +104,22 @@ export default defineConfig(({ mode }) => ({
             output: {
                 manualChunks(id) {
                     /*
+                     * ★★★ Vite 의 preload 헬퍼를 **반드시 자기 청크로 떼어 낸다.**
+                     *
+                     *   이걸 안 하면 Rollup 이 그 헬퍼를 아무 청크에나 넣는데,
+                     *   실제로 **mermaid 청크(902KB)에 들어갔다.** 헬퍼는 동적 import 를
+                     *   부르는 쪽(=초기 코드)이 정적으로 import 하므로, 결과적으로
+                     *   index.html 이 mermaid 청크를 modulepreload 하고 부팅 때
+                     *   902KB 를 통째로 받아 실행했다 —
+                     *   **제품 결정서 11.1 의 1번 규칙("mermaid 를 정적 import 하지 않는다")이
+                     *   산출물에서 깨져 있었다.** (2026-08-05 빌드 산출물에서 발견)
+                     *
+                     *   node_modules 검사보다 **먼저** 와야 한다. 헬퍼는 가상 모듈이라
+                     *   경로에 node_modules 가 없어서 아래 return undefined 에 먹힌다.
+                     */
+                    if (id.includes('vite/preload-helper')) return 'preload-helper';
+
+                    /*
                      * ★★ **node_modules 만 본다.** 아래 조건은 경로 문자열 검사라서
                      *   우리 소스인 `src/markdown/mermaid.ts` 도 함께 걸린다.
                      *   그러면 그 파일이 import 하는 것들(i18n 카탈로그 등)이 통째로

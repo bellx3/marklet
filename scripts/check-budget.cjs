@@ -14,7 +14,8 @@ const zlib = require('zlib');
 
 const ROOT = path.join(__dirname, '..');
 // ★ vite.config.ts 의 build.outDir 과 같아야 한다 (dist 가 아니라 www)
-const ASSETS = path.join(ROOT, 'www', 'assets');
+const DIST = path.join(ROOT, 'www');
+const ASSETS = path.join(DIST, 'assets');
 const SRC = path.join(ROOT, 'src');
 
 const BUDGET_INITIAL_JS_KB = 200; // 목표 150, 상한 200
@@ -35,6 +36,18 @@ const LAZY_BUDGETS = {
     mermaid: {
         limitKb: 1000, // 목표 950. gzip 936KB 실측 — 낮추지 마라
         pkgs: ['mermaid'],
+    },
+    /*
+     * ★★ 2026-08-05 에 지연으로 옮겼다. 그 전에는 core + 언어 12개가 정적 import 라
+     *   **모든 실행에 22.6KB** 가 얹혔다 — 시작 화면에도, 코드 없는 문서에도.
+     *   초기 번들의 16% 였다.
+     *
+     * ★ 상한을 넉넉히 잡지 마라. 여기가 늘어난다는 것은 대개 언어를 더 넣었다는 뜻인데,
+     *   그건 "코드가 있는 문서를 여는 사람"이 매번 치르는 비용이다.
+     */
+    hljs: {
+        limitKb: 40, // 목표 25. 실측 23.3KB
+        pkgs: ['highlight.js'],
     },
 };
 const LAZY_NAMES = Object.keys(LAZY_BUDGETS);
@@ -133,6 +146,38 @@ for (const [name, { limitKb, pkgs }] of Object.entries(LAZY_BUDGETS)) {
     const detail = n > 1 ? ` (${n}개 파일 합)` : '';
     console.log(`지연 ${name.padEnd(8)}: ${got.toFixed(1)}KB${detail} / 상한 ${limitKb}KB`);
     if (got > limitKb) over.push(`${name} ${got.toFixed(1)}KB`);
+}
+
+/*
+ * ★★★ 지연 청크가 index.html 에 preload 되어 있으면 **지연이 아니다.**
+ *
+ *   2026-08-05에 실제로 그랬다. Vite 의 preload 헬퍼가 mermaid 청크에 들어가는 바람에
+ *   초기 코드가 그 청크를 정적 import 했고, index.html 이 902KB 를 modulepreload 했다.
+ *   부팅 때 통째로 받아 실행하고 있었다 — 크기 예산은 전부 초록불이었는데도.
+ *   실측 차이: DOM 완료 633ms → 346ms.
+ *
+ *   ★ 크기만 재면 이 사고를 못 잡는다. **어디서 불러오는지**도 봐야 한다.
+ */
+const htmlFiles = fs.readdirSync(DIST).filter((f) => f.endsWith('.html'));
+for (const html of htmlFiles) {
+    const text = fs.readFileSync(path.join(DIST, html), 'utf8');
+    const preloads = [...text.matchAll(/<link[^>]+rel="modulepreload"[^>]+href="([^"]+)"/g)].map(
+        (m) => m[1],
+    );
+    for (const href of preloads) {
+        const bad = LAZY_NAMES.find((n) => href.includes(n));
+        if (bad) {
+            console.error(
+                `✗ ${html} 이 지연 청크 '${bad}' 를 modulepreload 한다 — 부팅 때 통째로 받는다`,
+            );
+            console.error(
+                `  ${href}\n` +
+                    '  초기 코드가 그 청크에서 무언가를 정적 import 하고 있다는 뜻이다.' +
+                    ' vite.config.ts 의 manualChunks 를 확인해라.',
+            );
+            over.push(`${bad} 프리로드됨`);
+        }
+    }
 }
 
 if (initialJs > BUDGET_INITIAL_JS_KB) over.push(`초기 JS ${initialJs.toFixed(1)}KB`);
