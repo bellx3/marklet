@@ -1,7 +1,7 @@
 import { getSamples, clearSamples } from '../../utils/perf';
 import { Toast } from '../../utils/toast';
 import { iconButton } from '../icons';
-import { t } from '../../i18n';
+import { t, localeTag } from '../../i18n';
 
 /**
  * 진단 화면 (12-3절).
@@ -104,7 +104,9 @@ export function createDiagnostics(onBack: () => void): DiagnosticsScreen {
 
             const at = document.createElement('span');
             at.className = 'diag-at';
-            at.textContent = new Date(s.at).toLocaleTimeString('ko-KR');
+            // ★ 'ko-KR' 을 박아 두지 마라 — 영어로 쓰는 사람에게 "오후 3:04:12" 가 나온다.
+            //   i18n/index.ts 80줄이 이미 금지한 것이고 folders 정렬은 지키고 있었다.
+            at.textContent = new Date(s.at).toLocaleTimeString(localeTag());
 
             row.append(name, ms, at);
             table.appendChild(row);
