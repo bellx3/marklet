@@ -1,0 +1,320 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+/**
+ * S1 뷰어 화면 — 문서를 갈아탈 때 앞 문서의 것이 남지 않는지.
+ *
+ * ★★ 왜 여기가 위험한가.
+ *   뷰어는 컨테이너를 재사용한다. 화면·시트·오버레이를 문서마다 새로 만들지 않고
+ *   같은 것을 다시 채운다(그게 빠르니까). 그래서 **지우는 것을 빠뜨리면
+ *   앞 문서의 잔해가 새 문서 위에 그대로 남는다** — 그런데 화면은 멀쩡해 보인다.
+ *
+ * ★ 문서를 갈아타는 길은 사실상 하나뿐이다: **밖에서 들어오는 인텐트**.
+ *   앱 안에서는 시트를 닫아야만 다른 문서로 갈 수 있어서 손으로는 재현이 어렵다.
+ *   카톡에서 .md 를 누르면 시트가 열려 있든 말든 새 문서가 밀고 들어온다.
+ */
+
+const h = vi.hoisted(() => ({
+    nativeStore: new Map<string, string>(),
+}));
+
+vi.mock('@capacitor/app', () => ({
+    App: {
+        exitApp: vi.fn(async () => {}),
+        addListener: vi.fn(async () => ({ remove: async () => {} })),
+    },
+}));
+
+vi.mock('@capacitor/browser', () => ({
+    Browser: { open: vi.fn(async () => {}) },
+}));
+
+vi.mock('@capacitor/preferences', () => ({
+    Preferences: {
+        get: async ({ key }: { key: string }) => ({ value: h.nativeStore.get(key) ?? null }),
+        set: async ({ key, value }: { key: string; value: string }) => {
+            h.nativeStore.set(key, value);
+        },
+        remove: async ({ key }: { key: string }) => {
+            h.nativeStore.delete(key);
+        },
+    },
+}));
+
+import { createViewerScreen, type ViewerScreen } from './viewer-screen';
+import { __resetRouterForTest, hasLayer } from '../router';
+import { t } from '../../i18n';
+import type { MdDocument } from '../../plugins/md-file';
+
+function doc(over: Partial<MdDocument> = {}): MdDocument {
+    return {
+        uri: 'content://docs/a.md',
+        name: 'a.md',
+        size: 128,
+        mimeType: 'text/markdown',
+        writable: true,
+        ...over,
+    };
+}
+
+const cb = {
+    onBack: vi.fn(),
+    onEdit: vi.fn(),
+    onSettings: vi.fn(),
+    onPickFile: vi.fn(),
+    onShare: vi.fn(),
+    onSharePlain: vi.fn(),
+    onShareFile: vi.fn(),
+};
+
+let screen: ViewerScreen;
+
+function buttonByLabel(label: string): HTMLButtonElement | null {
+    return (
+        [...document.querySelectorAll('button')].find(
+            (b) => b.getAttribute('aria-label') === label,
+        ) ?? null
+    );
+}
+
+/** 붙어 있는 타이머·마이크로태스크가 풀릴 때까지 돌린다. */
+async function settle(): Promise<void> {
+    for (let i = 0; i < 12; i++) await vi.advanceTimersByTimeAsync(50);
+}
+
+beforeEach(() => {
+    vi.useFakeTimers();
+    h.nativeStore.clear();
+    __resetRouterForTest();
+    Object.values(cb).forEach((f) => f.mockClear());
+
+    // 모션 줄이기를 켠 상태로 본다 — 오버레이가 타이머 없이 즉시 확정되어
+    // '열렸다/닫혔다'를 애매함 없이 볼 수 있다.
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+        (q: string) =>
+            ({
+                matches: q.includes('prefers-reduced-motion'),
+                media: q,
+                onchange: null,
+                addEventListener: () => {},
+                removeEventListener: () => {},
+                addListener: () => {},
+                removeListener: () => {},
+                dispatchEvent: () => false,
+            }) as unknown as MediaQueryList,
+    );
+
+    screen = createViewerScreen(cb);
+    document.body.appendChild(screen.root);
+});
+
+afterEach(() => {
+    screen.destroy();
+    vi.useRealTimers();
+});
+
+describe('뷰어 — 기본', () => {
+    it('문서 이름을 제목에 건다', async () => {
+        await screen.show(doc({ name: '회의록.md' }), '# 안녕\n\n본문');
+        expect(screen.root.querySelector('.topbar-title')?.textContent).toBe('회의록.md');
+    });
+
+    it('본문을 그린다', async () => {
+        await screen.show(doc(), '# 제목\n\n문단 하나');
+        await settle();
+        expect(screen.root.querySelector('.md-target')?.textContent).toContain('문단 하나');
+    });
+
+    it('읽기 전용 문서에 안내 줄을 띄운다', async () => {
+        await screen.show(doc({ writable: false }), '# 문서');
+        const notice = screen.root.querySelector<HTMLElement>('.viewer-notice');
+        expect(notice?.hidden).toBe(false);
+        expect(notice?.textContent).toBe(t.viewer.readOnlyNotice);
+    });
+
+    it('사본을 보고 있으면 그렇게 말한다', async () => {
+        await screen.show(doc(), '# 문서', { fromSnapshot: true });
+        expect(screen.root.querySelector<HTMLElement>('.viewer-notice')?.textContent).toBe(
+            t.viewer.snapshotNotice,
+        );
+    });
+
+    it('원문만 보여 주는 문서에는 편집 버튼을 감춘다', async () => {
+        await screen.show(doc(), '아주 큰 문서', { plain: true });
+        expect(buttonByLabel(t.viewer.edit)?.hidden).toBe(true);
+    });
+
+    it('파일이 아닌 문서에는 파일 공유를 감춘다', async () => {
+        await screen.show(doc({ uri: '' }), '# 예제');
+        const item = [...screen.root.querySelectorAll<HTMLElement>('.menu-item')].find(
+            (b) => b.textContent === t.viewer.shareFile,
+        );
+        expect(item?.hidden).toBe(true);
+    });
+});
+
+describe('⋮ 메뉴', () => {
+    it('열고 닫을 때 aria-expanded 가 따라간다', async () => {
+        await screen.show(doc(), '# 문서');
+        const moreBtn = buttonByLabel(t.viewer.more)!;
+        const menu = screen.root.querySelector<HTMLElement>('.more-menu')!;
+
+        expect(menu.hidden).toBe(true);
+        moreBtn.click();
+        expect(menu.hidden).toBe(false);
+        expect(moreBtn.getAttribute('aria-expanded')).toBe('true');
+
+        moreBtn.click();
+        expect(menu.hidden).toBe(true);
+        expect(moreBtn.getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('상단 바 안에 있다 — 형제로 두면 본문을 아래로 밀어낸다', async () => {
+        await screen.show(doc(), '# 문서');
+        const menu = screen.root.querySelector<HTMLElement>('.more-menu')!;
+        // 2026-08-04 사용자가 지적한 그 버그. 구조로 고정해 둔다.
+        expect(menu.closest('.app-topbar')).not.toBeNull();
+    });
+
+    it('바깥(스크림)을 누르면 닫힌다', async () => {
+        await screen.show(doc(), '# 문서');
+        buttonByLabel(t.viewer.more)!.click();
+
+        const scrim = screen.root.querySelector<HTMLElement>('.menu-scrim')!;
+        expect(scrim.hidden).toBe(false);
+        scrim.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        expect(screen.root.querySelector<HTMLElement>('.more-menu')!.hidden).toBe(true);
+    });
+});
+
+describe('★ 문서를 갈아탈 때', () => {
+    /** 목차 시트를 연다. 시트는 #overlay-root(없으면 body)에 붙는다. */
+    function openToc(): HTMLElement {
+        buttonByLabel(t.viewer.toc)!.click();
+        const sheet = document.querySelector<HTMLElement>('[aria-labelledby="toc-title"]')!;
+        expect(sheet, '목차 시트가 없다').not.toBeNull();
+        return sheet;
+    }
+
+    it('앞 문서의 목차 시트가 새 문서 위에 남지 않는다', async () => {
+        await screen.show(doc(), '# 첫째\n\n가\n\n## 둘째\n\n나');
+        await settle();
+
+        const sheet = openToc();
+        expect(sheet.hidden).toBe(false);
+        expect(sheet.textContent).toContain('첫째');
+
+        // 카톡에서 다른 .md 를 눌렀다. 시트를 닫을 틈이 없다.
+        await screen.show(doc({ uri: 'content://docs/b.md', name: 'b.md' }), '# 전혀 다른 문서');
+        await settle();
+
+        /*
+         * ★★ 남으면 **앞 문서의 제목들이 새 문서의 목차인 척** 떠 있게 된다.
+         *   눌러도 그 id 가 새 문서에 없으니 아무 일도 안 일어난다.
+         */
+        expect(sheet.hidden).toBe(true);
+    });
+
+    it("앞 문서의 목차가 back 스택에 'toc' 를 남기지 않는다", async () => {
+        await screen.show(doc(), '# 첫째');
+        await settle();
+        openToc();
+        expect(hasLayer('toc')).toBe(true);
+
+        await screen.show(doc({ uri: 'content://docs/b.md' }), '# 다른 문서');
+        await settle();
+
+        // 남으면 뒤로가기 한 번을 이미 화면에 없는 시트가 잡아먹는다(9-4절).
+        expect(hasLayer('toc')).toBe(false);
+    });
+
+    it('⋮ 메뉴가 새 문서 위에 남지 않는다', async () => {
+        await screen.show(doc(), '# 문서');
+        buttonByLabel(t.viewer.more)!.click();
+        expect(screen.root.querySelector<HTMLElement>('.more-menu')!.hidden).toBe(false);
+
+        await screen.show(doc({ uri: 'content://docs/b.md' }), '# 다른 문서');
+        await settle();
+
+        const menu = screen.root.querySelector<HTMLElement>('.more-menu')!;
+        expect(menu.hidden).toBe(true);
+        // 스크림이 남으면 화면 전체가 눌리지 않는다.
+        expect(screen.root.querySelector<HTMLElement>('.menu-scrim')!.hidden).toBe(true);
+    });
+
+    it('보기 설정 시트가 새 문서 위에 남지 않는다', async () => {
+        await screen.show(doc(), '# 문서');
+        buttonByLabel(t.viewer.more)!.click();
+        [...screen.root.querySelectorAll<HTMLElement>('.menu-item')]
+            .find((b) => b.textContent === t.viewer.viewSettings)!
+            .click();
+
+        const sheet = document.querySelector<HTMLElement>('[aria-labelledby="view-title"]')!;
+        expect(sheet.hidden).toBe(false);
+
+        await screen.show(doc({ uri: 'content://docs/b.md' }), '# 다른 문서');
+        await settle();
+
+        expect(sheet.hidden).toBe(true);
+    });
+
+    it('★ 진행 표시가 새 문서 위에 남지 않는다', async () => {
+        /*
+         * 청크가 둘 이상이어야 렌더가 '아직 도는 중'이 된다 —
+         * 한 청크에 들어가면 show() 를 await 하는 동안 다 끝나 버려서
+         * 애초에 표시가 켜져 있지 않다(TOKENS_PER_CHUNK = 600, 문단 하나가 약 3토큰).
+         */
+        const big = Array.from({ length: 400 }, (_, i) => `문단 ${i}`).join('\n\n');
+        await screen.show(doc(), `# 큰 문서\n\n${big}`, { showProgress: true });
+
+        const busy = screen.root.querySelector<HTMLElement>('.viewer-busy')!;
+        expect(busy.hidden, '큰 문서인데 진행 표시가 안 떴다').toBe(false);
+
+        /*
+         * ★★ 다음 문서가 4MB 를 넘으면 plain 경로로 가는데, 그 경로는
+         *   complete 를 기다리지 않고 곧바로 끝난다 — 표시를 꺼 줄 사람이 없다.
+         *   앞 문서 것이 그대로 남아 **끝나지 않는 문서처럼 보인다.**
+         */
+        await screen.show(doc({ uri: 'content://docs/b.md' }), '아주 큰 원문', { plain: true });
+        await settle();
+
+        expect(busy.hidden).toBe(true);
+    });
+
+    it('앞 문서의 본문이 남지 않는다', async () => {
+        await screen.show(doc(), '# 첫째 문서\n\n첫째 본문');
+        await settle();
+        expect(screen.root.querySelector('.md-target')?.textContent).toContain('첫째 본문');
+
+        await screen.show(doc({ uri: 'content://docs/b.md' }), '# 둘째 문서\n\n둘째 본문');
+        await settle();
+
+        const text = screen.root.querySelector('.md-target')?.textContent ?? '';
+        expect(text).toContain('둘째 본문');
+        expect(text).not.toContain('첫째 본문');
+    });
+});
+
+describe('rerender — 같은 문서', () => {
+    it('보기 설정 시트는 열어 둔 채로 다시 그린다', async () => {
+        await screen.show(doc(), '# 문서\n\n본문');
+        await settle();
+
+        buttonByLabel(t.viewer.more)!.click();
+        [...screen.root.querySelectorAll<HTMLElement>('.menu-item')]
+            .find((b) => b.textContent === t.viewer.viewSettings)!
+            .click();
+        const sheet = document.querySelector<HTMLElement>('[aria-labelledby="view-title"]')!;
+        expect(sheet.hidden).toBe(false);
+
+        /*
+         * ★ 여기서 시트를 닫으면 안 된다. 설정을 하나 바꿀 때마다 시트가 닫히면
+         *   여러 개를 바꿔 보려는 사람이 매번 다시 열어야 한다.
+         *   갈아타기(show)와 다시 그리기(rerender)는 서로 다르다.
+         */
+        await screen.rerender();
+        await settle();
+
+        expect(sheet.hidden).toBe(false);
+        expect(screen.root.querySelector('.md-target')?.textContent).toContain('본문');
+    });
+});

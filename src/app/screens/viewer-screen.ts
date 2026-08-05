@@ -223,6 +223,16 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
         handle?.cancel();
         frontmatterSlot.replaceChildren();
 
+        /*
+         * ★★ 표시를 반드시 여기서 끈다.
+         *   켜는 조건(showProgress)과 끄는 조건(complete.then)이 서로 다른 자리에 있어서,
+         *   **끄는 쪽이 아예 실행되지 않는 경로**가 있다. 512KB 문서를 그리는 중에
+         *   4MB 넘는 문서로 갈아타면 새 문서는 plain 경로라 complete 를 기다리지 않고
+         *   곧바로 끝난다 — 앞 문서의 "그리는 중" 이 그대로 남아
+         *   **끝나지 않는 문서처럼 보인다.** 켜기 전에 끄면 그 갈래가 사라진다.
+         */
+        busy.hidden = true;
+
         title.textContent = doc?.name ?? 'Marklet';
 
         // 알림 줄 — ★ 사용자가 사본을 편집하고 저장했다고 믿게 두면 그게 곧 데이터 유실이다.
@@ -288,6 +298,21 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
     const screen: ViewerScreen = {
         root,
         async show(nextDoc, nextContent, opts = {}) {
+            /*
+             * ★★ 갈아타기 전에 열려 있는 것을 전부 닫는다.
+             *   뷰어는 컨테이너를 재사용하므로 시트·메뉴는 문서가 바뀌어도 그대로 떠 있다.
+             *   목차 시트가 남으면 **앞 문서의 제목들이 새 문서의 목차인 척** 보이고,
+             *   눌러도 그 id 가 없어 아무 일도 안 일어난다. back 스택에도 'toc' 가 남아
+             *   뒤로가기 한 번을 화면에 없는 시트가 먹는다(9-4절).
+             *
+             *   ★ 앱 안에서는 시트를 닫아야만 다른 문서로 갈 수 있어서 손으로는 잘 안 나온다.
+             *     밖에서 들어오는 인텐트(카톡의 .md)는 그 순서를 지키지 않는다.
+             *
+             *   ★ rerender 에는 걸지 않는다. 보기 설정 시트가 자기 자신을 다시 그리게 하는데,
+             *     거기서 닫아 버리면 설정을 하나 바꿀 때마다 시트가 사라진다.
+             */
+            screen.closeOverlays();
+
             doc = nextDoc;
             content = nextContent;
             options = opts;
