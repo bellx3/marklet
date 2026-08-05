@@ -96,11 +96,20 @@ export function createHome(cb: HomeCallbacks): HomeScreen {
         query = search.value;
         rerender();
     }, 120);
-    search.addEventListener('input', (e) => {
-        // 한글 조합 중에는 훑지 않는다(8-6절 6번 규칙과 같은 이유).
-        if ((e as InputEvent).isComposing) return;
-        onQuery();
-    });
+    /*
+     * ★★ `if (e.isComposing) return;` 을 되돌리지 마라. **초성 검색이 아예 안 돈다.**
+     *
+     *   검색창에서는 사용자가 마지막 글자를 치고 멈춘다 — 뒤에 스페이스도 엔터도 안 친다.
+     *   그런데 한글 IME 는 마지막 음절을 조합 상태로 열어 두므로 compositionend 가
+     *   영영 안 온다. 실기기에서 "ㅇㅁ" 을 쳤는데 목록 13개가 그대로였다
+     *   (2026-08-06, 실제 Gboard 한국어 자판).
+     *   이 앱이 내세우는 기능인데 한국어 사용자에게는 처음부터 죽어 있었다.
+     *
+     *   "매 자모마다 훑지 마라" 는 **디바운스가 이미 한다**(120ms).
+     *   치는 동안에는 안 돌고, 멈췄을 때만 돈다.
+     */
+    search.addEventListener('input', () => onQuery());
+    // 조합이 끝나는 순간에도 한 번 — 확정된 글자로 즉시 반응한다.
     search.addEventListener('compositionend', () => onQuery());
     search.addEventListener('keydown', (e) => {
         // ★ 조합 중인 Enter 를 가로채면 한글이 씹힌다(9-5절).

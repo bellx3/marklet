@@ -286,16 +286,43 @@ describe('★ 한글 IME (6번 규칙)', () => {
         await vi.advanceTimersByTimeAsync(10);
     });
 
-    it('조합 중에는 훑지 않는다', async () => {
+    it('★★ 조합 중에도 훑는다 — 안 그러면 한글 검색이 아예 안 돈다', async () => {
         const input = bar.root.querySelector<HTMLInputElement>('.search-input')!;
-        input.value = 'ㅎ';
+        input.value = '한글';
         input.dispatchEvent(
             Object.assign(new Event('input'), { isComposing: true }) as unknown as Event,
         );
         await vi.advanceTimersByTimeAsync(200);
-        // 조합 중 자모로 훑으면 결과가 튀고 화면이 번쩍인다.
+
+        /*
+         * ★★ 이 테스트는 예전에 정반대를 고정하고 있었다("조합 중에는 훑지 않는다").
+         *   그런데 검색창에서는 사용자가 마지막 글자를 치고 **멈춘다** — 뒤에
+         *   스페이스도 엔터도 안 친다. 한글 IME 는 마지막 음절을 조합 상태로 열어 두므로
+         *   compositionend 가 영영 안 온다.
+         *   실기기에서 문서에 "조합" 이 있는데 "조합" 을 치고 3초를 기다려도 0/0 이었다
+         *   (2026-08-06, Gboard 한국어 자판).
+         */
+        expect(marks(), '조합 중이라고 건너뛰면 한글 검색이 죽는다').toEqual(['한글']);
+    });
+
+    it('★ 그래도 매 자모마다 훑지는 않는다 — 디바운스가 막는다', async () => {
+        const input = bar.root.querySelector<HTMLInputElement>('.search-input')!;
+        for (const v of ['ㅎ', '하', '한', '한그', '한글']) {
+            input.value = v;
+            input.dispatchEvent(
+                Object.assign(new Event('input'), { isComposing: true }) as unknown as Event,
+            );
+            await vi.advanceTimersByTimeAsync(30); // 120ms 안에 이어서 친다
+        }
+        // 중간 자모로 훑으면 결과가 튀고 화면이 번쩍인다. 아직 안 돌았어야 한다.
         expect(marks()).toEqual([]);
 
+        await vi.advanceTimersByTimeAsync(200);
+        expect(marks()).toEqual(['한글']);
+    });
+
+    it('조합이 끝나는 순간에도 반응한다', async () => {
+        const input = bar.root.querySelector<HTMLInputElement>('.search-input')!;
         input.value = '한글';
         input.dispatchEvent(new Event('compositionend'));
         await vi.advanceTimersByTimeAsync(200);

@@ -84,16 +84,26 @@ export function createSearchBar(
         next.disabled = none;
     };
 
-    // 6번 규칙 — 조합 중에는 돌리지 않는다. compositionend 뒤 120ms 디바운스.
+    // 6번 규칙 — 매 글자마다 돌리지 않는다. 120ms 디바운스가 그 몫을 한다.
     const rerun = debounce(() => {
         state = runSearch(container, input.value);
         updateCounter();
     }, 120);
 
-    input.addEventListener('input', (e) => {
-        if ((e as InputEvent).isComposing) return;
-        rerun();
-    });
+    /*
+     * ★★ `if (e.isComposing) return;` 을 되돌리지 마라. 한글 검색이 **아예 안 돈다.**
+     *
+     *   검색창에서는 사용자가 마지막 글자를 치고 **멈춘다.** 뒤에 스페이스도 엔터도
+     *   치지 않는다. 그런데 한글 IME 는 마지막 음절을 조합 상태로 열어 둔 채 기다린다 —
+     *   compositionend 가 영영 안 온다. 그래서 "조합" 을 쳐도 3초가 지나도 0/0 이었다
+     *   (2026-08-06 실기기, 실제 Gboard 한국어 자판으로 확인).
+     *
+     *   6번 규칙의 뜻은 "중간 자모마다 문서를 훑지 마라" 지 "조합 중에는 아무것도 하지
+     *   마라" 가 아니다. 앞의 것은 **디바운스가 이미 한다** — 치는 동안에는 안 돌고,
+     *   120ms 쉬었을 때만 돈다. 그때 칸에 있는 글자가 곧 사용자가 찾는 것이다.
+     */
+    input.addEventListener('input', () => rerun());
+    // 조합이 끝나는 순간에도 한 번 — 확정된 글자로 즉시 반응한다.
     input.addEventListener('compositionend', () => rerun());
     input.addEventListener('keydown', (e) => {
         // ★ 조합 중인 Enter 는 가로채면 안 된다 — 한글 확정용까지 먹으면 글자가 씹힌다.
