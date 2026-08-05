@@ -107,7 +107,20 @@ if (playCredentialsFile.exists()) {
         defaultToAppBundles.set(true)
         // 기본은 내부 테스트 트랙 — 프로덕션 배포는 --track production으로 지정
         track.set('internal')
-        releaseStatus.set(com.github.triplet.gradle.androidpublisher.ReleaseStatus.COMPLETED)
+        /*
+         * ⚠️ **앱이 아직 한 번도 게시되지 않았으면 COMPLETED 로 못 올린다.**
+         *
+         *   400 Only releases with status draft may be created on draft app.
+         *
+         * 내부 테스트는 심사를 안 거쳐서 COMPLETED 가 통했는데, 비공개 테스트
+         * (alpha)는 심사를 거치므로 첫 출시가 반드시 draft 여야 한다. 올린 뒤
+         * Play Console 에서 "검토를 위해 Google에 버전 전송"을 눌러야 나간다.
+         *
+         * 첫 정식 출시가 끝나면 COMPLETED 로 되돌려도 된다. 그때는
+         * `-PreleaseStatus=completed` 로 주면 된다.
+         */
+        def wantStatus = (project.findProperty('releaseStatus') ?: 'draft').toUpperCase()
+        releaseStatus.set(com.github.triplet.gradle.androidpublisher.ReleaseStatus.valueOf(wantStatus))
     }
 } else {
     logger.lifecycle("ℹ️ play-service-account.json이 없어 Play 업로드 태스크가 비활성화되었습니다.")

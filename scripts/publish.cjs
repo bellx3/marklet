@@ -111,12 +111,24 @@ async function main() {
 
     console.log(`🚀 v${version} → ${track} 트랙 업로드 중...`);
 
-    const result = spawnSync(`"${gradlew}"`, [':app:publishReleaseBundle', '--track', track], {
-        cwd: androidDir,
-        env: { ...process.env, JAVA_HOME: javaHome },
-        stdio: 'inherit',
-        shell: true,
-    });
+    /*
+     * ⚠️ **--rerun-tasks 를 빼지 마라.**
+     *
+     * publishReleaseBundle 은 AAB 가 안 바뀌면 UP-TO-DATE 로 건너뛴다. 그런데
+     * 업로드가 **실패한** 뒤에도 그 판단이 남아서, 다시 돌리면 아무것도 안
+     * 올리고 BUILD SUCCESSFUL 을 뱉는다. 실제로 그렇게 세 번을 "성공"으로
+     * 보고받고 트랙은 비어 있었다.
+     */
+    const result = spawnSync(
+        `"${gradlew}"`,
+        [':app:publishReleaseBundle', '--track', track, '--rerun-tasks'],
+        {
+            cwd: androidDir,
+            env: { ...process.env, JAVA_HOME: javaHome },
+            stdio: 'inherit',
+            shell: true,
+        },
+    );
 
     if (result.error) {
         console.error('❌ gradlew 실행 실패:', result.error.message);
@@ -127,9 +139,79 @@ async function main() {
         process.exit(result.status ?? 1);
     }
 
+    /*
+     * Gradle 이 0으로 끝나도 **트랙에 들어갔는지는 별개**다. 위의 UP-TO-DATE
+     * 건이 그랬다. 올라간 것을 눈으로 확인하고 나서 성공이라고 말한다.
+     */
+    const landed = await verifyTrack(track, version);
+    if (!landed) {
+        console.error('');
+        console.error(`❌ gradlew 는 성공했지만 ${track} 트랙에서 v${version}를 찾지 못했습니다.`);
+        console.error('   Play Console에서 직접 확인하세요.');
+        process.exit(1);
+    }
+
     console.log('');
-    console.log(`✅ v${version}를 ${track} 트랙에 업로드했습니다.`);
-    console.log('   Play Console에서 검토 상태를 확인하세요.');
+    console.log(`✅ v${version}를 ${track} 트랙에 올렸습니다. (상태: ${landed.status})`);
+    if (landed.status === 'draft') {
+        console.log('   아직 초안입니다. Play Console에서 "검토를 위해 Google에 버전 전송"을');
+        console.log('   눌러야 테스터에게 배포됩니다.');
+    }
+}
+
+/** 트랙을 실제로 읽어 그 버전이 들어갔는지 본다 */
+async function verifyTrack(track, version) {
+    const crypto = require('crypto');
+    const creds = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+    const API = 'https://androidpublisher.googleapis.com/androidpublisher/v3';
+    const pkg = require(path.join(repoRoot, 'capacitor.config.json')).appId;
+    const b64 = (s) => Buffer.from(s).toString('base64url');
+
+    const now = Math.floor(Date.now() / 1000);
+    const h = b64(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+    const cl = b64(
+        JSON.stringify({
+            iss: creds.client_email,
+            scope: 'https://www.googleapis.com/auth/androidpublisher',
+            aud: 'https://oauth2.googleapis.com/token',
+            exp: now + 3600,
+            iat: now,
+        }),
+    );
+    const sig = crypto.createSign('RSA-SHA256').update(`${h}.${cl}`).sign(creds.private_key).toString('base64url');
+    const tok = await (
+        await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion: `${h}.${cl}.${sig}`,
+            }),
+        })
+    ).json();
+    if (!tok.access_token) return null;
+
+    const call = async (p, o = {}) => {
+        const r = await fetch(API + p, { ...o, headers: { Authorization: `Bearer ${tok.access_token}` } });
+        const x = await r.text();
+        try {
+            return x ? JSON.parse(x) : {};
+        } catch {
+            return {};
+        }
+    };
+
+    const id = (await call(`/applications/${pkg}/edits`, { method: 'POST' })).id;
+    if (!id) return null;
+    try {
+        const t = await call(`/applications/${pkg}/edits/${id}/tracks/${track}`);
+        for (const rel of t.releases ?? []) {
+            if ((rel.versionCodes ?? []).length && (!rel.name || rel.name.includes(version))) return rel;
+        }
+        return null;
+    } finally {
+        await call(`/applications/${pkg}/edits/${id}`, { method: 'DELETE' });
+    }
 }
 
 main();
