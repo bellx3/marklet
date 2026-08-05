@@ -18,6 +18,15 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = function scrollIntoView() {};
 }
 
+// scrollTo — jsdom 은 "Not implemented" 를 콘솔에 쏟는다(레이아웃 엔진이 없어서).
+// 실제 WebView 에는 있다. 조용한 무동작으로 채워 진짜 실패만 보이게 한다.
+if (typeof window !== 'undefined') {
+    window.scrollTo = (() => {}) as typeof window.scrollTo;
+    if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
+        Element.prototype.scrollTo = function scrollTo() {};
+    }
+}
+
 // matchMedia — jsdom 에 없다. 실제 브라우저에는 항상 있으므로 환경 메우기다.
 // 기본값은 '전부 거짓'(모션 줄이기 꺼짐 · 라이트 테마)이고,
 // 필요한 테스트는 각자 vi.spyOn(window,'matchMedia') 으로 덮어쓴다.

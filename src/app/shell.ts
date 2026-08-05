@@ -308,7 +308,28 @@ async function openExample(): Promise<void> {
 // 화면 전환
 // ────────────────────────────────────────────────────────────
 
+/**
+ * 편집을 접는다. 초안은 지키고 나간다(destroy 안에서 flushDraft 한다).
+ *
+ * ★★ 편집 중에 **밖에서** 다른 문서가 들어올 수 있다 — 카톡에서 .md 를 누르는 순간이다.
+ *   document-entry 는 "버리시겠습니까"만 묻고, 사용자가 승낙하면 곧바로 새 문서를 연다.
+ *   그런데 그 경로는 editor 를 건드리지 않으므로 **편집기가 살아남는다.**
+ *   화면은 멀쩡해 보이는데 안에서는:
+ *     1) editor 가 null 이 아니고 textarea 에 옛 글이 남아 hasUnsavedChanges() 가
+ *        영영 true 다 → 그 뒤로 문서를 열 때마다 근거 없는 "저장하지 않은 편집" 이 뜬다
+ *     2) back 스택에 'editor' 가 남아 뒤로가기가 옛 문서의 편집 화면으로 되돌아간다
+ */
+function leaveEditor(): void {
+    if (!editor) return;
+    editor.destroy();
+    editor = null;
+    removeLayer('editor');
+}
+
 function enterViewer(): void {
+    // ★ 문서가 화면에 올라오는 길목은 여기 하나다. 접는 것도 여기서 한다 —
+    //   호출하는 쪽마다 넣으면 반드시 한 곳을 빠뜨린다.
+    leaveEditor();
     showScreen('viewer');
     // ★ 여는 순간 동기적으로 등록한다(9-3절).
     pushLayer('viewer', () => {
