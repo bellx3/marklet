@@ -4,8 +4,27 @@ import { sanitize } from './sanitize';
 import { liftTaskCheckedState, postProcessSection } from './post-process';
 import { record } from '../utils/perf';
 
-/** 청크 하나에 들어갈 최상위 토큰 수. ★ 기기 실측 후 조정할 값이다(12장). */
-export const TOKENS_PER_CHUNK = 600;
+/**
+ * 청크 하나에 들어갈 최상위 토큰 수.
+ *
+ * ★★ 600 → 250 (2026-08-05 에뮬레이터 실측, 밀도 420 / 1080x2400).
+ *   600KB 문서를 배경 렌더하는 ~11초 동안 메인 스레드가 100ms 넘게 막힌 시간의 합:
+ *     600토큰 → 2361 · 1905 · 2380ms   (평균 2215)
+ *     250토큰 →  812 ·  698 ·  431 · 1362ms (평균 826)
+ *   **평균 2.7배 차이다.** 편차가 크니 한 번 재고 판단하지 마라 —
+ *   위 숫자도 각각 세 번 이상 돌린 것이다.
+ *   그 시간 동안 스크롤이 그대로 멎으므로 사용자가 바로 느낀다.
+ *
+ * ★ 공짜가 아니다. 청크가 늘면 <section> 도 늘고 총 렌더 시간이 길어진다.
+ *     600KB : 전체 렌더 7.4초 → 7.9초 (+6%)
+ *     2.5MB : 전체 렌더 25초 → 30초 (+21%), 검색 9.4초 → 12.3초 (+31%)
+ *   그래도 250 을 고른 이유 — **버벅임은 읽는 내내 느끼고, 총 렌더 시간은
+ *   검색·목차를 누를 때만 드러난다.** 그리고 2.5MB 는 확인 다이얼로그 뒤에 있는
+ *   드문 경우지만 600KB 는 흔한 크기다.
+ *
+ * ★ 400 도 재 봤는데 600KB 에서 2381ms 로 600 과 차이가 없었다. 효과가 선형이 아니다.
+ */
+export const TOKENS_PER_CHUNK = 250;
 
 /**
  * 토큰 배열을 nesting 균형이 맞는 지점에서만 자른다.
@@ -113,20 +132,43 @@ export function renderProgressive(
         resolveComplete = r;
     });
 
+    /**
+     * 청크 하나가 **화면을 실제로 붙잡은 시간**의 최대값.
+     *
+     * ★★ maxChunkMs 와 다르다. 그쪽은 renderRange() 안의 JS 만 잰다 —
+     *   innerHTML 을 넣는 것까지는 재지만 그 뒤에 브라우저가 하는
+     *   스타일 계산·레이아웃·페인트는 빠진다. 그래서 실제로 화면이 215ms 멎을 때도
+     *   83.9ms 로 찍혔다(2026-08-05 2.5MB 실측). 상한이 100ms 인데
+     *   **넘는 일이 영영 없으니 "줄여라"는 지침이 발동하지 않았다.**
+     *
+     *   여기서는 '붙이기 시작'부터 '브라우저가 다음 프레임을 준 순간'까지를 잰다.
+     *   그게 사용자가 스크롤을 못 하는 시간이다. 이미 있는 yield 를 가로질러 재므로
+     *   추가 비용은 없다.
+     */
+    let maxStallMs = 0;
+    let appendedAt = 0;
+
     const loop = async () => {
         while (next < ranges.length) {
             if (cancelled) break;
             await yieldToBrowser();
+            if (appendedAt > 0) {
+                maxStallMs = Math.max(maxStallMs, performance.now() - appendedAt);
+                appendedAt = 0;
+            }
             // ★★ await 뒤에 조건을 **다시** 본다. 기다리는 동안 renderRest() 가
             //   남은 청크를 전부 붙여 next 를 끝까지 올려놨을 수 있다.
             //   이 검사를 빼면 ranges[next] 가 undefined 가 되어 여기서 터지고
             //   (TypeError: undefined is not iterable) 렌더가 조용히 멈춘다.
             //   실제 경로: 큰 문서를 열자마자 목차·검색을 누르면 그대로 밟는다.
             if (cancelled || next >= ranges.length) break;
+            appendedAt = performance.now();
             container.appendChild(renderRange(next));
             next++;
         }
         if (maxChunkMs > 0) record('doc:chunk-max', maxChunkMs);
+        // ★ 이쪽이 사용자가 느끼는 값이다. 100ms 를 넘으면 TOKENS_PER_CHUNK 를 줄여라.
+        if (maxStallMs > 0) record('doc:chunk-stall-max', maxStallMs);
         resolveComplete();
     };
     void loop();
