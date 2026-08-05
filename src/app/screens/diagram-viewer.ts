@@ -10,10 +10,14 @@
  *   인라인 → 폭에 맞춰 축소. 전체 구조가 한눈에 보인다 (markdown.css 의 max-width:100%)
  *   탭      → 이 오버레이. 원래 크기로 보고 끌어서 이동, 버튼으로 확대·축소
  *
- * ★ D11 라우터가 생기면 pushLayer('diagram', ...) / removeLayer 로 옮겨라.
- *   지금은 라우터가 없어 backButton 을 여기서 직접 받는다. 임시다.
+ * ★★ 뒤로가기는 **라우터에만 맡긴다**(9-3절). 여기서 App.addListener('backButton') 을
+ *   따로 달면 안 된다 — Capacitor 는 등록된 리스너를 전부 부르므로 라우터의 것과 함께
+ *   돌아서 **한 번 누를 때 두 겹이 닫힌다.** 그림만 접으려던 사용자가 문서까지 잃고,
+ *   밖에서 들어온 문서였다면 앱이 통째로 꺼진다.
+ *   (라우터가 생기기 전에 직접 받던 코드가 남아 있었다 — 2026-08-05 테스트로 확인)
  */
 
+import { pushLayer, removeLayer } from '../router';
 import { t } from '../../i18n';
 
 const MIN_SCALE = 0.25;
@@ -21,7 +25,7 @@ const MAX_SCALE = 6;
 const STEP = 1.4;
 
 let openEl: HTMLElement | null = null;
-let detachBack: (() => void) | null = null;
+let detachKeys: (() => void) | null = null;
 
 export function isDiagramViewerOpen(): boolean {
     return openEl !== null;
@@ -31,8 +35,11 @@ export function closeDiagramViewer(): void {
     if (!openEl) return;
     openEl.remove();
     openEl = null;
-    detachBack?.();
-    detachBack = null;
+    // ★ 애니메이션을 기다리지 않고 지금 뗀다 — 기다리면 화면에 없는 그림이
+    //   뒤로가기 한 번을 먹는다(9-4절).
+    removeLayer('diagram');
+    detachKeys?.();
+    detachKeys = null;
     document.documentElement.style.overflow = '';
 }
 
@@ -131,29 +138,19 @@ export function openDiagramViewer(sourceSvg: SVGElement, label: string): void {
         setScale(Math.abs(scale - fitScale) < 0.01 ? 1 : fitScale);
     });
 
-    // ── 닫는 경로: 닫기 버튼 / Esc / 안드로이드 뒤로가기
+    // ── 닫는 경로: 닫기 버튼 / 안드로이드 뒤로가기 / Esc
+    // ★ 여는 함수 안에서 동기적으로 등록한다(9-3절).
+    pushLayer('diagram', () => {
+        closeDiagramViewer();
+        return true; // 내가 처리했다 — 아래 문서 레이어로 내려보내지 않는다
+    });
+
+    // Esc 는 브라우저(npm run dev)에서 확인할 때 쓴다. 기기에는 키보드가 없다.
     const onKey = (e: KeyboardEvent) => {
         if (e.key === 'Escape') closeDiagramViewer();
     };
     document.addEventListener('keydown', onKey);
-
-    let removeBackListener: (() => void) | null = null;
-    void (async () => {
-        try {
-            const { App } = await import('@capacitor/app');
-            const h = await App.addListener('backButton', () => closeDiagramViewer());
-            removeBackListener = () => void h.remove();
-            // 이미 닫혔으면 즉시 정리
-            if (!openEl) removeBackListener();
-        } catch {
-            /* 웹 환경 — 뒤로가기 훅이 없다 */
-        }
-    })();
-
-    detachBack = () => {
-        document.removeEventListener('keydown', onKey);
-        removeBackListener?.();
-    };
+    detachKeys = () => document.removeEventListener('keydown', onKey);
 
     close.focus();
 }

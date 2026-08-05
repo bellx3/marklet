@@ -51,7 +51,12 @@ export function initRouter(): void {
         void (async () => {
             try {
                 for (let i = stack.length - 1; i >= 0; i--) {
-                    if (await stack[i].onBack()) return;
+                    // ★ 핸들러가 스택을 줄인다(거의 항상 자기 레이어를 뗀다).
+                    //   인덱스가 빈 자리를 가리키면 건너뛴다 — 안 그러면 여기서 터지고
+                    //   그 뒤로 뒤로가기가 통째로 죽는다.
+                    const layer = stack[i];
+                    if (!layer) continue;
+                    if (await layer.onBack()) return;
                 }
                 await App.exitApp();
             } finally {
@@ -88,7 +93,12 @@ export function __resetRouterForTest(): void {
 /** 테스트 전용 — 뒤로가기 한 번을 흉내 낸다. 처리한 레이어 이름을 돌려준다. */
 export async function __pressBackForTest(): Promise<string | null> {
     for (let i = stack.length - 1; i >= 0; i--) {
-        if (await stack[i].onBack()) return stack[i]?.name ?? null;
+        const layer = stack[i];
+        if (!layer) continue;
+        // ★ 이름을 **먼저** 잡는다. 핸들러는 거의 항상 자기 레이어를 떼므로
+        //   부른 뒤에 stack[i] 를 읽으면 이미 없거나 남의 것이다.
+        const { name } = layer;
+        if (await layer.onBack()) return name;
     }
     return null;
 }
