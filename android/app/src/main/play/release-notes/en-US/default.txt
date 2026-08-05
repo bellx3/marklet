@@ -1,9 +1,16 @@
-Internal test build.
+Thank you for testing Marklet.
 
-- Opens Markdown files as they are: tables, Mermaid diagrams, math, footnotes, task lists
-- Add a folder once and every .md inside it stays listed
-- Search by file name and inside the open document
-- Edit and save back to the original file, with a backup taken first
-- Share as a file, as plain text, or as Markdown source
-- English and Korean, light and dark
-- No ads, no accounts, and documents never leave the device
+Please try each of these once — it helps a lot.
+
+• Open a .md from another app (file manager, messenger, mail)
+• Add a folder, then check its documents stay on the start screen
+• Open a document with tables, diagrams and math
+• Edit and save one, then check the original file is intact
+• Find a file by initial consonants (ㅁㅋㄷㅇ → 마크다운)
+
+Fixed in this build
+• New app icon
+• The tip button could not be tapped
+• A discarded draft could come back
+
+If something looks wrong, write to the address at the bottom of Settings. Saying which document it happened with makes it much easier to find.
