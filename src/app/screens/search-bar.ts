@@ -126,6 +126,22 @@ export function createSearchBar(
 
             // ★ 1번 규칙. 이걸 빼면 문서 뒷부분이 검색되지 않는다.
             await getHandle()?.renderRest();
+
+            /*
+             * ★★ 기다리는 동안 사용자는 이미 치고 있다 — 바가 뜨자마자 친다.
+             *   그때 돌아간 검색은 **아직 앞부분만 붙은 DOM** 을 훑은 것이라
+             *   뒷부분의 결과가 통째로 빠진 채 굳는다. 큰 문서일수록 오래 걸리므로
+             *   (실기기 3.6MB 에서 renderRest 8초) 정확히 그런 문서에서만 어긋난다.
+             *   사용자에게는 "검색이 안 된다" 로만 보이고 왜인지는 알 길이 없다.
+             *
+             *   ★ opened 를 다시 본다 — 기다리는 동안 뒤로가기로 닫혔을 수 있다.
+             *     그때 훑으면 이미 걷어낸 <mark> 가 되살아난다.
+             */
+            if (opened && input.value) {
+                rerun.cancel();
+                state = runSearch(container, input.value);
+                updateCounter();
+            }
         },
         close() {
             if (!opened) return;
