@@ -11,7 +11,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const h = vi.hoisted(() => ({
     store: new Map<string, string>(),
     /** uri → 그 폴더가 돌려줄 파일들. 지연을 주려면 delay 를 함께 넣는다. */
-    folderFiles: new Map<string, { files: Array<{ name: string }>; delayMs?: number }>(),
+    folderFiles: new Map<
+        string,
+        { files: Array<{ name: string }>; delayMs?: number; truncated?: boolean; limit?: number }
+    >(),
     deleted: [] as string[],
 }));
 
@@ -47,6 +50,8 @@ vi.mock('../../plugins/md-file', () => ({
             if (!entry) throw Object.assign(new Error('no perm'), { code: 'EPERM' });
             if (entry.delayMs) await new Promise((r) => setTimeout(r, entry.delayMs));
             return {
+                truncated: entry.truncated ?? false,
+                limit: entry.limit,
                 files: entry.files.map((f) => ({
                     uri: `${uri}/${f.name}`,
                     name: f.name,
@@ -297,5 +302,86 @@ describe('formatWhen', () => {
         const out = formatWhen(now - 30 * 86_400_000, now);
         expect(out).not.toContain(t.time.justNow);
         expect(out).toMatch(/\d/);
+    });
+});
+
+describe('★ 폴더가 상한에서 잘렸을 때', () => {
+    function seedTruncated(uri: string, name: string, files: string[], limit: number): void {
+        const prev = JSON.parse(h.store.get('folders') ?? '[]') as unknown[];
+        h.store.set('folders', JSON.stringify([...prev, { uri, name, addedAt: 1 }]));
+        h.folderFiles.set(uri, {
+            files: files.map((f) => ({ name: f })),
+            truncated: true,
+            limit,
+        });
+    }
+
+    it('잘렸다고 말한다', async () => {
+        seedTruncated('content://tree/big', '큰폴더', ['a.md', 'b.md'], 2000);
+        await home.refresh();
+
+        /*
+         * ★★ 이게 없으면 **조용히 잘린다.** 사용자는 폴더에 파일이 더 있는데
+         *   목록에 없는 것을 보고 "이 앱이 내 파일을 못 찾는다" 고 판단한다.
+         *   원인은 화면 어디에도 안 남고, 문의를 받아도 물어볼 게 없다.
+         */
+        const note = home.root.querySelector('.list-error--info');
+        expect(note, '잘렸는데 아무 말도 없다').not.toBeNull();
+        expect(note!.textContent).toBe(t.folders.truncated(2000));
+    });
+
+    it('★ 상한 숫자는 네이티브가 준 값을 쓴다', async () => {
+        // 코드에 2000 을 박아 두면 네이티브가 바뀔 때 화면이 거짓말을 한다.
+        seedTruncated('content://tree/big', '큰폴더', ['a.md'], 500);
+        await home.refresh();
+        expect(home.root.querySelector('.list-error--info')?.textContent).toContain('500');
+    });
+
+    it('안 잘렸으면 아무 말도 하지 않는다', async () => {
+        seedFolder('content://tree/small', '작은폴더', ['a.md']);
+        await home.refresh();
+        expect(home.root.querySelector('.list-error--info')).toBeNull();
+    });
+
+    it('★ 검색으로 걸러도 안내는 남는다', async () => {
+        seedTruncated('content://tree/big', '큰폴더', ['회의록.md', '가계부.md'], 2000);
+        await home.refresh();
+
+        typeSearch('회의');
+        await vi.advanceTimersByTimeAsync(200);
+
+        // 잘린 것은 **목록 자체**다. 검색 결과가 좁아진 것과는 다른 이야기다 —
+        // 여기서 안내를 감추면 "검색이 안 된다" 로 오해하게 된다.
+        expect(home.root.querySelector('.list-error--info')).not.toBeNull();
+        expect(names('.list-name')).toEqual(['회의록.md']);
+    });
+});
+
+describe('★★ 잘린 목록에서 검색이 빈손일 때', () => {
+    it('그래도 잘렸다고 말한다 — 여기가 제일 필요한 순간이다', async () => {
+        h.store.set(
+            'folders',
+            JSON.stringify([{ uri: 'content://tree/big', name: '큰폴더', addedAt: 1 }]),
+        );
+        h.folderFiles.set('content://tree/big', {
+            files: [{ name: 'a.md' }],
+            truncated: true,
+            limit: 2000,
+        });
+        await home.refresh();
+
+        typeSearch('없는파일');
+        await vi.advanceTimersByTimeAsync(200);
+
+        /*
+         * ★★ 찾는 파일이 **잘려 나간 꼬리에 있어서** 안 나오는 것일 수 있다.
+         *   그런데 안내를 걸러내기 뒤에 두면 "일치하는 파일 없음" 으로 빠져나가며
+         *   안내가 통째로 사라진다 — 사용자는 "검색이 안 된다" 로 오해한다.
+         */
+        expect(
+            home.root.querySelector('.list-error--info'),
+            '검색이 빈손인데 잘림 안내가 사라졌다',
+        ).not.toBeNull();
+        expect(home.root.querySelector('.list-empty')?.textContent).toBe(t.home.noMatchingFile);
     });
 });

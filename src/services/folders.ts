@@ -61,12 +61,25 @@ export interface FolderListing {
     folder: Folder;
     files: MdDocument[];
     error?: string;
+    /**
+     * 네이티브가 상한에서 멈췄다.
+     *
+     * ★★ 이걸 화면까지 올리지 않으면 **조용히 잘린다.** 사용자는 폴더에 파일이 더 있는데
+     *   목록에 없는 것을 보고 "이 앱이 내 파일을 못 찾는다" 고 판단한다.
+     *   원인은 화면 어디에도 안 남고, 문의를 받아도 물어볼 게 없다.
+     */
+    truncated?: boolean;
+    /** 상한 값. 안내 문구에 숫자를 넣기 위한 것 — 코드에 박아 두면 네이티브와 어긋난다. */
+    limit?: number;
 }
 
 /** 폴더 내용을 읽는다. 권한이 만료된 폴더는 error 를 담아 돌려준다(목록에서 지우지 않는다). */
 export async function listFolder(folder: Folder): Promise<FolderListing> {
     try {
-        const { files } = await MdFile.listFolder({ uri: folder.uri, maxDepth: 3 });
+        const { files, truncated, limit } = await MdFile.listFolder({
+            uri: folder.uri,
+            maxDepth: 3,
+        });
         // ★ 정렬 규칙을 'ko' 로 고정하지 마라 — 영어 사용자에게 한국어 규칙이 적용된다.
         files.sort((a, b) => a.name.localeCompare(b.name, localeTag()));
         /*
@@ -74,7 +87,12 @@ export async function listFolder(folder: Folder): Promise<FolderListing> {
          *   addFolder() 가 영속화되지 않은 폴더를 아예 거부하므로(위) 여기 온 파일은 전부 그렇다.
          *   이 표시가 없으면 최근 목록에서 '읽기 전용 사본' 으로 뜨고 사본까지 만들어진다.
          */
-        return { folder, files: files.map((f) => ({ ...f, persisted: true })) };
+        return {
+            folder,
+            files: files.map((f) => ({ ...f, persisted: true })),
+            truncated: !!truncated,
+            limit,
+        };
     } catch (e) {
         // ★ 권한이 만료된 폴더를 자동으로 지우지 마라. SD 카드를 잠깐 뺐을 뿐일 수 있다.
         return {

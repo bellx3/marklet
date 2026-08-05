@@ -232,6 +232,8 @@ export const ko: Catalog = {
     folders: {
         noPermission: '이 폴더는 계속 사용할 권한을 받지 못했습니다. 다른 폴더를 선택해 주세요.',
         expired: '폴더 권한이 만료되었습니다. 폴더를 다시 추가해 주세요.',
+        truncated: (n: number) =>
+            `파일이 많아 ${n.toLocaleString()}개까지만 보여 줍니다. 하위 폴더로 나누면 전부 보입니다.`,
         readFailed: '폴더를 읽지 못했습니다.',
     },
 

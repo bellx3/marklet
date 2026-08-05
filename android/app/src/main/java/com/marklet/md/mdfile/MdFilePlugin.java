@@ -389,14 +389,21 @@ public class MdFilePlugin extends Plugin {
         Uri tree = Uri.parse(uriStr);
         try {
             String rootDocId = DocumentsContract.getTreeDocumentId(tree);
-            List<JSObject> out = new ArrayList<>();
-            walk(tree, rootDocId, 0, maxDepth, out);
+            Scan scan = new Scan();
+            walk(tree, rootDocId, 0, maxDepth, scan);
 
             JSArray arr = new JSArray();
-            for (JSObject o : out) arr.put(o);
+            for (JSObject o : scan.out) arr.put(o);
 
             JSObject ret = new JSObject();
             ret.put("files", arr);
+            /*
+             * ★★ 잘렸으면 반드시 알린다. 예전에는 조용히 멈췄다 —
+             *   사용자는 폴더에 파일이 더 있는데 목록에 없는 것을 보고
+             *   "이 앱이 내 파일을 못 찾는다" 고 판단한다. 원인은 화면 어디에도 안 남는다.
+             */
+            ret.put("truncated", scan.truncated);
+            ret.put("limit", MAX_FILES);
             call.resolve(ret);
         } catch (SecurityException e) {
             call.reject("폴더 권한이 만료되었습니다", "EPERM", e);
@@ -405,8 +412,22 @@ public class MdFilePlugin extends Plugin {
         }
     }
 
-    private void walk(Uri tree, String docId, int depth, int maxDepth, List<JSObject> out) {
-        if (depth > maxDepth || out.size() > 2000) return;
+    /**
+     * 한 폴더에서 가져올 파일 수의 상한.
+     *
+     * ★ 이걸 넘기면 목록 화면이 감당하지 못한다(항목 하나마다 DOM 노드가 여럿이다).
+     *   그리고 SAF 커서 순회 자체가 느려져 시작 화면이 몇 초씩 멎는다.
+     */
+    private static final int MAX_FILES = 2000;
+
+    /** 훑기 결과. 목록과 '잘렸는가'를 함께 들고 다닌다. */
+    private static final class Scan {
+        final List<JSObject> out = new ArrayList<>();
+        boolean truncated = false;
+    }
+
+    private void walk(Uri tree, String docId, int depth, int maxDepth, Scan scan) {
+        if (depth > maxDepth || scan.truncated) return;
 
         Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, docId);
         String[] proj = {
@@ -421,12 +442,24 @@ public class MdFilePlugin extends Plugin {
                 .query(children, proj, null, null, null)) {
             if (c == null) return;
             while (c.moveToNext()) {
+                /*
+                 * ★★ 상한 검사가 여기 있어야 한다. 예전에는 walk() 진입 시점에만 봤는데,
+                 *   그러면 **평평한 폴더에서는 아예 안 걸린다** — 하위 폴더가 없으면
+                 *   walk() 가 한 번만 불리고 이 while 문이 파일 1만 개를 그대로 다 담는다.
+                 *   그게 가장 흔한 모양이다(다운로드 폴더, 문서 폴더).
+                 */
+                if (scan.out.size() >= MAX_FILES) {
+                    scan.truncated = true;
+                    return;
+                }
+
                 String childId = c.getString(0);
                 String name = c.getString(1);
                 String mime = c.getString(2);
 
                 if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
-                    walk(tree, childId, depth + 1, maxDepth, out);
+                    walk(tree, childId, depth + 1, maxDepth, scan);
+                    if (scan.truncated) return;
                     continue;
                 }
                 if (!isMarkdownName(name)) continue;
@@ -438,7 +471,7 @@ public class MdFilePlugin extends Plugin {
                 o.put("mimeType", mime);
                 o.put("size", c.isNull(3) ? -1 : c.getLong(3));
                 o.put("lastModified", c.isNull(4) ? 0 : c.getLong(4));
-                out.add(o);
+                scan.out.add(o);
             }
         } catch (Exception e) {
             Log.w(TAG, "폴더 탐색 실패 docId=" + docId + " : " + e.getMessage());

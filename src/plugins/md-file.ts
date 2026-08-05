@@ -45,7 +45,13 @@ export interface MdFilePlugin {
         persisted: boolean;
         cancelled?: boolean;
     }>;
-    listFolder(options: { uri: string; maxDepth?: number }): Promise<{ files: MdDocument[] }>;
+    listFolder(options: { uri: string; maxDepth?: number }): Promise<{
+        files: MdDocument[];
+        /** 상한에서 멈췄는가. 화면이 "일부만 보여 준다" 고 알려야 한다. */
+        truncated?: boolean;
+        /** 그 상한 값 */
+        limit?: number;
+    }>;
     createFile(options: { name: string }): Promise<MdDocument>;
     /**
      * 원본 URI 를 그대로 넘겨 **파일 자체**를 공유한다 (5-8절).

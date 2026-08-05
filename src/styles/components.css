@@ -322,6 +322,14 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    /*
+     * ★★ 반드시 명시한다. 폴더 안의 파일은 한 요소가 `.list-item .list-main` 을
+     *   **함께** 걸친다(최근 문서는 div 안에 button 이라 나뉘어 있다).
+     *   .list-item 의 `align-items: center` 는 가로 행을 세로 가운데로 맞추려는 것인데,
+     *   여기는 세로 열이라 그 값이 **글자를 가로 가운데로 몰아 버린다.**
+     *   그래서 폴더 파일 이름만 가운데 정렬로 떠 있었다(2026-08-06 실기기에서 발견).
+     */
+    align-items: flex-start;
     flex: 1 1 auto;
     min-width: 0;
     gap: var(--sp-1);
@@ -376,6 +384,13 @@
 }
 .list-error {
     color: var(--md-warn-fg);
+}
+/*
+ * 잘림 안내는 '고장'이 아니라 '알아 두세요' 다.
+ * ★ 권한 만료(경고색)와 같은 색으로 두지 마라 — 사용자가 폴더가 깨진 줄 안다.
+ */
+.list-error--info {
+    color: var(--md-fg-muted);
 }
 
 .folder-head {

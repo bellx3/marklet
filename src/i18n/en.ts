@@ -241,6 +241,9 @@ export const en = {
     folders: {
         noPermission: 'This folder did not grant lasting access. Please choose a different folder.',
         expired: 'Folder access expired. Please add the folder again.',
+        /** ★ 상한은 네이티브가 정한다. 여기에 숫자를 박으면 둘이 어긋난다. */
+        truncated: (n: number) =>
+            `Too many files — showing the first ${n.toLocaleString()}. Split them into subfolders to see all.`,
         readFailed: 'Could not read the folder.',
     },
 

@@ -1,5 +1,5 @@
 import { loadRecents, removeRecent, type RecentDoc } from '../../services/recents';
-import { loadFolders, listFolder, removeFolder, type Folder } from '../../services/folders';
+import { loadFolders, listFolder, removeFolder, type FolderListing } from '../../services/folders';
 import { matchesName } from '../../utils/hangul';
 import { debounce } from '../../utils/debounce';
 import { icon, iconButton, type IconName } from '../icons';
@@ -82,7 +82,9 @@ export function createHome(cb: HomeCallbacks): HomeScreen {
     root.append(bar, main);
 
     let recents: RecentDoc[] = [];
-    let listings: Array<{ folder: Folder; files: MdDocument[]; error?: string }> = [];
+    // ★ 손으로 베낀 타입을 두지 마라 — 서비스가 필드를 늘려도 여기가 모른다.
+    //   truncated 를 추가했을 때 실제로 여기서 걸렸다(2026-08-06).
+    let listings: FolderListing[] = [];
     let query = '';
 
     const rerender = () => {
@@ -196,6 +198,23 @@ export function createHome(cb: HomeCallbacks): HomeScreen {
                 err.textContent = listing.error;
                 foldersSection.body.appendChild(err);
                 continue;
+            }
+
+            /*
+             * ★★ 네이티브가 상한에서 멈췄으면 **반드시 말한다.**
+             *   예전에는 조용히 잘렸다 — 사용자는 폴더에 파일이 더 있는데 목록에 없는 것을 보고
+             *   "이 앱이 내 파일을 못 찾는다" 고 판단한다. 원인은 화면 어디에도 안 남는다.
+             *
+             * ★★ 걸러내기 **앞에** 둔다. 잘린 것은 검색 결과가 아니라 **목록 자체**다.
+             *   뒤에 두면 "일치하는 파일 없음" 으로 빠져나가면서 안내가 통째로 사라지는데,
+             *   하필 그때가 안내가 제일 필요한 순간이다 — 찾는 파일이 잘려 나간 꼬리에 있어서
+             *   안 나오는 것일 수 있기 때문이다.
+             */
+            if (listing.truncated) {
+                const note = document.createElement('p');
+                note.className = 'list-error list-error--info';
+                note.textContent = t.folders.truncated(listing.limit ?? listing.files.length);
+                foldersSection.body.appendChild(note);
             }
 
             const files = listing.files.filter((f) => matchesName(f.name, query));
