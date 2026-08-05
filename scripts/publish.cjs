@@ -109,7 +109,20 @@ async function main() {
     const javaHome = resolveJdk();
     const gradlew = path.join(androidDir, isWindows ? 'gradlew.bat' : 'gradlew');
 
-    console.log(`🚀 v${version} → ${track} 트랙 업로드 중...`);
+    /*
+     * 트랙마다 올릴 수 있는 상태가 다르다.
+     *
+     *   internal  심사를 안 거친다 → completed 로 올려야 **바로** 테스터에게 간다
+     *   그 밖      심사를 거친다   → 앱이 아직 미게시면 draft 만 받는다
+     *                               (400 Only releases with status draft may be
+     *                                created on draft app)
+     *
+     * 정식 출시가 끝난 뒤에는 어느 트랙이든 completed 가 되므로 --status 로 덮는다.
+     */
+    const flag = process.argv.find((a) => a.startsWith('--status='));
+    const status = flag ? flag.split('=')[1] : track === 'internal' ? 'completed' : 'draft';
+
+    console.log(`🚀 v${version} → ${track} 트랙 업로드 중... (상태: ${status})`);
 
     /*
      * ⚠️ **--rerun-tasks 를 빼지 마라.**
@@ -121,7 +134,13 @@ async function main() {
      */
     const result = spawnSync(
         `"${gradlew}"`,
-        [':app:publishReleaseBundle', '--track', track, '--rerun-tasks'],
+        [
+            ':app:publishReleaseBundle',
+            '--track',
+            track,
+            `-PreleaseStatus=${status}`,
+            '--rerun-tasks',
+        ],
         {
             cwd: androidDir,
             env: { ...process.env, JAVA_HOME: javaHome },
