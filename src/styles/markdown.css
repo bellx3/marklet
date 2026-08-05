@@ -316,6 +316,28 @@ mark.md-hit.is-current {
     text-decoration: none;
 }
 
+/*
+ * 각주 번호와 되돌아가기 화살표는 글자 흐름 안에 있어서 상자를 48px 로 키울 수 없다 —
+ * 키우면 줄 간격이 무너진다. WCAG 2.2 의 2.5.8 도 그래서 인라인은 예외로 둔다.
+ *
+ * ★ 그렇다고 두면 실제로 17x21px 이라 손가락으로 거의 못 누른다(2026-08-05 실측).
+ *   보이는 크기는 그대로 두고 **눌리는 넓이만** 넓힌다.
+ *
+ * ★ 세로만 넉넉히 넓힌다. 가로로 크게 넓히면 `[1][2]` 처럼 붙어 있는 각주끼리
+ *   영역이 겹쳐 엉뚱한 번호로 뛴다. 각주는 대개 세로로 떨어져 있지 않으므로
+ *   가로는 딱 손끝만큼(4px)만 준다.
+ */
+.md-body .footnote-ref a,
+.md-body .footnote-backref {
+    position: relative;
+}
+.md-body .footnote-ref a::after,
+.md-body .footnote-backref::after {
+    content: '';
+    position: absolute;
+    inset: -13px -4px;
+}
+
 .md-frontmatter {
     margin: 0 0 1.5em;
     border: 1px solid var(--md-border);

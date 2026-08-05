@@ -74,6 +74,7 @@ export function openDiagramViewer(sourceSvg: SVGElement, label: string): void {
     stage.className = 'diagram-viewer__stage';
 
     const svg = sourceSvg.cloneNode(true) as SVGElement;
+    isolateIds(svg);
     // 인라인에서 걸어 둔 폭 제한을 풀어 원래 크기로 되돌린다.
     svg.removeAttribute('style');
     svg.style.maxWidth = 'none';
@@ -169,6 +170,82 @@ export function bindDiagramZoom(container: HTMLElement): void {
         e.preventDefault();
         openDiagramViewer(svg, holder.getAttribute('aria-label') ?? t.diagram.label);
     });
+}
+
+let cloneSeq = 0;
+
+/**
+ * 복제본 안의 id 를 전부 새 이름으로 바꾸고 참조도 함께 고친다.
+ *
+ * ★★ cloneNode(true) 는 id 까지 복사한다. Mermaid SVG 하나에 30개가 넘는다
+ *   (화살촉 marker, 그라디언트, clipPath …). 그대로 두면 문서에 같은 id 가 둘씩 생기고,
+ *   `url(#id)` 는 **문서에서 처음 만나는 것**으로 풀린다 — 즉 복제본의 화살표가
+ *   원본의 정의를 빌려 쓴다.
+ *
+ *   지금은 그려진다. 하지만 원본 청크에는 `content-visibility: auto` 가 걸려 있고
+ *   확대 보기가 화면을 덮으면 원본은 화면 밖으로 나간다. 브라우저가 그 subtree 의
+ *   렌더를 건너뛰는 순간 **화살촉이 사라진다.** 기기·엔진에 따라 갈리는 종류의 고장이라
+ *   한 대에서 멀쩡하다고 안심할 수 없다.
+ *
+ *   복제본은 스스로 완결되어야 한다.
+ */
+function isolateIds(root: SVGElement): void {
+    const prefix = `dv${++cloneSeq}-`;
+    const renamed = new Map<string, string>();
+
+    for (const el of [root, ...root.querySelectorAll('[id]')]) {
+        const old = el.getAttribute('id');
+        if (!old) continue;
+        const next = prefix + old;
+        renamed.set(old, next);
+        el.setAttribute('id', next);
+    }
+    if (renamed.size === 0) return;
+
+    const rewrite = (value: string): string =>
+        value.replace(/url\(\s*(['"]?)#([^'")\s]+)\1\s*\)/g, (whole, q: string, id: string) => {
+            const next = renamed.get(id);
+            return next ? `url(${q}#${next}${q})` : whole;
+        });
+
+    for (const el of [root, ...root.querySelectorAll('*')]) {
+        for (const attr of [...el.attributes]) {
+            // marker-end · fill · clip-path · mask · filter … 어디에든 올 수 있다
+            if (attr.value.includes('url(')) {
+                const next = rewrite(attr.value);
+                if (next !== attr.value) el.setAttribute(attr.name, next);
+                continue;
+            }
+            // href="#id" (그리고 옛 xlink:href)
+            if (
+                (attr.name === 'href' || attr.name.endsWith(':href')) &&
+                attr.value.startsWith('#')
+            ) {
+                const next = renamed.get(attr.value.slice(1));
+                if (next) el.setAttribute(attr.name, `#${next}`);
+                continue;
+            }
+            // aria-labelledby / aria-describedby 는 공백으로 여러 개를 잇는다
+            if (attr.name === 'aria-labelledby' || attr.name === 'aria-describedby') {
+                el.setAttribute(
+                    attr.name,
+                    attr.value
+                        .split(/\s+/)
+                        .map((id) => renamed.get(id) ?? id)
+                        .join(' '),
+                );
+            }
+        }
+    }
+
+    // <style> 안의 url(#…) 과 셀렉터(#id)
+    for (const style of root.querySelectorAll('style')) {
+        let text = rewrite(style.textContent ?? '');
+        for (const [old, next] of renamed) {
+            text = text.split(`#${old}`).join(`#${next}`);
+        }
+        style.textContent = text;
+    }
 }
 
 function button(text: string, cls: string, onClick: () => void): HTMLButtonElement {

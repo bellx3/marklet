@@ -39,33 +39,39 @@ let loadFailures = 0;
 const MAX_LOAD_ATTEMPTS = 3;
 
 /**
- * 청크를 받아 초기화한다. 두 번 불러도 한 번만 로드된다.
+ * 마지막으로 initialize 에 넘긴 테마.
+ *
+ * ★★ 이게 없으면 **테마가 영영 고정된다.** mermaidApi 를 캐시해 두고 그대로 돌려주므로
+ *   initialize 가 다시 불리지 않는다 — 라이트에서 켠 앱은 다크로 바꾸고 문서를 다시 열어도
+ *   흰 배경 다이어그램을 그린다. 다크 화면에서는 글씨가 거의 안 보인다
+ *   (2026-08-05 접근성 감사에서 대비 1.41:1 로 측정).
+ *
+ *   테마가 바뀌면 initialize 만 다시 부른다. 청크를 다시 받을 필요는 없다.
+ */
+let initializedDark: boolean | null = null;
+
+/**
+ * 청크를 받아 초기화한다. 두 번 불러도 청크는 한 번만 받는다.
  * ★ 실패를 던지지 않는다. null 을 돌려주고 호출자는 코드 블록을 그대로 둔다.
  */
 async function ensureMermaid(): Promise<typeof import('mermaid').default | null> {
-    if (mermaidApi) return mermaidApi;
+    const dark = isDark();
+
+    if (mermaidApi) {
+        if (initializedDark !== dark) {
+            mermaidApi.initialize(mermaidConfig());
+            initializedDark = dark;
+        }
+        return mermaidApi;
+    }
+
     if (loadFailures >= MAX_LOAD_ATTEMPTS) return null;
     try {
         const mod = await import('mermaid');
         const api = mod.default;
-        api.initialize({
-            startOnLoad: false, // ★ 우리가 직접 부른다. true 면 DOM 을 마음대로 훑는다
-            securityLevel: 'strict', // ★ 절대 'loose' 로 바꾸지 마라
-            theme: isDark() ? 'dark' : 'default',
-            fontFamily: 'inherit',
-            // ★ htmlLabels: false — 라벨을 <foreignObject> 안 HTML 이 아니라 SVG <text> 로 그린다.
-            //   기본값(true)이면 라벨이 DOMPurify 를 통과하지 못해 **도형만 남고 글자가 전부
-            //   사라진다**(2026-08-03 실기기 실측: foreignObject 17개가 내용 없이 껍데기만 남음).
-            //   원인은 DOMPurify 가 SVG 문자열을 HTML 파서로 읽어 SVG→XHTML 네임스페이스 전환이
-            //   깨지는 것이다. 살균기를 더 여는 것보다 문제 자체를 없애는 쪽이 낫다 —
-            //   이러면 우리 SVG 에 HTML 이 아예 섞이지 않는다.
-            //   대가: 라벨 안에서 굵게/링크 같은 HTML 서식을 못 쓴다. 다이어그램에 필요 없다.
-            htmlLabels: false,
-            flowchart: { useMaxWidth: false, htmlLabels: false },
-            sequence: { useMaxWidth: false },
-            class: { useMaxWidth: false, htmlLabels: false },
-        });
+        api.initialize(mermaidConfig());
         mermaidApi = api;
+        initializedDark = dark;
         return api;
     } catch (err) {
         console.error('Mermaid 로드 실패:', err);
@@ -74,10 +80,42 @@ async function ensureMermaid(): Promise<typeof import('mermaid').default | null>
     }
 }
 
+function mermaidConfig() {
+    const dark = isDark();
+    return {
+        startOnLoad: false, // ★ 우리가 직접 부른다. true 면 DOM 을 마음대로 훑는다
+        securityLevel: 'strict' as const, // ★ 절대 'loose' 로 바꾸지 마라
+        theme: (dark ? 'dark' : 'default') as 'dark' | 'default',
+        /*
+         * ★ 다크 테마의 간선 라벨만 손본다.
+         *   mermaid 기본값은 글자 #cccccc 에 배경 #585858 이라 **4.43:1** 이다 —
+         *   WCAG AA 본문 기준 4.5 에 근소하게 못 미친다(2026-08-05 실기기 실측).
+         *   배경을 #4a4a4a 로 낮추면 5.52:1 이 되고, 본문 배경(#16181c)과도
+         *   여전히 구분되어 라벨이 칩처럼 읽힌다.
+         *
+         * ★ 라이트 테마는 건드리지 않는다. 거기는 이미 통과한다.
+         */
+        ...(dark ? { themeVariables: { edgeLabelBackground: '#4a4a4a' } } : {}),
+        fontFamily: 'inherit',
+        // ★ htmlLabels: false — 라벨을 <foreignObject> 안 HTML 이 아니라 SVG <text> 로 그린다.
+        //   기본값(true)이면 라벨이 DOMPurify 를 통과하지 못해 **도형만 남고 글자가 전부
+        //   사라진다**(2026-08-03 실기기 실측: foreignObject 17개가 내용 없이 껍데기만 남음).
+        //   원인은 DOMPurify 가 SVG 문자열을 HTML 파서로 읽어 SVG→XHTML 네임스페이스 전환이
+        //   깨지는 것이다. 살균기를 더 여는 것보다 문제 자체를 없애는 쪽이 낫다 —
+        //   이러면 우리 SVG 에 HTML 이 아예 섞이지 않는다.
+        //   대가: 라벨 안에서 굵게/링크 같은 HTML 서식을 못 쓴다. 다이어그램에 필요 없다.
+        htmlLabels: false,
+        flowchart: { useMaxWidth: false, htmlLabels: false },
+        sequence: { useMaxWidth: false },
+        class: { useMaxWidth: false, htmlLabels: false },
+    };
+}
+
 /** 로드 실패 횟수를 되돌린다. 테스트 전용. */
 export function __resetMermaidLoadForTest(): void {
     mermaidApi = null;
     loadFailures = 0;
+    initializedDark = null;
 }
 
 function isDark(): boolean {
@@ -256,18 +294,4 @@ function fail(block: HTMLElement, message: string, src: string): void {
 function mermaidAriaLabel(src: string): string {
     const first = src.trim().split('\n')[0]?.slice(0, 40) ?? '';
     return `${t.mermaid.blockLabel}${first ? ` (${first})` : ''}`;
-}
-
-/**
- * 테마를 바꾸면 이미 그린 SVG 의 색이 안 맞는다. 다시 그리게 표시만 해 둔다.
- * ★ v1 의 확정 동작: 테마를 바꿔도 이미 그린 다이어그램은 그대로 둔다.
- *   문서를 다시 열면 새 테마로 그려진다. (재렌더 중 화면이 멈추는 쪽이 더 나쁘다.)
- */
-export function invalidateMermaid(container: HTMLElement): void {
-    mermaidApi = null; // initialize 를 다시 하려면 모듈 상태를 버려야 한다
-    for (const b of Array.from(
-        container.querySelectorAll<HTMLElement>('.mermaid-block[data-mermaid-state="done"]'),
-    )) {
-        b.dataset.mermaidState = 'stale';
-    }
 }

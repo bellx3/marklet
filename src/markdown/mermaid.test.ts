@@ -16,12 +16,14 @@ let shouldFail = true;
 const render = vi.fn(async (id: string) => ({ svg: `<svg id="${id}"><g/></svg>` }));
 /** ★ 코드가 그리기 전에 문법을 먼저 검사한다(suppressErrors). 목에도 있어야 한다. */
 const parse = vi.fn(async () => true);
+/** ★ 모듈 밖에 둔다 — 매번 새로 만들면 "몇 번 불렸나"를 셀 수 없다. */
+const initialize = vi.fn();
 
 vi.mock('mermaid', () => ({
     get default() {
         loadAttempts += 1;
         if (shouldFail) throw new Error('청크를 받지 못했습니다');
-        return { initialize: vi.fn(), parse, render };
+        return { initialize, parse, render };
     },
 }));
 
@@ -54,6 +56,8 @@ beforeEach(() => {
     shouldFail = true;
     render.mockClear();
     parse.mockClear();
+    initialize.mockClear();
+    document.documentElement.removeAttribute('data-theme');
     __resetMermaidLoadForTest();
 });
 
@@ -118,5 +122,60 @@ describe('정상 렌더', () => {
         const host = document.createElement('div');
         await upgradeMermaidBlocks(host);
         expect(loadAttempts).toBe(0);
+    });
+});
+
+describe('★ 테마', () => {
+    beforeEach(() => {
+        shouldFail = false;
+    });
+
+    const themeOf = (call: number) =>
+        (initialize.mock.calls[call]?.[0] as { theme?: string } | undefined)?.theme;
+
+    it('라이트에서는 default, 다크에서는 dark 로 시작한다', async () => {
+        await upgradeMermaidBlocks(container());
+        expect(themeOf(0)).toBe('default');
+
+        __resetMermaidLoadForTest();
+        initialize.mockClear();
+        document.documentElement.dataset.theme = 'dark';
+        await upgradeMermaidBlocks(container());
+        expect(themeOf(0)).toBe('dark');
+    });
+
+    it('★★ 테마가 바뀌면 initialize 를 다시 부른다', async () => {
+        await upgradeMermaidBlocks(container());
+        expect(initialize).toHaveBeenCalledTimes(1);
+
+        document.documentElement.dataset.theme = 'dark';
+        await upgradeMermaidBlocks(container());
+
+        /*
+         * ★★ 이걸 안 하면 **테마가 영영 고정된다.** mermaidApi 를 캐시해 두고
+         *   그대로 돌려주므로 initialize 가 다시 안 불린다 — 라이트에서 켠 앱은
+         *   다크로 바꾸고 문서를 다시 열어도 흰 배경 다이어그램을 그리고,
+         *   다크 화면에서는 글씨가 거의 안 보인다(실측 대비 1.41:1).
+         */
+        expect(initialize).toHaveBeenCalledTimes(2);
+        expect(themeOf(1)).toBe('dark');
+    });
+
+    it('테마가 그대로면 다시 부르지 않는다', async () => {
+        await upgradeMermaidBlocks(container());
+        await upgradeMermaidBlocks(container());
+        expect(initialize).toHaveBeenCalledTimes(1);
+    });
+
+    it('테마를 다시 바꿔도 청크는 한 번만 받는다', async () => {
+        await upgradeMermaidBlocks(container());
+        document.documentElement.dataset.theme = 'dark';
+        await upgradeMermaidBlocks(container());
+        document.documentElement.removeAttribute('data-theme');
+        await upgradeMermaidBlocks(container());
+
+        // 900KB 를 테마 바꿀 때마다 다시 받으면 그게 더 나쁘다.
+        expect(loadAttempts).toBe(1);
+        expect(initialize).toHaveBeenCalledTimes(3);
     });
 });

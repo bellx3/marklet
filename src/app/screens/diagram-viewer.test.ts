@@ -88,6 +88,55 @@ describe('열고 닫기', () => {
         expect(src.style.maxWidth).toBe('100%');
     });
 
+    it('★ 복제본의 id 를 원본과 겹치지 않게 바꾼다', () => {
+        const src = makeSvg();
+        src.id = 'mmd-1';
+        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+        marker.id = 'mmd-1_pointEnd';
+        defs.appendChild(marker);
+        src.appendChild(defs);
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        line.setAttribute('marker-end', 'url(#mmd-1_pointEnd)');
+        src.appendChild(line);
+        document.body.appendChild(src);
+
+        openDiagramViewer(src, '흐름도');
+
+        const clone = viewerRoot()!.querySelector('svg')!;
+        /*
+         * ★★ 겹쳐 두면 url(#id) 가 **문서에서 처음 만나는 것**으로 풀린다 —
+         *   복제본의 화살표가 원본의 정의를 빌려 쓰게 된다. 원본 청크에는
+         *   content-visibility: auto 가 걸려 있어서 화면 밖으로 나가면
+         *   렌더가 건너뛰어지고 화살촉이 사라질 수 있다.
+         */
+        expect(clone.id).not.toBe('mmd-1');
+        expect(clone.querySelector('marker')!.id).not.toBe('mmd-1_pointEnd');
+
+        // 참조도 함께 바뀌어야 한다 — 안 바꾸면 화살촉이 아예 안 나온다.
+        const ref = clone.querySelector('path')!.getAttribute('marker-end')!;
+        expect(ref).toBe(`url(#${clone.querySelector('marker')!.id})`);
+
+        // 원본은 그대로다.
+        expect(src.id).toBe('mmd-1');
+        expect(src.querySelector('marker')!.id).toBe('mmd-1_pointEnd');
+    });
+
+    it('두 번 열어도 서로 다른 id 를 쓴다', () => {
+        const src = makeSvg();
+        src.id = 'mmd-1';
+        openDiagramViewer(src, '첫 번째');
+        const a = viewerRoot()!.querySelector('svg')!.id;
+        openDiagramViewer(src, '두 번째');
+        const b = viewerRoot()!.querySelector('svg')!.id;
+        expect(a).not.toBe(b);
+    });
+
+    it('id 가 없는 그림도 그냥 열린다', () => {
+        expect(() => openDiagramViewer(makeSvg(), '그림')).not.toThrow();
+        expect(isDiagramViewerOpen()).toBe(true);
+    });
+
     it('소리로 읽을 이름을 그대로 쓴다', () => {
         openDiagramViewer(makeSvg(), '주문 흐름도');
         const root = viewerRoot()!;
