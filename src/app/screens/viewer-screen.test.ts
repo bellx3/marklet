@@ -318,3 +318,55 @@ describe('rerender — 같은 문서', () => {
         expect(screen.root.querySelector('.md-target')?.textContent).toContain('본문');
     });
 });
+
+describe('★ 문서 안 링크로 뛸 때', () => {
+    /**
+     * ★★ AI 가 만든 문서는 맨 위에 목차 링크를 붙이는 경우가 아주 흔하다.
+     *   그걸 누르면 jumpToAnchor 가 renderRest() 를 부른다 —
+     *   목차 시트·검색과 **똑같이 무거운 작업**이다(2.5MB 에서 화면이 2초 멎는 것을 실측).
+     *   그런데 저 둘만 진행 표시를 띄우고 링크만 맨 handle 을 받아 조용히 굳었다.
+     */
+    function bigDocWithTocLink(): string {
+        const body = Array.from({ length: 400 }, (_, i) => `문단 ${i}`).join('\n\n');
+        return `# 큰 문서\n\n[맺음말로](#맺음말)\n\n${body}\n\n## 맺음말\n\n끝입니다.\n`;
+    }
+
+    it('진행 표시를 띄운다', async () => {
+        /*
+         * ★ settle() 로 다 그린 뒤에 누르면 안 된다. 목표 제목이 이미 붙어 있어서
+         *   renderRest 를 아예 안 부르고, 그러면 이 테스트가 아무것도 안 본다.
+         *   show() 직후는 첫 청크만 붙어 있는 상태다 — 그때가 사용자가 링크를 보는 시점이다.
+         */
+        await screen.show(doc(), bigDocWithTocLink(), {});
+
+        const busy = screen.root.querySelector<HTMLElement>('.viewer-busy')!;
+        expect(busy.hidden, '아직은 떠 있으면 안 된다').toBe(true);
+        expect(
+            screen.root.querySelector('.md-target h2'),
+            '맺음말이 벌써 붙었다 — 문서를 더 크게 잡아라',
+        ).toBeNull();
+
+        const link = screen.root.querySelector<HTMLAnchorElement>('.md-target a[href^="#"]');
+        expect(link, '문서 안 링크가 없다').not.toBeNull();
+
+        link!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(busy.hidden, '문서 안 링크만 아무 표시 없이 굳는다').toBe(false);
+        expect(busy.textContent).toBe(t.viewer.renderingAll);
+
+        await settle();
+        expect(busy.hidden, '다 붙었으면 꺼져야 한다').toBe(true);
+    });
+
+    it('목표 제목까지 붙이고 나서 뛴다', async () => {
+        await screen.show(doc(), bigDocWithTocLink(), {});
+
+        const link = screen.root.querySelector<HTMLAnchorElement>('.md-target a[href^="#"]')!;
+        link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        await settle();
+
+        // 남은 청크를 안 붙이면 갈 곳이 없어 아무 일도 안 일어난다.
+        expect(screen.root.querySelector('.md-target h2'), '남은 청크가 안 붙었다').not.toBeNull();
+    });
+});

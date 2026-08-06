@@ -171,7 +171,6 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
 
     // ── 오버레이들. 컨테이너가 고정이라 한 번만 만들면 된다.
     let handle: RenderHandle | null = null;
-    const getHandle = () => handle;
 
     /**
      * 표시를 켜고 **화면에 그려진 뒤** 일을 시작한다.
@@ -190,7 +189,10 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
         }
     }
 
-    /** 목차·검색이 renderRest 를 부를 때 진행 표시를 함께 켠다. */
+    /**
+     * renderRest 를 부르는 **모든** 곳이 이걸 받아야 한다 — 목차 · 검색 · 문서 안 링크.
+     * ★ 하나라도 맨 handle 을 받으면 그 경로만 아무 표시 없이 몇 초씩 굳는다.
+     */
     const getHandleWithBusy = (): RenderHandle | null => {
         if (!handle) return null;
         const h = handle;
@@ -211,7 +213,18 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
     root.insertBefore(search.root, notice);
 
     // 위임이라 나중에 SVG 로 바뀌는 블록에도 걸린다. 한 번만 부르면 된다.
-    bindDocumentLinks(target, getHandle);
+    /*
+     * ★★ 여기도 **진행 표시가 붙은** 핸들이어야 한다. 예전에는 맨 handle 을 줬다.
+     *
+     *   문서 안 링크(#앵커)를 누르면 jumpToAnchor 가 renderRest() 를 부른다 —
+     *   목차·검색과 **똑같이 무거운 작업**이다(2.5MB 문서에서 화면이 2초 멎는 것을 실측).
+     *   그런데 저 둘만 표시를 띄우고 링크는 아무 표시 없이 굳었다.
+     *
+     *   AI 가 만든 문서는 맨 위에 목차 링크를 붙이는 경우가 아주 흔하다. 그걸 누른
+     *   사용자는 몇 초 동안 아무 반응 없는 화면을 보고 "앱이 죽었다" 고 판단한다.
+     *   각주 번호([1] · ↩︎)도 같은 경로다.
+     */
+    bindDocumentLinks(target, getHandleWithBusy);
     bindDiagramZoom(target);
 
     let doc: MdDocument | null = null;
