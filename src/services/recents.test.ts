@@ -13,6 +13,8 @@ import type { MdDocument } from '../plugins/md-file';
  */
 
 const store = new Map<string, string>();
+/** 네이티브 Preferences 가 실패하는 상황을 만든다. 실기기에서는 드물지만 일어난다. */
+const prefsFail = { get: false };
 const mdFile = {
     read: vi.fn(),
     releaseUri: vi.fn(),
@@ -28,7 +30,10 @@ const fs = {
 
 vi.mock('@capacitor/preferences', () => ({
     Preferences: {
-        get: async ({ key }: { key: string }) => ({ value: store.get(key) ?? null }),
+        get: async ({ key }: { key: string }) => {
+            if (prefsFail.get) throw new Error('네이티브 실패');
+            return { value: store.get(key) ?? null };
+        },
         set: async ({ key, value }: { key: string; value: string }) => {
             store.set(key, value);
         },
@@ -78,6 +83,7 @@ function doc(n: number, persisted = true): MdDocument {
 
 beforeEach(() => {
     store.clear();
+    prefsFail.get = false;
     vi.clearAllMocks();
     fs.mkdir.mockResolvedValue(undefined);
     fs.writeFile.mockResolvedValue(undefined);
@@ -484,5 +490,63 @@ describe('★★ 정리기가 쓰는 중인 사본을 지우지 않는다', () =
         fs.deleteFile.mockClear();
         await pruneSnapshotOrphans();
         expect(fs.deleteFile).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * ★★★ 2026-08-06. 목록을 **못 읽은 것**과 **비어 있는 것**을 같게 다뤘다.
+ *
+ *   pruneSnapshotOrphans 는 "목록이 안 가리키는 사본" 을 지운다. 그런데 loadRecents 가
+ *   실패해도 [] 를 돌려줬으므로, 못 읽은 순간에는 **모든 사본이 안 가리켜지는 것으로
+ *   보이고 통째로 지워졌다.**
+ *
+ *   드문 경우만이 아니다. Preferences.get 이 한 번 실패하기만 해도 그렇다 —
+ *   그때 목록 자체는 멀쩡히 남아 있으므로 결과는 **목록은 그대로인데 사본만 사라진**
+ *   상태다. 사본은 다시 못 여는 URI 의 유일한 사본이라, 최근 목록에서 누르면
+ *   "원본을 찾을 수 없습니다" 가 뜬다 — 카톡으로 받은 문서를 그대로 잃는다.
+ */
+describe('★★ 목록을 못 읽으면 사본을 지우지 않는다', () => {
+    it('Preferences 가 한 번 실패했을 뿐인데 사본을 다 지웠다', async () => {
+        await rememberDoc({ ...doc(1, false), name: 'a.md' }, '가', 'intent');
+        const 쓰는것 = (await loadRecents())[0].snapshotPath!;
+
+        fs.readdir.mockResolvedValue({ files: [{ name: 쓰는것.replace('snapshot/', '') }] });
+        fs.deleteFile.mockClear();
+
+        prefsFail.get = true;
+        try {
+            await pruneSnapshotOrphans();
+        } finally {
+            prefsFail.get = false;
+        }
+
+        expect(fs.deleteFile, '한 번 못 읽었다고 사본을 버렸다').not.toHaveBeenCalled();
+        // 목록은 멀쩡하다 — 즉 지울 이유가 애초에 없었다.
+        expect((await loadRecents())[0].snapshotPath).toBe(쓰는것);
+    });
+
+    it.each([
+        ['깨진 JSON', '{이건 JSON 이'],
+        ['배열이 아님', '{"a":1}'],
+        ['숫자', '5'],
+    ])('%s 이면 사본을 지우지 않는다', async (_이름, 값) => {
+        await rememberDoc({ ...doc(1, false), name: 'a.md' }, '가', 'intent');
+        const 쓰는것 = (await loadRecents())[0].snapshotPath!;
+
+        store.set('recentDocs', 값);
+        fs.readdir.mockResolvedValue({ files: [{ name: 쓰는것.replace('snapshot/', '') }] });
+        fs.deleteFile.mockClear();
+
+        await pruneSnapshotOrphans();
+        expect(fs.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('목록이 진짜로 비어 있으면(한 번도 쓴 적 없음) 정리는 그대로 돈다', async () => {
+        store.clear();
+        fs.readdir.mockResolvedValue({ files: [{ name: '999-버려진것.md' }] });
+        fs.deleteFile.mockClear();
+
+        await pruneSnapshotOrphans();
+        expect(fs.deleteFile, '규칙이 과해져 진짜 쓰레기까지 못 치우면 안 된다').toHaveBeenCalled();
     });
 });

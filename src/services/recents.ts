@@ -52,14 +52,43 @@ function keepUsable(raw: unknown): RecentDoc[] {
     });
 }
 
-export async function loadRecents(): Promise<RecentDoc[]> {
+/**
+ * 저장된 목록을 읽는다. **못 읽었으면 null 이다 — 빈 목록이 아니다.**
+ *
+ * ★★★ 이 구분이 왜 필요한가 (2026-08-06). pruneSnapshotOrphans 는
+ *   "목록이 안 가리키는 사본" 을 지운다. 그런데 못 읽은 것을 [] 로 퉁치면
+ *   **모든 사본이 안 가리켜지는 것으로 보이고 통째로 지워진다.**
+ *
+ *   그리고 이건 JSON 이 깨진 드문 경우만이 아니다. Preferences.get 이 한 번
+ *   실패하기만 해도 그렇다 — 그때 목록 자체는 멀쩡히 남아 있으므로,
+ *   결과는 **목록은 그대로인데 그 사본들만 사라진** 상태다. 최근 목록에서 누르면
+ *   "원본을 찾을 수 없습니다" 가 뜬다. 사본은 다시 못 여는 URI 의 **유일한 사본**이라
+ *   카톡으로 받은 문서를 그대로 잃는다.
+ *
+ * ★ 화면에 뿌리는 쪽(loadRecents)은 지금까지대로 [] 로 흘러도 된다 — 한 번 못 읽은 것과
+ *   비어 있는 것이 같아 보일 뿐 잃는 것이 없다. 지우는 쪽만 엄격해야 한다.
+ */
+async function readStoredRecents(): Promise<RecentDoc[] | null> {
+    let value: string | null;
     try {
-        const { value } = await Preferences.get({ key: KEY });
-        if (!value) return [];
-        return keepUsable(JSON.parse(value));
+        ({ value } = await Preferences.get({ key: KEY }));
     } catch {
-        return [];
+        return null; // 네이티브를 못 불렀다. 무엇이 있었는지 모른다.
     }
+    if (!value) return []; // 한 번도 쓴 적이 없다 — 진짜로 비어 있다
+
+    let raw: unknown;
+    try {
+        raw = JSON.parse(value);
+    } catch {
+        return null; // 깨진 JSON
+    }
+    if (!Array.isArray(raw)) return null; // 모양이 아예 다르다
+    return keepUsable(raw);
+}
+
+export async function loadRecents(): Promise<RecentDoc[]> {
+    return (await readStoredRecents()) ?? [];
 }
 
 async function saveRecents(list: RecentDoc[]): Promise<void> {
@@ -177,10 +206,12 @@ export async function rememberDoc(
  */
 export async function pruneSnapshotOrphans(): Promise<void> {
     try {
+        const stored = await readStoredRecents();
+        // ★★ 목록을 못 읽었으면 한 개도 지우지 않는다(readStoredRecents 주석).
+        //    청소는 미뤄도 되는 일이고, 지우는 것은 되돌릴 수 없다.
+        if (!stored) return;
         const used = new Set(
-            (await loadRecents())
-                .map((r) => r.snapshotPath)
-                .filter((p): p is string => typeof p === 'string'),
+            stored.map((r) => r.snapshotPath).filter((p): p is string => typeof p === 'string'),
         );
         const { files } = await Filesystem.readdir({
             path: 'snapshot',
