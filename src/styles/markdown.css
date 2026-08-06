@@ -28,6 +28,8 @@
     --md-quote-bar: #c9cbc5;
     --md-hit-bg: #ffe89a;
     --md-hit-bg-current: #ffc94d;
+    /* 밝은 테마는 원래 어두운 글자라 그대로 둔다 (10.04:1). 변수만 짝을 맞춘다. */
+    --md-hit-fg-current: #22252a;
     --md-hit-outline: #b8860b;
     --md-warn-fg: #8a5a00;
     --md-warn-bg: #fdf4e3;
@@ -44,7 +46,18 @@
     --md-code-bg-block: #1b1e24;
     --md-quote-bar: #3a404a;
     --md-hit-bg: #6b5300;
-    --md-hit-bg-current: #a37c00;
+    /*
+     * ★★ 어두운 테마에서 **현재 검색 결과의 글자가 안 읽혔다** (2026-08-06 실측).
+     *   `#d6d9de` on `#a37c00` = 2.73:1 — WCAG AA(4.5:1)에 한참 못 미친다.
+     *   하필 **지금 보고 있는 그 한 곳**이다. 나머지 결과(5.18:1)는 멀쩡했다.
+     *
+     *   밝기만 낮추면 다른 결과와 구분이 안 되고(1.03:1),
+     *   더 밝히면 밝은 글자가 더 안 읽힌다. 밝은 테마가 이미 쓰던 방법을 따른다 —
+     *   **밝은 호박색 바탕 + 어두운 글자.** 그러면 5.81:1 이고
+     *   다른 결과와도 2.40:1 로 확실히 갈린다.
+     */
+    --md-hit-bg-current: #b98d00;
+    --md-hit-fg-current: #16181c;
     --md-hit-outline: #ffd75e;
     --md-warn-fg: #e8c37a;
     --md-warn-bg: #2a2317;
@@ -262,6 +275,8 @@
 /*
  * 검색 하이라이트 (8-6절).
  * ★ 현재 항목은 색만 바꾸지 않고 외곽선도 함께 준다 — 노란색 두 가지는 구분이 어렵다.
+ * ★★ 현재 항목의 글자색은 **반드시 지정한다.** `inherit` 로 두면 어두운 테마에서
+ *   밝은 글자가 밝은 호박색 위에 얹혀 2.73:1 이 된다(위 변수 주석).
  */
 mark.md-hit {
     background: var(--md-hit-bg);
@@ -271,6 +286,7 @@ mark.md-hit {
 }
 mark.md-hit.is-current {
     background: var(--md-hit-bg-current);
+    color: var(--md-hit-fg-current);
     outline: 2px solid var(--md-hit-outline);
 }
 
@@ -467,14 +483,8 @@ mark.md-hit.is-current {
     padding: 12px;
 }
 
-/* 문서 내 검색 하이라이트 (8-6절) */
-mark.md-hit {
-    background: var(--md-hit-bg);
-    color: inherit;
-    border-radius: 2px;
-    padding: 0 1px;
-}
-mark.md-hit.is-current {
-    background: var(--md-hit-bg-current);
-    outline: 2px solid var(--md-hit-outline);
-}
+/*
+ * 문서 내 검색 하이라이트는 위(8-6절)에 한 벌만 둔다.
+ * ★ 여기 똑같은 규칙이 한 벌 더 있었다. 뒤엣것이 이겨서 겉으로는 같았지만,
+ *   한쪽만 고치면 조용히 안 먹는다 — 실제로 색 대비를 고칠 때 밟을 뻔했다.
+ */

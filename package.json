@@ -7,7 +7,7 @@
     "scripts": {
         "dev": "vite",
         "dev:device": "node scripts/dev-device.cjs",
-        "build": "vite build && node scripts/check-budget.cjs",
+        "build": "vite build && node scripts/check-budget.cjs && node scripts/check-contrast.cjs",
         "build:android": "npm run build && npm run sync:android",
         "build:aab": "node scripts/build-aab.cjs",
         "release": "npm run build:android && npm run build:aab",
