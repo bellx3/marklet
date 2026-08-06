@@ -97,10 +97,29 @@ export function runSearch(container: HTMLElement, rawQuery: string): SearchState
         const original = node.nodeValue ?? '';
         const hay = haystackOf(original, q.choseong);
 
-        // 한 노드 안의 모든 일치를 뒤에서부터 처리한다.
-        // 앞에서부터 자르면 splitText 가 오프셋을 밀어 버린다.
+        /*
+         * 한 노드 안의 모든 일치를 뒤에서부터 처리한다.
+         * 앞에서부터 자르면 splitText 가 오프셋을 밀어 버린다.
+         *
+         * ★★★ 다음 자리를 `i + 1` 로 잡지 마라. **겹치는 일치**가 생긴다.
+         *   `....` 에서 `..` 를 찾으면 0·1·2 가 다 잡힌다. 그런데 뒤에서부터
+         *   surroundContents 를 하면 노드가 그 자리에서 잘려 짧아지므로,
+         *   앞쪽 일치의 끝이 이미 없는 자리를 가리킨다:
+         *       DOMException: offset 5 is larger than the node's length (4)
+         *   검색이 통째로 터지고 사용자는 왜 안 되는지 알 방법이 없다(2026-08-06 실측).
+         *
+         *   드문 입력이 아니다 — AI 문서의 말줄임 `...`, 표 구분 `----`,
+         *   한국어 `ㅋㅋㅋ`, 그리고 **초성 검색 `ㄱㄱ` 이 `기관공` 같은 평범한 말**에
+         *   걸리면 바로 밟는다.
+         *
+         * ★ 겹치지 않게 세는 것이 브라우저 Ctrl+F 와도 같은 셈법이다.
+         */
         const hits: number[] = [];
-        for (let i = hay.indexOf(q.needle); i >= 0; i = hay.indexOf(q.needle, i + 1)) {
+        for (
+            let i = hay.indexOf(q.needle);
+            i >= 0;
+            i = hay.indexOf(q.needle, i + q.needle.length)
+        ) {
             hits.push(i);
             if (hits.length + marks.length >= MAX_MATCHES) {
                 truncated = true;

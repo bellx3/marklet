@@ -180,3 +180,75 @@ describe('step · counterLabel', () => {
         expect(counterLabel(s)).toBe(`1/${MAX_MATCHES}+`);
     });
 });
+
+/**
+ * ★★★ 2026-08-06. **검색이 통째로 터지는 입력이 있었다.**
+ *
+ *   다음 일치를 `indexOf(needle, i + 1)` 로 찾아서 **겹치는 일치**가 잡혔다.
+ *   `....` 에서 `..` 를 찾으면 0·1·2 가 다 걸린다. 그런데 하이라이트는
+ *   뒤에서부터 surroundContents 로 끼우므로 노드가 그 자리에서 잘려 짧아지고,
+ *   앞쪽 일치의 끝이 이미 없는 자리를 가리킨다:
+ *       DOMException: offset 5 is larger than the node's length (4)
+ *
+ *   드문 입력이 아니다:
+ *     `..`  AI 문서의 말줄임 `...`
+ *     `--`  표·구분선 `----`, 명령줄 옵션
+ *     `ㅋㅋ` 한국어에서 아주 흔하다
+ *     `ㄱㄱ` **초성 검색이 `기관공사` 같은 평범한 말에 걸린다**
+ *
+ *   그리고 터지면 사용자는 왜 안 되는지 알 방법이 없다 — 셈이 멎을 뿐이다.
+ */
+describe('★★ 겹치는 일치 — 검색이 터지면 안 된다', () => {
+    it.each([
+        ['aaaa', 'aa', 2],
+        ['말줄임... 그리고', '..', 1],
+        ['구분 ---- 선', '--', 2],
+        ['아 ㅋㅋㅋㅋ 진짜', 'ㅋㅋ', 2],
+    ])('%s 에서 %s → %i건 (터지지 않는다)', (본문, 질의, 예상) => {
+        const el = host(`<p>${본문}</p>`);
+        expect(() => runSearch(el, 질의)).not.toThrow();
+        expect(runSearch(el, 질의).marks.length).toBe(예상);
+    });
+
+    it('★ 초성 검색이 평범한 한국어에서 터지지 않는다', () => {
+        // 기관공사 → ㄱㄱㄱㅅ. `ㄱㄱ` 이 0·1 두 자리에 걸린다.
+        const el = host('<p>기관공사 얘기</p>');
+        expect(() => runSearch(el, 'ㄱㄱ')).not.toThrow();
+        const s = runSearch(el, 'ㄱㄱ');
+        expect(s.marks.length).toBe(1);
+        expect(s.marks[0].textContent).toBe('기관');
+    });
+
+    it('★ 겹치지 않게 센다 (브라우저 Ctrl+F 와 같은 셈법)', () => {
+        // 아이유의 → ㅇㅇㅇㅇ. 겹쳐 세면 3건, 겹치지 않게 세면 2건이다.
+        const el = host('<p>아이유의 노래</p>');
+        const s = runSearch(el, 'ㅇㅇ');
+        expect(s.marks.length).toBe(2);
+        expect(s.marks.map((m) => m.textContent)).toEqual(['아이', '유의']);
+    });
+
+    it('터진 뒤에도 글자가 남아 있어야 한다 (하이라이트가 본문을 먹지 않는다)', () => {
+        const el = host('<p>말줄임... 그리고</p>');
+        runSearch(el, '..');
+        expect(el.textContent).toBe('말줄임... 그리고');
+        clearSearch(el);
+        expect(el.textContent).toBe('말줄임... 그리고');
+    });
+
+    it('겹치는 질의로도 다음/이전이 문서 순서대로 돈다', () => {
+        const el = host('<p>가가가가</p>');
+        let s = runSearch(el, '가가');
+        expect(counterLabel(s)).toBe('1/2');
+        s = step(s, 1);
+        expect(counterLabel(s)).toBe('2/2');
+        s = step(s, 1);
+        expect(counterLabel(s)).toBe('1/2');
+    });
+
+    it('상한을 넘겨도 터지지 않는다', () => {
+        const el = host(`<p>${'..'.repeat(MAX_MATCHES + 50)}</p>`);
+        const s = runSearch(el, '..');
+        expect(s.truncated).toBe(true);
+        expect(s.marks.length).toBeLessThanOrEqual(MAX_MATCHES);
+    });
+});
