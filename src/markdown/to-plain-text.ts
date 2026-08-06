@@ -119,6 +119,22 @@ function walkBlock(node: Node, out: string[], depth: number): void {
     for (const c of Array.from(el.childNodes)) walkBlock(c, out, depth);
 }
 
+/**
+ * 목록 항목 안에서 **inline() 에 넘기면 안 되는** 것들.
+ *
+ * ★★ inline() 은 이어진 공백을 한 칸으로 줄인다. 문단에서는 맞지만
+ *   코드 안에서는 **들여쓰기가 곧 문법**이다. 파이썬·YAML·JSON 이 통째로 망가진다.
+ *   2026-08-06 실측:
+ *       1. 설정 파일을 만듭니다        →   {
+ *          ```json                         "port": 3000,     ← 두 칸이 한 칸으로
+ *          {                              }
+ *            "port": 3000,
+ *          }
+ *   그리고 AI 가 쓴 설치 안내는 거의 항상 "1. …" 아래에 코드 블록을 놓는다.
+ *   즉 가장 흔한 모양이 가장 크게 깨져 있었다. 게다가 이 글은 **남에게 보내는 글**이다.
+ */
+const LIST_BLOCK_TAGS = new Set(['ul', 'ol', 'pre', 'blockquote', 'table']);
+
 function walkList(list: HTMLElement, out: string[], depth: number): void {
     const ordered = list.tagName.toLowerCase() === 'ol';
     let index = Number(list.getAttribute('start') ?? '1') || 1;
@@ -135,14 +151,28 @@ function walkList(list: HTMLElement, out: string[], depth: number): void {
             marker = ordered ? `${index++}. ` : BULLET;
         }
 
-        // 중첩 목록은 따로 처리한다 — 본문에 섞이면 한 줄로 뭉친다.
-        const nested = Array.from(item.children).filter((c) =>
-            ['ul', 'ol'].includes(c.tagName.toLowerCase()),
+        // 블록 자식은 떼어 두고 따로 옮긴다 — 본문에 섞이면 한 줄로 뭉친다(위 주석).
+        const blocks = Array.from(item.children).filter((c) =>
+            LIST_BLOCK_TAGS.has(c.tagName.toLowerCase()),
         );
-        for (const n of nested) n.remove();
+        for (const b of blocks) b.remove();
 
         out.push(`${INDENT.repeat(depth)}${marker}${inline(item)}`);
-        for (const n of nested) walkList(n as HTMLElement, out, depth + 1);
+
+        const pad = INDENT.repeat(depth + 1);
+        for (const b of blocks) {
+            const tag = b.tagName.toLowerCase();
+            if (tag === 'ul' || tag === 'ol') {
+                walkList(b as HTMLElement, out, depth + 1);
+                continue;
+            }
+            // ★ 한 단계만 들여쓴다. 안쪽 들여쓰기는 손대지 않는다 — 그게 요점이다.
+            const sub: string[] = [];
+            walkBlock(b, sub, depth + 1);
+            for (const line of sub.join('\n').replace(/\n+$/, '').split('\n')) {
+                out.push(line ? pad + line : '');
+            }
+        }
     }
 }
 
