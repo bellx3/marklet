@@ -366,3 +366,70 @@ describe('★ 한글 IME (6번 규칙)', () => {
         expect(counter()).toBe('2/2');
     });
 });
+
+/**
+ * ★★★ 2026-08-06. **검색을 닫으면 초점이 갈 곳을 잃었다.**
+ *
+ *   닫는 순간 바가 `hidden` 이 되는데, 그때 초점은 아직 검색칸에 있다.
+ *   실측: 닫은 뒤에도 activeElement 가 `[hidden]` 안의 입력칸이었다.
+ *   실기기에서는 브라우저가 곧 body 로 떨어뜨린다 — 어느 쪽이든 **열기 전 자리로
+ *   돌아가지 않는다.** 토크백 사용자는 다음 스와이프가 화면 맨 위에서 다시 시작해
+ *   읽던 자리를 잃는다.
+ *
+ *   ★ 시트·다이얼로그는 Overlay 가 이걸 해 준다. 검색 바는 상단 바를 **덮는**
+ *     인라인 바라 Overlay 를 쓰지 않아서 그 그물 밖에 있었다.
+ */
+describe('★★ 닫으면 초점이 열기 전 자리로 돌아간다', () => {
+    let 찾기버튼: HTMLButtonElement;
+
+    beforeEach(() => {
+        build(makeHandle('뒷부분'));
+        찾기버튼 = document.createElement('button');
+        찾기버튼.id = 'find-btn';
+        document.body.appendChild(찾기버튼);
+    });
+
+    it('★ 뒤로가기로 닫아도 [찾기] 버튼으로 돌아간다', async () => {
+        찾기버튼.focus();
+        await bar.open();
+        expect(document.activeElement, '열면 검색칸이 잡혀야 한다').toBe(
+            bar.root.querySelector('input'),
+        );
+
+        expect(await __pressBackForTest()).toBe('search');
+
+        expect(document.activeElement, '초점이 숨겨진 칸이나 body 에 남았다').toBe(찾기버튼);
+    });
+
+    it('닫기 버튼으로 닫아도 돌아간다', async () => {
+        찾기버튼.focus();
+        await bar.open();
+        const 닫기 = [...bar.root.querySelectorAll('button')].pop()!;
+        닫기.focus();
+        닫기.click();
+        expect(document.activeElement).toBe(찾기버튼);
+    });
+
+    it('돌아갈 자리가 이미 사라졌으면 아무 데도 손대지 않는다', async () => {
+        찾기버튼.focus();
+        await bar.open();
+        찾기버튼.remove(); // 그 사이에 화면이 바뀌었다
+        expect(() => bar.close()).not.toThrow();
+    });
+
+    /*
+     * ★ 닫는 사이에 앱이 초점을 다른 곳으로 옮겼으면 빼앗지 않는다
+     *   (Overlay 에서 다이얼로그가 겹칠 때 겪은 것과 같은 함정이다).
+     */
+    it('★ 다른 곳이 이미 초점을 가져갔으면 빼앗지 않는다', async () => {
+        찾기버튼.focus();
+        await bar.open();
+
+        const 다른곳 = document.createElement('button');
+        document.body.appendChild(다른곳);
+        다른곳.focus();
+
+        bar.close();
+        expect(document.activeElement, '남의 초점을 빼앗았다').toBe(다른곳);
+    });
+});

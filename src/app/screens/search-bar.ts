@@ -77,6 +77,17 @@ export function createSearchBar(
     let state: SearchState = { marks: [], current: -1, truncated: false };
     let opened = false;
 
+    /**
+     * 열기 전에 초점이 있던 자리 — 보통 상단 바의 [문서에서 찾기] 버튼이다.
+     *
+     * ★★ 안 돌려주면 닫는 순간 초점이 **숨겨진 검색칸에 남거나 body 로 떨어진다**
+     *   (2026-08-06 실측: 닫은 뒤에도 activeElement 가 `[hidden]` 안의 입력칸이었다).
+     *   토크백 사용자는 다음 스와이프가 화면 맨 위에서 다시 시작해 읽던 자리를 잃는다.
+     *   시트·다이얼로그는 Overlay 가 이걸 해 주는데, 검색 바는 상단 바를 **덮는**
+     *   인라인 바라 Overlay 를 쓰지 않는다 — 그래서 그 그물 밖에 있었다.
+     */
+    let lastFocus: HTMLElement | null = null;
+
     const updateCounter = () => {
         counter.textContent = counterLabel(state);
         const none = state.marks.length === 0;
@@ -122,6 +133,7 @@ export function createSearchBar(
         async open() {
             if (opened) return;
             opened = true;
+            lastFocus = document.activeElement as HTMLElement | null;
             root.hidden = false;
             onToggle?.(true);
             // ★ 여는 함수 안에서 동기적으로 등록한다(9-3절).
@@ -160,8 +172,19 @@ export function createSearchBar(
             clearSearch(container); // ★ <mark> 를 반드시 걷어낸다
             removeLayer('search');
             root.hidden = true;
+            // ★ 상단 바를 먼저 되살린다 — 그래야 [찾기] 버튼이 다시 초점을 받을 수 있다.
             onToggle?.(false);
             state = { marks: [], current: -1, truncated: false };
+
+            /*
+             * ★ 초점이 아직 검색 바 안(또는 body)일 때만 되돌린다.
+             *   닫는 사이에 앱이 다른 곳으로 옮겨 놨으면 빼앗지 않는다
+             *   (Overlay 에서 다이얼로그가 겹칠 때 겪은 것과 같은 함정이다).
+             */
+            const active = document.activeElement;
+            const 우리것 = !active || active === document.body || root.contains(active);
+            if (우리것 && lastFocus?.isConnected) lastFocus.focus();
+            lastFocus = null;
         },
     };
 
