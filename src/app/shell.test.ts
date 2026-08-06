@@ -41,6 +41,7 @@ const h = vi.hoisted(() => ({
         addListener: vi.fn(async () => ({ remove: async () => {} })),
         getPendingOpen: vi.fn(async () => ({})),
     },
+    fsStore: new Map<string, string>(),
     confirmAnswer: { value: true },
     /** 확인 상자를 사람이 늦게 누르는 상황을 만든다. 0 이면 예전과 똑같이 즉시 답한다. */
     confirmDelayMs: { value: 0 },
@@ -48,7 +49,16 @@ const h = vi.hoisted(() => ({
     alerts: [] as string[],
 }));
 
-const { exitApp, nativeStore, mdFile, confirmAnswer, confirmDelayMs, choiceAnswer, alerts } = h;
+const {
+    exitApp,
+    nativeStore,
+    fsStore,
+    mdFile,
+    confirmAnswer,
+    confirmDelayMs,
+    choiceAnswer,
+    alerts,
+} = h;
 
 vi.mock('@capacitor/app', () => ({
     App: {
@@ -65,6 +75,39 @@ vi.mock('@capacitor/preferences', () => ({
         },
         remove: async ({ key }: { key: string }) => {
             h.nativeStore.delete(key);
+        },
+    },
+}));
+
+/*
+ * ★★ 파일 시스템도 **경계**다. 대역이 없으면 draft.ts 의 readFile 이 그냥 던지고
+ *   readDraft 가 null 을 돌려준다 — 즉 초안 복구 경로가 이 파일에서
+ *   **한 번도 돌지 않은 채** 초록불이었다. 여기 로직(쓰기 큐·목록 갱신)은
+ *   진짜를 돌려야 의미가 있으므로, 네이티브 호출만 메모리로 받는다.
+ */
+vi.mock('@capacitor/filesystem', () => ({
+    Directory: { Data: 'DATA' },
+    Encoding: { UTF8: 'utf8' },
+    Filesystem: {
+        mkdir: async () => {},
+        writeFile: async ({ path, data }: { path: string; data: string }) => {
+            h.fsStore.set(path, data);
+        },
+        readFile: async ({ path }: { path: string }) => {
+            if (!h.fsStore.has(path)) throw new Error('없음');
+            return { data: h.fsStore.get(path) };
+        },
+        deleteFile: async ({ path }: { path: string }) => {
+            h.fsStore.delete(path);
+        },
+        readdir: async ({ path }: { path: string }) => ({
+            files: [...h.fsStore.keys()]
+                .filter((p) => p.startsWith(`${path}/`))
+                .map((p) => ({ name: p.slice(path.length + 1), mtime: 0 })),
+        }),
+        stat: async ({ path }: { path: string }) => {
+            if (!h.fsStore.has(path)) throw new Error('없음');
+            return { size: (h.fsStore.get(path) ?? '').length, mtime: 0 };
         },
     },
 }));
@@ -125,6 +168,7 @@ let root: HTMLElement;
 beforeEach(() => {
     vi.useFakeTimers();
     nativeStore.clear();
+    fsStore.clear();
     alerts.length = 0;
     confirmAnswer.value = true;
     confirmDelayMs.value = 0;
@@ -390,5 +434,87 @@ describe('★★ 여는 도중에 다른 문서가 들어오면', () => {
         await settle();
         await p;
         expect(본문()).toContain('느린.md');
+    });
+});
+
+/**
+ * 저장하지 않은 초안 복구 (8-4절).
+ *
+ * ★★ 2026-08-06 실기기. 편집 중에 앱을 저메모리로 죽이고 같은 문서를 다시 열었다.
+ *   "저장하지 않은 편집이 있습니다 … [원본 열기] [이어서 편집]" 이 뜨는 것까지는 맞았는데,
+ *   **'이어서 편집'을 눌러도 뷰어에 내려놓았다.** 초안 내용이 실려 있기는 하지만
+ *   읽기 전용 화면이라, 글을 잃었을까 봐 불안한 바로 그 순간에 사용자가
+ *   편집 단추를 다시 찾아야 했다. 누른 것과 다른 일이 일어난 것이다.
+ */
+describe('셸 — 초안 복구', () => {
+    /** 편집기에 글을 치고 백그라운드 전환으로 초안을 디스크에 떨군다. */
+    async function 초안을남긴다(uri: string): Promise<void> {
+        await entryHandlers.openDocument(doc({ uri, name: uri.split('/').pop() }));
+        await settle();
+        buttonByLabel(t.viewer.edit)!.click();
+        await settle();
+
+        const ta = root.querySelector<HTMLTextAreaElement>('#editor')!;
+        ta.value = '# 문서\n\n본문\n\n초안에만 있는 줄';
+        ta.dispatchEvent(new Event('input'));
+        /*
+         * ★ 초안 디바운스는 800ms 인데 settle() 은 600ms 만 돌린다.
+         *   여기서 넉넉히 흘려보내지 않으면 **초안이 아직 안 쓰인 채로** 다음 단계로 간다.
+         *   그러면 대기 중이던 쓰기가 나중에 깨어나 clearDraft 뒤에 초안을 되살려,
+         *   테스트가 엉뚱한 곳에서 실패한다.
+         */
+        await vi.advanceTimersByTimeAsync(1200);
+        await settle();
+
+        // 앱이 죽은 것처럼 화면 상태만 되돌린다 — 디스크의 초안은 그대로 둔다.
+        __resetRouterForTest();
+        root.remove();
+        root = document.createElement('div');
+        document.body.appendChild(root);
+        mount(root);
+    }
+
+    it('초안이 실제로 디스크에 남는다 (이게 없으면 아래 시험이 헛돈다)', async () => {
+        await 초안을남긴다('content://docs/초안.md');
+        const 남은것 = [...fsStore.entries()].filter(([p]) => p.startsWith('draft/'));
+        expect(남은것.length, '초안 파일이 하나도 안 쓰였다').toBe(1);
+        expect(남은것[0][1]).toContain('초안에만 있는 줄');
+        expect(nativeStore.get('draftIndex')).toContain('content://docs/초안.md');
+    });
+
+    it("★★ '이어서 편집'을 고르면 편집 화면까지 데려간다", async () => {
+        await 초안을남긴다('content://docs/초안.md');
+
+        choiceAnswer.value = 'draft';
+        await entryHandlers.openDocument(doc({ uri: 'content://docs/초안.md', name: '초안.md' }));
+        await settle();
+
+        expect(visibleScreen(root), '뷰어에 내려놓으면 누른 것과 다른 일이다').toContain(
+            'screen-editor',
+        );
+        const ta = root.querySelector<HTMLTextAreaElement>('#editor')!;
+        expect(ta.value, '편집기가 초안이 아니라 원본에서 시작했다').toContain('초안에만 있는 줄');
+    });
+
+    it("'원본 열기'를 고르면 뷰어에 머물고 초안을 버린다", async () => {
+        await 초안을남긴다('content://docs/초안.md');
+
+        choiceAnswer.value = 'original';
+        await entryHandlers.openDocument(doc({ uri: 'content://docs/초안.md', name: '초안.md' }));
+        await settle();
+
+        expect(visibleScreen(root)).toContain('screen-viewer');
+        expect(
+            [...fsStore.keys()].filter((p) => p.startsWith('draft/')),
+            '원본을 골랐으면 초안은 지워져야 한다',
+        ).toEqual([]);
+    });
+
+    it('초안이 없으면 아무것도 묻지 않고 뷰어로 간다', async () => {
+        choiceAnswer.value = 'draft'; // 물으면 이걸 고를 텐데, 물어선 안 된다
+        await entryHandlers.openDocument(doc({ uri: 'content://docs/새.md', name: '새.md' }));
+        await settle();
+
+        expect(visibleScreen(root)).toContain('screen-viewer');
     });
 });

@@ -225,13 +225,16 @@ async function openDocumentFlow(
             void rememberDoc(outcome.doc, outcome.content, source);
             return;
         case 'render': {
-            const content = await resolveDraft(outcome.doc, outcome.content);
+            const draft = await resolveDraft(outcome.doc, outcome.content);
             // ★ 초안 복구 상자도 사람이 누를 때까지 기다린다. 다시 본다.
             if (superseded()) return;
             viewerFrom = from;
-            await viewer.show(outcome.doc, content, { showProgress: outcome.showProgress });
+            await viewer.show(outcome.doc, draft.content, { showProgress: outcome.showProgress });
             enterViewer();
+            // ★ 사본은 원본을 비춘다. 저장하지 않은 초안을 사본에 적으면 안 된다.
             void rememberDoc(outcome.doc, outcome.content, source);
+            // ★ 뷰어를 먼저 세운 뒤에 연다 — openEditor 가 viewer.getContent() 를 읽는다.
+            if (draft.resume) await openEditor();
             return;
         }
     }
@@ -240,13 +243,24 @@ async function openDocumentFlow(
 /**
  * 저장하지 않은 초안이 있으면 물어본다 (8-4절).
  * ★ '버리기'를 기본 선택으로 두지 마라. 실수로 누르면 되돌릴 수 없다.
+ *
+ * ★★ resume 을 함께 돌려준다. 단추 이름이 '이어서 편집' 인데 뷰어에 내려놓으면
+ *   **누른 것과 다른 일이 일어난다.** 앱이 죽어 편집하던 글을 잃었을까 봐 불안한
+ *   바로 그 순간에, 읽기 전용 화면에 떨어뜨리고 편집 단추를 다시 찾게 만들면 안 된다.
+ *   (2026-08-06 실기기에서 강제 종료 후 복구를 밟아 보고 발견)
  */
-async function resolveDraft(doc: MdDocument, original: string): Promise<string> {
-    if (!doc.uri) return original;
+interface DraftChoice {
+    content: string;
+    /** 사용자가 '이어서 편집'을 골랐다 — 뷰어를 지나 편집기까지 열어 준다. */
+    resume: boolean;
+}
+
+async function resolveDraft(doc: MdDocument, original: string): Promise<DraftChoice> {
+    if (!doc.uri) return { content: original, resume: false };
     const draft = await readDraft(doc.uri);
     if (draft === null || draft === original) {
         if (draft !== null) await clearDraft(doc.uri);
-        return original;
+        return { content: original, resume: false };
     }
 
     const at = await draftSavedAt(doc.uri);
@@ -260,9 +274,9 @@ async function resolveDraft(doc: MdDocument, original: string): Promise<string> 
         ],
     });
 
-    if (answer === 'draft') return draft;
+    if (answer === 'draft') return { content: draft, resume: true };
     if (answer === 'original') await clearDraft(doc.uri);
-    return original;
+    return { content: original, resume: false };
 }
 
 async function openFromRecent(r: RecentDoc): Promise<void> {
@@ -286,21 +300,22 @@ async function openFromRecent(r: RecentDoc): Promise<void> {
         return;
     }
 
-    const content =
+    const draft: DraftChoice =
         outcome.kind === 'plain'
-            ? outcome.content
+            ? { content: outcome.content, resume: false }
             : await resolveDraft(opened.doc, outcome.content);
     // ★ 크기 확인 상자와 초안 복구 상자를 지나는 사이에 밖에서 문서가 들어왔을 수 있다.
     if (superseded()) return;
 
     viewerFrom = 'in-app';
-    await viewer.show(opened.doc, content, {
+    await viewer.show(opened.doc, draft.content, {
         plain: outcome.kind === 'plain',
         fromSnapshot: opened.fromSnapshot,
         showProgress: outcome.kind === 'render' && outcome.showProgress,
     });
     enterViewer();
     if (!opened.fromSnapshot) void rememberDoc(opened.doc, opened.content, r.source);
+    if (draft.resume) await openEditor();
 }
 
 async function pickAndOpen(): Promise<void> {
