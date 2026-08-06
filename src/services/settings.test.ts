@@ -75,18 +75,31 @@ describe('applyTheme', () => {
     });
 });
 
-describe('loadSettings — 첫 실행 글꼴 배율 (10-2절)', () => {
-    it('★ 첫 실행에서 OS 글꼴 배율을 읽어 가장 가까운 단계를 고른다', async () => {
+describe('★★ OS 글꼴 배율은 웹뷰에 맡긴다 (10-2절)', () => {
+    it('OS 배율을 읽지 않는다 — 읽으면 두 번 곱해진다', async () => {
         mdFile.getSystemFontScale.mockResolvedValue({ scale: 1.3 });
-        const { loadSettings, FONT_STEPS, getSettings } = await import('./settings');
+        const { loadSettings, FONT_STEPS, DEFAULT_FONT_STEP } = await import('./settings');
 
         const s = await loadSettings();
-        // 17 * 1.3 = 22.1 → 22px 단계
-        expect(FONT_STEPS[s.fontStep]).toBe(22);
-        expect(getSettings().fontStepInitialized).toBe(true);
+
+        /*
+         * ★★ 이 테스트는 예전에 정반대를 고정했다("배율을 읽어 가장 가까운 단계를 고른다").
+         *   근거는 "본문에 text-size-adjust:none 을 걸어 OS 확대를 껐으니 우리가 보정해야
+         *   한다" 였는데 **그 전제가 틀렸다.** 시스템 글꼴 배율은 WebSettings.setTextZoom
+         *   이 먹이는 것이라 CSS 로는 못 끈다.
+         *
+         *   그래서 배율이 두 번 곱해졌다(2026-08-06 실기기, 시스템 배율 2.0):
+         *     지정 16px → 실제 32px            (웹뷰가 이미 2배)
+         *     --md-font-size 24px → 본문 48px  (앱이 17→24 로 올린 뒤 또 2배)
+         *   사용자가 바란 것은 17×2 = 34px 였다.
+         */
+        expect(FONT_STEPS[s.fontStep], '앱이 배율을 또 곱하면 안 된다').toBe(
+            FONT_STEPS[DEFAULT_FONT_STEP],
+        );
+        expect(mdFile.getSystemFontScale, 'OS 배율을 읽으면 안 된다').not.toHaveBeenCalled();
     });
 
-    it('두 번째 실행에서는 다시 읽지 않는다 (사용자가 고른 값을 덮어쓰면 안 된다)', async () => {
+    it('사용자가 고른 값은 그대로 쓴다', async () => {
         store.set(
             'settings',
             JSON.stringify({ fontStep: 1, fontStepInitialized: true, theme: 'light' }),
