@@ -156,3 +156,46 @@ describe('살균 후에도 구조가 남는다', () => {
         expect(host.querySelector('input')).toBeNull();
     });
 });
+
+/**
+ * ★★★ 2026-08-06. **빈 문서에서 렌더가 터졌다.**
+ *
+ *   sliceTokens 가 빈 배열을 돌려주면 renderProgressive 의 `renderRange(0)` 이
+ *   `ranges[0]` 을 구조 분해하다 터진다:
+ *       TypeError: undefined is not iterable
+ *
+ *   그런 문서는 드물지 않다 — **0바이트 파일**, 공백만 있는 파일,
+ *   **frontmatter 만 있는 파일**(옵시디언 템플릿·메타데이터 노트)이 전부 여기다.
+ *
+ *   ★ 뷰어에 try/catch 폴백이 있어 화면이 죽지는 않았다. 하지만 그 그물은
+ *     **예상 못 한 렌더 실패**를 위한 것이다. 정상 입력이 거기로 떨어지면
+ *     "렌더 실패" 가 로그에 찍히고 원문 보기 경로로 그려진다 —
+ *     진짜 사고가 났을 때 그 로그를 믿을 수 없게 된다.
+ */
+describe('★★ 내용이 없는 문서', () => {
+    it('★ sliceTokens 는 토큰이 없어도 범위 하나를 준다', () => {
+        expect(sliceTokens([])).toEqual([[0, 0]]);
+    });
+
+    it.each([
+        ['완전히 빈 문서', ''],
+        ['공백만', '   \n\n  \t\n'],
+        ['개행 하나', '\n'],
+        ['frontmatter 를 걷어내고 남은 것이 없음', ''],
+    ])('%s — 터지지 않는다', (_이름, src) => {
+        const md = createMarkdownIt({ breaks: true });
+        const host = document.createElement('div');
+        expect(() => renderProgressive(md, src, host)).not.toThrow();
+        expect(host.querySelectorAll('.md-chunk').length, '청크가 하나는 있어야 한다').toBe(1);
+        expect(host.textContent).toBe('');
+    });
+
+    it('평범한 문서는 그대로다 (빈 범위가 끼어들지 않는다)', () => {
+        const md = createMarkdownIt({ breaks: true });
+        const host = document.createElement('div');
+        renderProgressive(md, '# 제목\n\n본문입니다.\n', host);
+        expect(host.textContent).toContain('제목');
+        expect(host.textContent).toContain('본문입니다');
+        expect(host.querySelectorAll('.md-chunk').length).toBe(1);
+    });
+});

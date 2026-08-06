@@ -42,6 +42,21 @@ export function sliceTokens(tokens: Token[], perChunk = TOKENS_PER_CHUNK): Array
         }
     }
     if (start < tokens.length) ranges.push([start, tokens.length]);
+
+    /*
+     * ★★★ 토큰이 하나도 없어도 **범위 하나는 돌려준다** (2026-08-06).
+     *
+     *   빈 배열을 돌려주면 renderProgressive 의 `renderRange(0)` 이
+     *   `ranges[0]` 을 구조 분해하다 터진다:
+     *       TypeError: undefined is not iterable
+     *
+     *   그리고 그런 문서는 **드물지 않다** — 0바이트 파일, 공백만 있는 파일,
+     *   frontmatter 만 있는 파일(옵시디언 템플릿·메타데이터 노트)이 전부 여기다.
+     *   뷰어에 try/catch 폴백이 있어 화면이 죽지는 않았지만, 그 폴백은
+     *   **예상 못 한 렌더 실패**를 위한 그물이다. 정상 입력이 거기로 떨어지면
+     *   "렌더 실패" 가 로그에 찍히고, 실제로는 원문 보기 경로로 그려진다.
+     */
+    if (ranges.length === 0) ranges.push([0, 0]);
     return ranges;
 }
 
