@@ -226,6 +226,15 @@ export function createHome(cb: HomeCallbacks): HomeScreen {
                 foldersSection.body.appendChild(note);
             }
 
+            // ★ 깊이 상한도 **같은 자리에서, 같은 이유로** 알린다(위 주석).
+            //   개수만 알리고 깊이를 빠뜨리면 옵시디언 사용자에게는 여전히 조용히 잘린다.
+            if (listing.depthLimited) {
+                const note = document.createElement('p');
+                note.className = 'list-error list-error--info';
+                note.textContent = t.folders.depthLimited(listing.maxDepth ?? 3);
+                foldersSection.body.appendChild(note);
+            }
+
             const files = listing.files.filter((f) => matchesName(f.name, query));
             if (files.length === 0) {
                 foldersSection.body.appendChild(

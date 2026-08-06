@@ -435,6 +435,9 @@ public class MdFilePlugin extends Plugin {
              */
             ret.put("truncated", scan.truncated);
             ret.put("limit", MAX_FILES);
+            // ★ 깊이 상한도 같은 이유로 알린다(Scan.depthLimited 주석).
+            ret.put("depthLimited", scan.depthLimited);
+            ret.put("maxDepth", maxDepth);
             call.resolve(ret);
         } catch (SecurityException e) {
             call.reject("폴더 권한이 만료되었습니다", "EPERM", e);
@@ -455,6 +458,14 @@ public class MdFilePlugin extends Plugin {
     private static final class Scan {
         final List<JSObject> out = new ArrayList<>();
         boolean truncated = false;
+        /**
+         * ★★ 깊이 상한에 걸려 **들여다보지 않은 하위 폴더가 있었는가.**
+         *   개수 상한(MAX_FILES)은 알려 주면서 깊이 상한은 조용히 넘어가고 있었다.
+         *   증상은 똑같다 — 사용자는 폴더에 있는 파일이 목록에 없는 것을 보고
+         *   "이 앱이 내 파일을 못 찾는다" 고 판단한다. 원인은 화면 어디에도 안 남는다.
+         *   옵시디언처럼 폴더를 겹겹이 쓰는 사람이 바로 걸린다.
+         */
+        boolean depthLimited = false;
     }
 
     private void walk(Uri tree, String docId, int depth, int maxDepth, Scan scan) {
@@ -489,6 +500,12 @@ public class MdFilePlugin extends Plugin {
                 String mime = c.getString(2);
 
                 if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
+                    // ★ '들어가지 않았다'는 사실을 여기서 남긴다. 진입 시점의 depth 검사로는
+                    //   '하위 폴더가 있었는지' 자체를 알 수 없어 알려 줄 방법이 없다.
+                    if (depth + 1 > maxDepth) {
+                        scan.depthLimited = true;
+                        continue;
+                    }
                     walk(tree, childId, depth + 1, maxDepth, scan);
                     if (scan.truncated) return;
                     continue;

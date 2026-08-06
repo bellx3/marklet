@@ -253,6 +253,8 @@ export const en = {
         /** ★ 상한은 네이티브가 정한다. 여기에 숫자를 박으면 둘이 어긋난다. */
         truncated: (n: number) =>
             `Too many files — showing the first ${n.toLocaleString()}. Split them into subfolders to see all.`,
+        depthLimited: (n: number) =>
+            `Only ${n} levels of subfolders are scanned. Files deeper than that are not listed.`,
         readFailed: 'Could not read the folder.',
     },
 

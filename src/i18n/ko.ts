@@ -248,6 +248,8 @@ export const ko: Catalog = {
         expired: '폴더 권한이 만료되었습니다. 폴더를 다시 추가해 주세요.',
         truncated: (n: number) =>
             `파일이 많아 ${n.toLocaleString()}개까지만 보여 줍니다. 하위 폴더로 나누면 전부 보입니다.`,
+        depthLimited: (n: number) =>
+            `하위 ${n}단계까지만 훑습니다. 더 깊은 폴더의 파일은 목록에 없습니다.`,
         readFailed: '폴더를 읽지 못했습니다.',
     },
 

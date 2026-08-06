@@ -13,7 +13,14 @@ const h = vi.hoisted(() => ({
     /** uri → 그 폴더가 돌려줄 파일들. 지연을 주려면 delay 를 함께 넣는다. */
     folderFiles: new Map<
         string,
-        { files: Array<{ name: string }>; delayMs?: number; truncated?: boolean; limit?: number }
+        {
+            files: Array<{ name: string }>;
+            delayMs?: number;
+            truncated?: boolean;
+            limit?: number;
+            depthLimited?: boolean;
+            maxDepth?: number;
+        }
     >(),
     deleted: [] as string[],
 }));
@@ -52,6 +59,8 @@ vi.mock('../../plugins/md-file', () => ({
             return {
                 truncated: entry.truncated ?? false,
                 limit: entry.limit,
+                depthLimited: entry.depthLimited ?? false,
+                maxDepth: entry.maxDepth,
                 files: entry.files.map((f) => ({
                     uri: `${uri}/${f.name}`,
                     name: f.name,
@@ -361,6 +370,60 @@ describe('★ 폴더가 상한에서 잘렸을 때', () => {
         expect(note!.textContent).toBe(t.folders.truncated(2000));
     });
 
+    /**
+     * ★★★ 2026-08-06. **개수 상한은 알려 주면서 깊이 상한은 조용히 넘어갔다.**
+     *
+     *   폴더 훑기에는 상한이 둘 있다 — 파일 2,000개, 하위 3단계.
+     *   개수 쪽은 위 테스트가 지키고 있었는데 깊이 쪽은 아무 말도 없었다.
+     *   증상은 똑같다: 폴더에 있는 파일이 목록에 없고 이유는 화면 어디에도 없다.
+     *
+     *   ★ 옵시디언처럼 폴더를 겹겹이 쓰는 사람이 바로 걸린다 —
+     *     Vault/영역/프로젝트/2026/노트.md 면 벌써 상한 밖이다.
+     */
+    it('★ 너무 깊어서 못 본 폴더가 있으면 말한다', async () => {
+        const prev = JSON.parse(h.store.get('folders') ?? '[]') as unknown[];
+        h.store.set(
+            'folders',
+            JSON.stringify([...prev, { uri: 'content://tree/deep', name: '깊은폴더', addedAt: 1 }]),
+        );
+        h.folderFiles.set('content://tree/deep', {
+            files: [{ name: 'a.md' }],
+            depthLimited: true,
+            maxDepth: 3,
+        });
+
+        await home.refresh();
+
+        const note = home.root.querySelector('.list-error--info');
+        expect(note, '못 본 폴더가 있는데 아무 말도 없다').not.toBeNull();
+        expect(note!.textContent).toBe(t.folders.depthLimited(3));
+    });
+
+    it('깊이 숫자도 네이티브가 준 값을 쓴다', async () => {
+        const prev = JSON.parse(h.store.get('folders') ?? '[]') as unknown[];
+        h.store.set(
+            'folders',
+            JSON.stringify([...prev, { uri: 'content://tree/deep', name: '깊은폴더', addedAt: 1 }]),
+        );
+        h.folderFiles.set('content://tree/deep', {
+            files: [{ name: 'a.md' }],
+            depthLimited: true,
+            maxDepth: 5,
+        });
+        await home.refresh();
+        expect(home.root.querySelector('.list-error--info')?.textContent).toContain('5');
+    });
+
+    it('상한에 안 걸리면 아무 말도 하지 않는다', async () => {
+        const prev = JSON.parse(h.store.get('folders') ?? '[]') as unknown[];
+        h.store.set(
+            'folders',
+            JSON.stringify([...prev, { uri: 'content://tree/ok', name: '보통폴더', addedAt: 1 }]),
+        );
+        h.folderFiles.set('content://tree/ok', { files: [{ name: 'a.md' }] });
+        await home.refresh();
+        expect(home.root.querySelector('.list-error--info')).toBeNull();
+    });
     it('★ 상한 숫자는 네이티브가 준 값을 쓴다', async () => {
         // 코드에 2000 을 박아 두면 네이티브가 바뀔 때 화면이 거짓말을 한다.
         seedTruncated('content://tree/big', '큰폴더', ['a.md'], 500);

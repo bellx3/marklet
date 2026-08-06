@@ -51,6 +51,10 @@ export interface MdFilePlugin {
         truncated?: boolean;
         /** 그 상한 값 */
         limit?: number;
+        /** 깊이 상한에 걸려 들여다보지 않은 하위 폴더가 있었는가 */
+        depthLimited?: boolean;
+        /** 그 깊이 값 */
+        maxDepth?: number;
     }>;
     createFile(options: { name: string }): Promise<MdDocument>;
     /**

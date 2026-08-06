@@ -71,12 +71,21 @@ export interface FolderListing {
     truncated?: boolean;
     /** 상한 값. 안내 문구에 숫자를 넣기 위한 것 — 코드에 박아 두면 네이티브와 어긋난다. */
     limit?: number;
+    /**
+     * 깊이 상한에 걸려 **들여다보지 않은 하위 폴더가 있었는가.**
+     *
+     * ★ 개수 상한(위)과 증상이 똑같다. 개수는 알려 주면서 깊이는 조용히 넘어가고 있었다 —
+     *   옵시디언처럼 폴더를 겹겹이 쓰는 사람이 바로 걸린다(2026-08-06).
+     */
+    depthLimited?: boolean;
+    /** 그 깊이 값 */
+    maxDepth?: number;
 }
 
 /** 폴더 내용을 읽는다. 권한이 만료된 폴더는 error 를 담아 돌려준다(목록에서 지우지 않는다). */
 export async function listFolder(folder: Folder): Promise<FolderListing> {
     try {
-        const { files, truncated, limit } = await MdFile.listFolder({
+        const { files, truncated, limit, depthLimited, maxDepth } = await MdFile.listFolder({
             uri: folder.uri,
             maxDepth: 3,
         });
@@ -92,6 +101,8 @@ export async function listFolder(folder: Folder): Promise<FolderListing> {
             files: files.map((f) => ({ ...f, persisted: true })),
             truncated: !!truncated,
             limit,
+            depthLimited: !!depthLimited,
+            maxDepth,
         };
     } catch (e) {
         // ★ 권한이 만료된 폴더를 자동으로 지우지 마라. SD 카드를 잠깐 뺐을 뿐일 수 있다.
