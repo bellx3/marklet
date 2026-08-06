@@ -30,6 +30,8 @@
     --md-hit-bg-current: #ffc94d;
     /* 밝은 테마는 원래 어두운 글자라 그대로 둔다 (10.04:1). 변수만 짝을 맞춘다. */
     --md-hit-fg-current: #22252a;
+    /** 체크박스 안의 체크 표시. 칠해진 상자(--md-link) 위에 놓인다. */
+    --md-check-fg: #ffffff;
     --md-hit-outline: #b8860b;
     --md-warn-fg: #8a5a00;
     --md-warn-bg: #fdf4e3;
@@ -58,6 +60,8 @@
      */
     --md-hit-bg-current: #b98d00;
     --md-hit-fg-current: #16181c;
+    /* ★ 어두운 테마의 링크색은 밝은 파랑이라 흰 체크가 2.23:1 이었다. 바탕색을 쓴다. */
+    --md-check-fg: #16181c;
     --md-hit-outline: #ffd75e;
     --md-warn-fg: #e8c37a;
     --md-warn-bg: #2a2317;
@@ -250,6 +254,15 @@
     background: var(--md-link);
     border-color: var(--md-link);
 }
+/*
+ * ★★ 체크 표시 색을 `#fff` 로 박아 두지 마라.
+ *   어두운 테마의 링크색(#6fb3f2)은 **밝은 파랑**이라 흰 체크가 그 위에서 2.23:1 이다
+ *   (2026-08-06 실측). 밝은 테마는 5.90:1 이라 문제가 없어서 눈으로는 안 드러났다.
+ *   테마마다 바탕색을 쓰면 양쪽 다 7.96:1 · 5.90:1 이 된다 —
+ *   검색 강조(--md-hit-fg-current)에서 쓴 것과 같은 방법이다.
+ * ★ 칠해진 상자 자체가 바탕과 7.96:1 이라 '됨/안 됨' 구분은 원래 살아 있었다.
+ *   여기서 고치는 것은 **체크 글리프가 뭉개져 보이는 것**이다.
+ */
 .md-body .task-list-item.checked::after {
     content: '';
     position: absolute;
@@ -257,7 +270,7 @@
     top: 0.55em;
     width: 0.32em;
     height: 0.62em;
-    border: solid #fff;
+    border: solid var(--md-check-fg);
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
 }
