@@ -234,11 +234,53 @@ describe('보기 설정 시트', () => {
         const sheet = createViewSheet(() => {});
         await updateSettings({ fontStep: 0 });
         sheet.open();
-        expect(ariaBtn(t.view.smaller).disabled).toBe(true);
+        expect(ariaBtn(t.view.smaller).getAttribute('aria-disabled')).toBe('true');
 
         await updateSettings({ fontStep: FONT_STEPS.length - 1 });
         sheet.open();
-        expect(ariaBtn(t.view.bigger).disabled).toBe(true);
+        expect(ariaBtn(t.view.bigger).getAttribute('aria-disabled')).toBe('true');
+        expect(ariaBtn(t.view.smaller).getAttribute('aria-disabled')).toBe('false');
+    });
+
+    /**
+     * ★★★ 2026-08-06. 여기 있던 테스트가 **버그를 고정하고 있었다.**
+     *   `expect(...smaller.disabled).toBe(true)` 였다. 잠그는 것 자체는 맞지만
+     *   `disabled` 로 잠그면 **초점을 가진 버튼이 잠기는 순간 브라우저가 초점을
+     *   `<body>` 로 되돌린다.**
+     *
+     *   A− 를 끝까지 누른 사람은 그 순간 시트 밖으로 튕겨 나간다:
+     *     · 토크백  다음 스와이프가 화면 맨 위에서 다시 시작한다.
+     *               모달 뒤의 배경을 읽기 시작할 수도 있다.
+     *     · 키보드  탭이 문서 처음으로 간다.
+     *
+     *   글자를 크게 쓰는 사람은 글자 크기 단추를 **가장 자주 쓰는** 사람이다.
+     *   하필 그 사람이 밟는다.
+     */
+    it('★ 끝까지 눌러도 초점이 버튼에 남는다', async () => {
+        const sheet = createViewSheet(() => {});
+        await updateSettings({ fontStep: 1 });
+        sheet.open();
+
+        const smaller = ariaBtn(t.view.smaller);
+        smaller.focus();
+        expect(document.activeElement).toBe(smaller);
+
+        smaller.click(); // 하한에 닿는다
+        await vi.advanceTimersByTimeAsync(50);
+
+        expect(smaller.getAttribute('aria-disabled')).toBe('true');
+        expect(document.activeElement, '초점이 body 로 튕겼다').toBe(smaller);
+
+        smaller.click(); // 하한에서 한 번 더
+        await vi.advanceTimersByTimeAsync(50);
+        expect(document.activeElement).toBe(smaller);
+        expect(getSettings().fontStep, '하한 아래로 내려갔다').toBe(0);
+    });
+
+    it('★ disabled 속성은 쓰지 않는다 (초점이 사라진다)', async () => {
+        const sheet = createViewSheet(() => {});
+        await updateSettings({ fontStep: 0 });
+        sheet.open();
         expect(ariaBtn(t.view.smaller).disabled).toBe(false);
     });
 

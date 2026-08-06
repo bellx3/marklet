@@ -529,7 +529,15 @@
     color: var(--md-link);
     font-weight: 700;
 }
-.seg-item:disabled {
+/*
+ * ★★ 글자 크기의 A− / A+ 는 `disabled` 를 쓰지 않는다. **초점이 사라지기 때문이다.**
+ *   초점을 가진 버튼을 disabled 로 만들면 브라우저가 초점을 <body> 로 되돌린다 —
+ *   A− 를 끝까지 누른 사람은 그 순간 시트 밖으로 튕겨 나간다(2026-08-06 실측).
+ *   토크백에서는 다음 스와이프가 화면 맨 위에서 다시 시작한다.
+ *   그래서 aria-disabled 로만 알리고 버튼은 계속 초점을 받을 수 있게 둔다.
+ */
+.seg-item:disabled,
+.seg-item[aria-disabled='true'] {
     opacity: 0.4;
     cursor: default;
 }

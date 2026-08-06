@@ -82,6 +82,8 @@ export function createViewSheet(onBreaksChanged: () => void): ViewSheet {
         b.textContent = label;
         b.setAttribute('aria-label', aria);
         b.addEventListener('click', () => {
+            // 끝에 닿았으면 아무 일도 하지 않는다. 버튼은 계속 초점을 받는다(setLimit 주석).
+            if (b.getAttribute('aria-disabled') === 'true') return;
             void updateSettings({ fontStep: clampStep(getSettings().fontStep + delta) }).then(sync);
         });
         return b;
@@ -96,8 +98,8 @@ export function createViewSheet(onBreaksChanged: () => void): ViewSheet {
         }
         const step = clampStep(s.fontStep);
         sizeLabel.textContent = `${FONT_STEPS[step]}px`;
-        smaller.disabled = step === 0;
-        bigger.disabled = step === FONT_STEPS.length - 1;
+        setStepLimit(smaller, step === 0);
+        setStepLimit(bigger, step === FONT_STEPS.length - 1);
         breaksRow.input.checked = s.breaks;
     }
 
@@ -112,6 +114,20 @@ export function createViewSheet(onBreaksChanged: () => void): ViewSheet {
             root.remove();
         },
     };
+}
+
+/**
+ * 글자 크기 단추가 끝에 닿았음을 알린다.
+ *
+ * ★★ `disabled` 를 쓰지 마라. **초점을 가진 버튼을 disabled 로 만들면 브라우저가
+ *   초점을 `<body>` 로 되돌린다.** A− 를 끝까지 누른 사람은 그 순간 시트 밖으로
+ *   튕겨 나간다 — 토크백에서는 다음 스와이프가 화면 맨 위에서 다시 시작하고,
+ *   키보드에서는 탭이 문서 처음으로 간다(2026-08-06 실측).
+ *
+ * ★ 설정 화면(S4)에도 같은 단추가 있다. 한쪽만 고치지 마라.
+ */
+export function setStepLimit(btn: HTMLButtonElement, atLimit: boolean): void {
+    btn.setAttribute('aria-disabled', String(atLimit));
 }
 
 function createRow(label: string): HTMLElement {

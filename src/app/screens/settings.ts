@@ -5,7 +5,7 @@ import {
     updateSettings,
     type AppSettings,
 } from '../../services/settings';
-import { createToggleRow } from './view-sheet';
+import { createToggleRow, setStepLimit } from './view-sheet';
 import { clearRecents } from '../../services/recents';
 import { TipManager } from '../../services/tip-manager';
 import { confirmDialog } from '../../utils/dialog';
@@ -243,6 +243,8 @@ export function createSettings(cb: SettingsCallbacks): SettingsScreen {
         b.textContent = label;
         b.setAttribute('aria-label', aria);
         b.addEventListener('click', () => {
+            // 끝에 닿았으면 아무 일도 하지 않는다. 버튼은 계속 초점을 받는다(setStepLimit).
+            if (b.getAttribute('aria-disabled') === 'true') return;
             void updateSettings({ fontStep: clampStep(getSettings().fontStep + delta) }).then(
                 refresh,
             );
@@ -264,8 +266,8 @@ export function createSettings(cb: SettingsCallbacks): SettingsScreen {
         }
         const stepIndex = clampStep(s.fontStep);
         sizeLabel.textContent = `${FONT_STEPS[stepIndex]}px`;
-        smaller.disabled = stepIndex === 0;
-        bigger.disabled = stepIndex === FONT_STEPS.length - 1;
+        setStepLimit(smaller, stepIndex === 0);
+        setStepLimit(bigger, stepIndex === FONT_STEPS.length - 1);
         sizePreview.style.fontSize = `${FONT_STEPS[stepIndex]}px`;
         breaks.input.checked = s.breaks;
         remote.input.checked = s.remoteImages;

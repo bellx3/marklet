@@ -217,13 +217,32 @@ describe('글자 크기', () => {
     it('★ 상하한에서 버튼을 잠근다', async () => {
         await updateSettings({ fontStep: 0 });
         screen.refresh();
-        expect(btnByAria(t.view.smaller)!.disabled).toBe(true);
-        expect(btnByAria(t.view.bigger)!.disabled).toBe(false);
+        expect(btnByAria(t.view.smaller)!.getAttribute('aria-disabled')).toBe('true');
+        expect(btnByAria(t.view.bigger)!.getAttribute('aria-disabled')).toBe('false');
 
         await updateSettings({ fontStep: FONT_STEPS.length - 1 });
         screen.refresh();
-        expect(btnByAria(t.view.smaller)!.disabled).toBe(false);
-        expect(btnByAria(t.view.bigger)!.disabled).toBe(true);
+        expect(btnByAria(t.view.smaller)!.getAttribute('aria-disabled')).toBe('false');
+        expect(btnByAria(t.view.bigger)!.getAttribute('aria-disabled')).toBe('true');
+    });
+
+    /*
+     * ★★ 보기 설정 시트와 **같은 단추다.** 한쪽만 고치면 다른 쪽에서 그대로 튕긴다.
+     *   disabled 로 잠그면 초점을 가진 버튼이 잠기는 순간 초점이 <body> 로 간다.
+     */
+    it('★ 끝까지 눌러도 초점이 버튼에 남는다', async () => {
+        await updateSettings({ fontStep: 1 });
+        screen.refresh();
+
+        const smaller = btnByAria(t.view.smaller)!;
+        smaller.focus();
+        smaller.click();
+        await vi.advanceTimersByTimeAsync(50);
+
+        expect(smaller.getAttribute('aria-disabled')).toBe('true');
+        expect(smaller.disabled, 'disabled 를 쓰면 초점이 사라진다').toBe(false);
+        expect(document.activeElement, '초점이 body 로 튕겼다').toBe(smaller);
+        expect(getSettings().fontStep).toBe(0);
     });
 
     it('크기 표시는 소리로도 읽힌다', () => {
