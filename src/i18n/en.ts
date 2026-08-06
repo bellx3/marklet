@@ -63,6 +63,7 @@ export const en = {
         shareSource: 'Share Markdown source',
         renderingAll: 'Rendering the whole document…',
         renderingDoc: 'Rendering…',
+        preparingText: 'Preparing the text to share…',
         snapshotNotice:
             'You are viewing a copy. To edit the original, choose it again with [Open file].',
         readOnlyNotice: 'This document is read-only. Editing it will save under a new name.',

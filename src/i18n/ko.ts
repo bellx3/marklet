@@ -61,6 +61,7 @@ export const ko: Catalog = {
         shareSource: '마크다운 원문으로 공유',
         renderingAll: '문서를 모두 그리는 중…',
         renderingDoc: '문서를 그리는 중…',
+        preparingText: '공유할 글을 만드는 중…',
         snapshotNotice: '사본을 보고 있습니다. 원본을 수정하려면 [파일 열기]로 다시 선택해 주세요.',
         readOnlyNotice: '읽기 전용 문서입니다. 편집하면 새 이름으로 저장하게 됩니다.',
     },

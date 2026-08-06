@@ -370,3 +370,65 @@ describe('★ 문서 안 링크로 뛸 때', () => {
         expect(screen.root.querySelector('.md-target h2'), '남은 청크가 안 붙었다').not.toBeNull();
     });
 });
+
+/**
+ * ★★★ 2026-08-06. '보이는 대로 공유' 는 문서를 **청크 없이 통째로** 다시 그린다.
+ *
+ *   실측 (1MB 평범한 문서, 데스크톱 크로뮴):
+ *       렌더 519ms + 살균 855ms + 글자로 바꾸기 573ms = **1,948ms**
+ *   폰이면 6~10초다. 확인 상자를 닫자마자 화면이 그만큼 굳는데 아무 표시가 없으면
+ *   사용자는 앱이 멎은 줄 알고 강제 종료한다.
+ *
+ *   ★ 뷰어 안에는 withBusy 가 이미 있었지만 **뷰어 밖에서는 쓸 수 없었다.**
+ *     "renderRest 를 부르는 모든 곳이 표시를 받아야 한다" 는 규칙이 이미 있는데,
+ *     공유는 renderRest 가 아니라서 그 규칙의 그물을 빠져나갔다.
+ */
+describe('★★ withBusy — 뷰어 밖에서도 쓴다', () => {
+    it('표시를 켜고, 일이 끝나면 끈다', async () => {
+        await screen.show(doc(), '# 가\n\n나\n', {});
+        const busy = screen.root.querySelector<HTMLElement>('.viewer-busy')!;
+        expect(busy.hidden).toBe(true);
+
+        let 도중표시: boolean | null = null;
+        const p = screen.withBusy('만드는 중', () => {
+            도중표시 = busy.hidden;
+            return '결과';
+        });
+
+        await vi.advanceTimersByTimeAsync(50);
+        expect(await p).toBe('결과');
+        expect(도중표시, '일이 도는 동안 표시가 꺼져 있었다').toBe(false);
+        expect(busy.hidden, '끝났는데 표시가 남았다').toBe(true);
+    });
+
+    it('★ 표시가 화면에 그려진 뒤에 시작한다', async () => {
+        // 바로 fn() 을 부르면 메인 스레드가 잡혀 표시가 영영 안 그려진다.
+        await screen.show(doc(), '# 가\n', {});
+        const busy = screen.root.querySelector<HTMLElement>('.viewer-busy')!;
+
+        let 시작됨 = false;
+        const p = screen.withBusy('만드는 중', () => {
+            시작됨 = true;
+        });
+
+        expect(시작됨, '프레임을 안 기다리고 바로 시작했다').toBe(false);
+        expect(busy.hidden, '표시부터 켜져 있어야 한다').toBe(false);
+        expect(busy.textContent).toBe('만드는 중');
+
+        await vi.advanceTimersByTimeAsync(50);
+        await p;
+        expect(시작됨).toBe(true);
+    });
+
+    it('일이 터져도 표시를 끄고 그대로 던진다', async () => {
+        await screen.show(doc(), '# 가\n', {});
+        const busy = screen.root.querySelector<HTMLElement>('.viewer-busy')!;
+
+        const p = screen.withBusy('만드는 중', () => {
+            throw new Error('실패');
+        });
+        await vi.advanceTimersByTimeAsync(50);
+        await expect(p).rejects.toThrow('실패');
+        expect(busy.hidden, '터진 뒤에 표시가 남으면 화면이 영영 가려진다').toBe(true);
+    });
+});

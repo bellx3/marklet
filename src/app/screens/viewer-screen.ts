@@ -59,6 +59,14 @@ export interface ViewerScreen {
     getContent(): string;
     getHandle(): RenderHandle | null;
     setContent(content: string): void;
+    /**
+     * 진행 표시를 켠 채로 오래 걸리는 일을 한다.
+     *
+     * ★★ 뷰어 **밖에서도** 쓸 수 있어야 한다. '보이는 대로 공유' 는 문서를 한 번 더
+     *   통째로 그리는데(청크 없이), 1MB 에 데스크톱 2초·폰 6~10초다.
+     *   그동안 아무 표시가 없으면 사용자는 앱이 멎은 줄 안다(2026-08-06 실측).
+     */
+    withBusy<T>(label: string, fn: () => Promise<T> | T): Promise<T>;
     destroy(): void;
 }
 
@@ -355,6 +363,7 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
         setContent(next) {
             content = next;
         },
+        withBusy,
         destroy() {
             handle?.cancel();
             toc.destroy();

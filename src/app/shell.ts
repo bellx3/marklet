@@ -720,10 +720,20 @@ async function sharePlainCurrent(): Promise<void> {
         plainNoticeShown = true;
     }
 
-    const { body: markdown } = parseDocument(viewer.getContent());
-    const md = createMarkdownIt({ breaks: getSettings().breaks });
-    const html = sanitize(liftTaskCheckedState(md.render(markdown)));
-    await shareText(doc.name, htmlToPlainText(html, { title: doc.name }));
+    /*
+     * ★★ 진행 표시를 켜고 한다. 여기서 문서를 **청크 없이 통째로** 다시 그리므로
+     *   1MB 에 데스크톱 2초, 폰이면 6~10초다(2026-08-06 실측: 렌더 519 + 살균 855 +
+     *   글자 573ms). 확인 상자를 닫자마자 화면이 그만큼 굳는데 아무 표시가 없으면
+     *   사용자는 앱이 멎은 줄 알고 강제 종료한다.
+     * ★ withBusy 가 두 프레임을 기다린 뒤 시작한다 — 안 그러면 표시가 그려지지도 못한다.
+     */
+    const plain = await viewer.withBusy(t.viewer.preparingText, () => {
+        const { body: markdown } = parseDocument(viewer.getContent());
+        const md = createMarkdownIt({ breaks: getSettings().breaks });
+        const html = sanitize(liftTaskCheckedState(md.render(markdown)));
+        return htmlToPlainText(html, { title: doc.name });
+    });
+    await shareText(doc.name, plain);
 }
 
 async function shareCurrent(): Promise<void> {
