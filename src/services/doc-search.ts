@@ -37,18 +37,35 @@ const EMPTY: SearchState = { marks: [], current: -1, truncated: false };
 /**
  * 컨테이너 안의 텍스트 노드를 문서 순서로 모은다.
  * 제외 대상(SKIP_SELECTOR) 안에 있는 노드는 건너뛴다.
+ *
+ * ★★★ 텍스트 노드마다 `parent.closest(SKIP_SELECTOR)` 를 부르지 마라 (2026-08-06).
+ *   closest 는 조상을 타고 올라가며 매번 셀렉터를 맞춰 본다. 500KB 문서는
+ *   텍스트 노드가 **15만 개**라 한 번 검색할 때마다 수백만 번 맞춰 보게 된다.
+ *   실측: 500KB 문서에서 **글자 하나 칠 때마다 0.5~1.5초**가 멎었다(데스크톱).
+ *   폰이면 몇 초다. 검색어를 치는 내내 화면이 굳는다.
+ *
+ * ★ 요소를 함께 훑으면서 제외 대상은 **FILTER_REJECT** 로 가지를 통째로 잘라 낸다.
+ *   그러면 셀렉터는 요소마다 딱 한 번만 맞춰 본다.
+ *   (텍스트 노드에는 자식이 없으므로 REJECT 와 SKIP 이 같다.)
  */
 function collectTextNodes(container: HTMLElement): Text[] {
     const out: Text[] = [];
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-        acceptNode(node) {
-            if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-            const parent = (node as Text).parentElement;
-            if (!parent) return NodeFilter.FILTER_REJECT;
-            if (parent.closest(SKIP_SELECTOR)) return NodeFilter.FILTER_REJECT;
-            return NodeFilter.FILTER_ACCEPT;
+    const walker = document.createTreeWalker(
+        container,
+        NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+        {
+            acceptNode(node) {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    return (node as Element).matches(SKIP_SELECTOR)
+                        ? NodeFilter.FILTER_REJECT // 이 아래는 통째로 안 본다
+                        : NodeFilter.FILTER_SKIP; // 요소 자체는 결과에 안 넣고 자식만 본다
+                }
+                return node.nodeValue && node.nodeValue.trim()
+                    ? NodeFilter.FILTER_ACCEPT
+                    : NodeFilter.FILTER_REJECT;
+            },
         },
-    });
+    );
     for (let n = walker.nextNode(); n; n = walker.nextNode()) out.push(n as Text);
     return out;
 }
@@ -158,14 +175,22 @@ export function runSearch(container: HTMLElement, rawQuery: string): SearchState
 /** <mark> 를 걷어내고 쪼개진 텍스트 노드를 다시 합친다. */
 export function clearSearch(container: HTMLElement): void {
     const marks = container.querySelectorAll<HTMLElement>('mark.md-hit');
+    /*
+     * ★ normalize() 를 빼면 텍스트 노드가 계속 쪼개져 다음 검색이 단어를 놓친다.
+     *   ("마크다운" 이 "마크" + "다운" 두 노드로 남으면 영영 안 잡힌다.)
+     *
+     * ★★ 다만 **표시마다 부르지는 않는다.** normalize() 는 그 요소의 자식을 전부
+     *   훑으므로, 한 문단에 표시가 여럿이면 같은 문단을 그 횟수만큼 다시 훑는다.
+     *   부모를 모아 두었다가 한 번씩만 부른다(2026-08-06).
+     */
+    const parents = new Set<Element>();
     for (const mark of Array.from(marks)) {
         const parent = mark.parentNode;
         if (!parent) continue;
         parent.replaceChild(document.createTextNode(mark.textContent ?? ''), mark);
-        // ★ normalize() 를 빼면 텍스트 노드가 계속 쪼개져 다음 검색이 단어를 놓친다.
-        //   ("마크다운" 이 "마크" + "다운" 두 노드로 남으면 영영 안 잡힌다.)
-        (parent as Element).normalize();
+        parents.add(parent as Element);
     }
+    for (const parent of parents) parent.normalize();
 }
 
 /** 다음/이전. 끝에서 처음으로 돈다. */

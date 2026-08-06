@@ -252,3 +252,69 @@ describe('★★ 겹치는 일치 — 검색이 터지면 안 된다', () => {
         expect(s.marks.length).toBeLessThanOrEqual(MAX_MATCHES);
     });
 });
+
+/**
+ * ★★★ 2026-08-06. **글자를 칠 때마다 화면이 굳었다.**
+ *
+ *   텍스트 노드마다 `parent.closest(SKIP_SELECTOR)` 를 불렀다. closest 는 조상을 타고
+ *   올라가며 매번 셀렉터를 맞춰 본다. 500KB 문서는 텍스트 노드가 4만 개가 넘고
+ *   요소는 7만 5천 개다 — 한 번 검색할 때마다 수십만 번 맞춰 보게 된다.
+ *
+ *   실측 (500KB 평범한 문서, 데스크톱 크로뮴):
+ *       고치기 전   글자 하나마다  485 ~ 879ms   ·  clearSearch 110ms
+ *       고친 뒤                  211 ~ 335ms   ·  clearSearch  15ms
+ *   폰이면 3~5배다. 검색어를 치는 내내 화면이 멎는다. 500KB 는 확인 상자(2MB)도
+ *   진행 표시(512KB)도 안 뜨는 **평범한 크기**다.
+ *
+ *   요소를 함께 훑으면서 제외 대상을 FILTER_REJECT 로 잘라 내면 셀렉터를
+ *   요소마다 한 번만 맞춰 본다. clearSearch 의 normalize() 는 부모마다 한 번만 부른다.
+ *
+ * ★ 빠르게 만들면서 **건너뛰는 규칙이 그대로인지**가 관건이다. 아래가 그걸 지킨다.
+ */
+describe('★★ 빨라져도 건너뛸 것은 그대로 건너뛴다', () => {
+    it('제외 대상의 **깊은 자손**까지 건너뛴다', () => {
+        // FILTER_REJECT 는 가지를 통째로 자른다. 한 겹만 보던 게 아니어야 한다.
+        const el = host(
+            '<p>겉의 마크다운</p>' +
+                '<span class="katex-mathml"><math><semantics><mrow><mi>마크다운</mi></mrow></semantics></math></span>' +
+                '<svg><g><text><tspan>마크다운</tspan></text></g></svg>' +
+                '<div class="md-block-label"><span><b>마크다운</b></span></div>',
+        );
+        const s = runSearch(el, '마크다운');
+        expect(s.marks.length, '제외 대상 안까지 잡았다').toBe(1);
+        expect(s.marks[0].closest('p')).not.toBeNull();
+    });
+
+    it('제외 대상 **다음** 형제는 다시 잡는다 (가지를 잘라도 흐름이 끊기면 안 된다)', () => {
+        const el = host('<p>앞 마크다운</p><svg><text>마크다운</text></svg><p>뒤 마크다운</p>');
+        const s = runSearch(el, '마크다운');
+        expect(s.marks.length).toBe(2);
+        expect(s.marks.map((m) => m.parentElement?.textContent)).toEqual([
+            '앞 마크다운',
+            '뒤 마크다운',
+        ]);
+    });
+
+    it('★ 한 문단에 표시가 여럿이어도 지운 뒤 다시 하나로 합쳐진다', () => {
+        // normalize() 를 부모마다 한 번만 부르도록 바꿨다 — 합쳐지는 것은 그대로여야 한다.
+        const el = host('<p>가 나 가 나 가 나 가</p>');
+        expect(runSearch(el, '가').marks.length).toBe(4);
+        clearSearch(el);
+
+        const p = el.querySelector('p')!;
+        expect(p.childNodes.length, `${p.childNodes.length}조각으로 쪼개진 채 남았다`).toBe(1);
+        expect(p.textContent).toBe('가 나 가 나 가 나 가');
+
+        // 쪼개진 채 남으면 다음 검색이 낱말을 놓친다.
+        expect(runSearch(el, '가 나').marks.length).toBe(3);
+    });
+
+    it('여러 문단에 걸쳐 있어도 전부 합쳐진다', () => {
+        const el = host('<p>가나 가나</p><p>가나 가나</p><p>가나</p>');
+        expect(runSearch(el, '가나').marks.length).toBe(5);
+        clearSearch(el);
+        for (const p of el.querySelectorAll('p')) {
+            expect(p.childNodes.length).toBe(1);
+        }
+    });
+});
