@@ -47,17 +47,42 @@ async function saveRecents(list: RecentDoc[]): Promise<void> {
     }
 }
 
+/** 사본 파일 하나를 지운다. 없어도 조용히 넘어간다. */
+async function dropSnapshot(path: string | undefined): Promise<void> {
+    if (!path) return;
+    await Filesystem.deleteFile({ path, directory: Directory.Data }).catch(() => {});
+}
+
 export async function rememberDoc(
     doc: MdDocument,
     content: string,
     source: RecentDoc['source'],
 ): Promise<void> {
-    const list = (await loadRecents()).filter((r) => r.uri !== doc.uri);
+    const all = await loadRecents();
+    const list = all.filter((r) => r.uri !== doc.uri);
+
+    /*
+     * ★★ 같은 URI 의 옛 항목을 목록에서 빼면 **그 사본 파일은 참조를 잃는다.**
+     *   지우지 않으면 영영 남는다 — 다시 못 여는 URI 는 열 때마다 새 사본을 만들므로
+     *   같은 문서를 스무 번 열면 사본 스무 개 중 열아홉 개가 쓰레기다.
+     *   (ACTION_VIEW 로 온 URI 는 영속 권한을 못 받는데, 파일 관리자에서 같은 파일을
+     *    다시 여는 것은 아주 흔한 일이다. URI 는 대개 그대로다.)
+     *
+     * ★ 초안(pruneDraftOrphans)에는 이 정리가 있었는데 사본에는 없었다.
+     */
+    const nextPath = snapshotPathFor(doc.uri, doc.name);
+    // 이번에 남길 사본. 이제 원본을 다시 열 수 있으면(persisted) 사본은 필요 없다.
+    const keeping = doc.persisted ? undefined : nextPath;
+    for (const old of all) {
+        if (old.uri === doc.uri && old.snapshotPath !== keeping) {
+            await dropSnapshot(old.snapshotPath);
+        }
+    }
 
     let snapshotPath: string | undefined;
     if (!doc.persisted) {
         // 다시 못 열 URI 다. 지금 사본을 만들어 둔다.
-        snapshotPath = `snapshot/${Date.now()}-${sanitizeFileName(doc.name)}`;
+        snapshotPath = nextPath;
         try {
             await Filesystem.mkdir({
                 path: 'snapshot',
@@ -88,20 +113,61 @@ export async function rememberDoc(
     // 넘치는 항목은 권한까지 반납해서 상한에 걸리지 않게 한다.
     for (const dropped of list.slice(MAX)) {
         if (dropped.persisted) await MdFile.releaseUri({ uri: dropped.uri }).catch(() => {});
-        if (dropped.snapshotPath) {
-            await Filesystem.deleteFile({
-                path: dropped.snapshotPath,
-                directory: Directory.Data,
-            }).catch(() => {});
-        }
+        await dropSnapshot(dropped.snapshotPath);
     }
 
     await saveRecents(list.slice(0, MAX));
 }
 
+/**
+ * 목록에서 아무도 가리키지 않는 사본 파일을 지운다.
+ *
+ * ★ 첫 화면 뒤에 조용히 돈다. 실패해도 아무 일도 안 일어난다 —
+ *   초안 쪽 pruneDraftOrphans() 와 같은 자리, 같은 이유다.
+ * ★★ 이미 새어 나간 것들을 치우려면 이게 필요하다. rememberDoc 을 고쳐도
+ *   **어제까지 쌓인 사본은 그대로 남는다.**
+ */
+export async function pruneSnapshotOrphans(): Promise<void> {
+    try {
+        const used = new Set(
+            (await loadRecents())
+                .map((r) => r.snapshotPath)
+                .filter((p): p is string => typeof p === 'string'),
+        );
+        const { files } = await Filesystem.readdir({
+            path: 'snapshot',
+            directory: Directory.Data,
+        });
+        for (const f of files) {
+            const path = `snapshot/${f.name}`;
+            if (used.has(path)) continue;
+            await Filesystem.deleteFile({ path, directory: Directory.Data }).catch(() => {});
+        }
+    } catch {
+        // 폴더가 아직 없거나 웹 환경이다. 할 일이 없다.
+    }
+}
+
 /** 파일 이름에 쓸 수 없는 문자를 없앤다. 사본 경로가 깨지면 조용히 실패한다. */
 export function sanitizeFileName(name: string): string {
     return name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 80) || 'doc.md';
+}
+
+/**
+ * 사본이 놓일 자리. **같은 문서는 늘 같은 자리다.**
+ *
+ * ★★ 예전에는 `Date.now()` 를 앞에 붙였다. 그래서 같은 문서를 다시 열 때마다
+ *   **새 파일이 생기고 옛 파일은 참조를 잃었다.** 게다가 같은 밀리초에 이름이 같은
+ *   두 문서가 들어오면 경로가 겹쳐서 **한쪽이 다른 쪽의 내용을 보게** 된다.
+ *   URI 로 자리를 정하면 두 문제가 같이 사라진다 — 다시 열면 제자리에 덮어쓴다.
+ *
+ * ★ 이름을 함께 남기는 이유는 진단 화면에서 사람이 알아볼 수 있어야 하기 때문이다.
+ *   (이름이 바뀌면 경로도 바뀌므로 옛 파일은 rememberDoc 이 지운다.)
+ */
+function snapshotPathFor(uri: string, name: string): string {
+    let h = 5381; // djb2 변형 — save.ts backupName 과 같은 방식
+    for (let i = 0; i < uri.length; i++) h = ((h * 33) ^ uri.charCodeAt(i)) >>> 0;
+    return `snapshot/${h.toString(36)}-${sanitizeFileName(name)}`;
 }
 
 /**

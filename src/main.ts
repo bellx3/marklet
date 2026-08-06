@@ -11,7 +11,7 @@ import { TipManager } from './services/tip-manager';
 import { installDraftFlushHooks, pruneDraftOrphans } from './services/draft';
 import { initRouter } from './app/router';
 import { initDocumentEntry } from './services/document-entry';
-import { reconcileRecents } from './services/recents';
+import { reconcileRecents, pruneSnapshotOrphans } from './services/recents';
 import { mark, measure } from './utils/perf';
 import * as shell from './app/shell';
 
@@ -51,6 +51,8 @@ async function boot(): Promise<void> {
      */
 
     void pruneDraftOrphans();
+    // ★ 사본도 같이 치운다. 예전 판이 남긴 것까지 여기서 정리된다(8-2절).
+    void pruneSnapshotOrphans();
 }
 
 async function hideSplash(): Promise<void> {

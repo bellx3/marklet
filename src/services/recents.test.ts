@@ -23,6 +23,7 @@ const fs = {
     writeFile: vi.fn(),
     readFile: vi.fn(),
     deleteFile: vi.fn(),
+    readdir: vi.fn(),
 };
 
 vi.mock('@capacitor/preferences', () => ({
@@ -40,6 +41,7 @@ vi.mock('@capacitor/filesystem', () => ({
         writeFile: (o: unknown) => fs.writeFile(o),
         readFile: (o: unknown) => fs.readFile(o),
         deleteFile: (o: unknown) => fs.deleteFile(o),
+        readdir: (o: unknown) => fs.readdir(o),
     },
     Directory: { Data: 'DATA' },
     Encoding: { UTF8: 'utf8' },
@@ -53,8 +55,15 @@ vi.mock('../plugins/md-file', () => ({
     },
 }));
 
-const { rememberDoc, loadRecents, openRecent, removeRecent, reconcileRecents, sanitizeFileName } =
-    await import('./recents');
+const {
+    rememberDoc,
+    loadRecents,
+    openRecent,
+    removeRecent,
+    reconcileRecents,
+    sanitizeFileName,
+    pruneSnapshotOrphans,
+} = await import('./recents');
 
 function doc(n: number, persisted = true): MdDocument {
     return {
@@ -262,5 +271,105 @@ describe('sanitizeFileName', () => {
     });
     it('빈 이름이면 기본값을 준다', () => {
         expect(sanitizeFileName('')).toBe('doc.md');
+    });
+});
+
+/**
+ * ★★★ 2026-08-06. **다시 못 여는 문서의 사본이 새고 있었다.**
+ *
+ *   rememberDoc 은 같은 URI 의 옛 항목을 목록에서 빼면서 **그 사본 파일은 그대로 뒀다.**
+ *   영속 권한을 못 받은 URI 는 열 때마다 새 사본을 만드므로,
+ *   같은 문서를 스무 번 열면 사본 스무 개 중 열아홉 개가 쓰레기다.
+ *
+ *   ACTION_VIEW 로 온 URI 는 영속 권한을 못 받는데(파일 관리자·메신저),
+ *   같은 파일을 다시 여는 것은 아주 흔한 일이고 URI 는 대개 그대로다.
+ *   4MB 문서라면 스무 번에 76MB 다 — 사용자는 이유를 알 수 없다.
+ *
+ *   ★ 초안 쪽에는 pruneDraftOrphans() 가 있었는데 사본에는 없었다.
+ */
+describe('★★ 사본이 새지 않는다', () => {
+    it('★ 같은 문서를 다시 열어도 사본 파일이 늘지 않는다', async () => {
+        const d = { ...doc(1, false), name: 'a.md' };
+
+        // ★ 시간을 흘려보낸다. 안 그러면 같은 밀리초에 두 번 불려서
+        //   시각 기반 이름으로도 우연히 같은 경로가 나오고, 테스트가 아무것도 못 잡는다.
+        vi.useFakeTimers();
+        try {
+            await rememberDoc(d, '첫 내용', 'intent');
+            const 첫사본 = (await loadRecents())[0].snapshotPath!;
+            expect(첫사본).toBeTruthy();
+
+            vi.setSystemTime(new Date(Date.now() + 60_000));
+            await rememberDoc(d, '둘째 내용', 'intent');
+            const 둘째사본 = (await loadRecents())[0].snapshotPath!;
+
+            // 같은 자리에 덮어쓴다 — 새 파일이 생기지 않으므로 버려질 것도 없다.
+            expect(둘째사본, '열 때마다 새 파일이 생긴다').toBe(첫사본);
+            const 쓴경로 = fs.writeFile.mock.calls.map((c) => (c[0] as { path: string }).path);
+            expect(new Set(쓴경로).size, `사본 파일이 늘었다: ${쓴경로.join(', ')}`).toBe(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('시각이 아니라 URI 로 자리를 정한다 (같은 밀리초에도 안 겹친다)', async () => {
+        // 이름이 같고 URI 만 다른 두 문서 — 예전에는 같은 밀리초면 경로가 겹쳤다.
+        await rememberDoc({ ...doc(1, false), name: 'README.md' }, '가', 'intent');
+        await rememberDoc({ ...doc(2, false), name: 'README.md' }, '나', 'intent');
+        const 사본들 = (await loadRecents()).map((r) => r.snapshotPath);
+        expect(new Set(사본들).size, `경로가 겹쳤다: ${사본들.join(', ')}`).toBe(2);
+    });
+
+    it('★ 이름이 바뀌면 옛 사본을 지운다', async () => {
+        const d = { ...doc(1, false), name: 'a.md' };
+        await rememberDoc(d, '가', 'intent');
+        const 옛사본 = (await loadRecents())[0].snapshotPath!;
+
+        fs.deleteFile.mockClear();
+        await rememberDoc({ ...d, name: 'b.md' }, '나', 'intent');
+
+        expect((await loadRecents())[0].snapshotPath).not.toBe(옛사본);
+        expect(fs.deleteFile, '이름만 바뀌었는데 옛 사본이 남았다').toHaveBeenCalledWith(
+            expect.objectContaining({ path: 옛사본 }),
+        );
+    });
+
+    it('다른 문서의 사본은 건드리지 않는다', async () => {
+        await rememberDoc({ ...doc(1, false), name: 'a.md' }, '가', 'intent');
+        const 남의사본 = (await loadRecents())[0].snapshotPath!;
+
+        fs.deleteFile.mockClear();
+        await rememberDoc({ ...doc(2, false), name: 'b.md' }, '나', 'intent');
+
+        expect(fs.deleteFile).not.toHaveBeenCalledWith(expect.objectContaining({ path: 남의사본 }));
+        expect((await loadRecents()).map((r) => r.snapshotPath)).toContain(남의사본);
+    });
+});
+
+/**
+ * ★ rememberDoc 을 고쳐도 **어제까지 쌓인 사본은 그대로 남는다.**
+ *   첫 화면 뒤에 조용히 치운다 — 초안 쪽과 같은 자리, 같은 이유다.
+ */
+describe('★ pruneSnapshotOrphans — 이미 새어 나간 것을 치운다', () => {
+    it('목록이 가리키지 않는 사본만 지운다', async () => {
+        await rememberDoc({ ...doc(1, false), name: 'a.md' }, '가', 'intent');
+        const 쓰는것 = (await loadRecents())[0].snapshotPath!;
+        const 이름 = 쓰는것.replace('snapshot/', '');
+
+        fs.readdir.mockResolvedValue({
+            files: [{ name: 이름 }, { name: '999-버려진것.md' }, { name: '998-이것도.md' }],
+        });
+        fs.deleteFile.mockClear();
+
+        await pruneSnapshotOrphans();
+
+        const 지운것 = fs.deleteFile.mock.calls.map((c) => (c[0] as { path: string }).path);
+        expect(지운것).toEqual(['snapshot/999-버려진것.md', 'snapshot/998-이것도.md']);
+        expect(지운것, '쓰는 사본을 지웠다').not.toContain(쓰는것);
+    });
+
+    it('폴더가 없어도(첫 실행·웹) 조용히 넘어간다', async () => {
+        fs.readdir.mockRejectedValue(new Error('ENOENT'));
+        await expect(pruneSnapshotOrphans()).resolves.toBeUndefined();
     });
 });
