@@ -170,6 +170,9 @@ export function createHome(cb: HomeCallbacks): HomeScreen {
 
             const del = iconButton('close', t.home.removeFromList(r.name), () => {
                 void removeRecent(r.uri).then((next) => {
+                    // ★ null = 목록을 못 읽어 아무것도 하지 않았다. 화면을 비우면 안 된다 —
+                    //   저장된 목록은 멀쩡한데 사라진 것처럼 보인다.
+                    if (!next) return;
                     recents = next;
                     renderRecents();
                 });

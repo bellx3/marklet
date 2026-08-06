@@ -69,6 +69,7 @@ const {
     sanitizeFileName,
     pruneSnapshotOrphans,
 } = await import('./recents');
+type RecentDoc = Awaited<ReturnType<typeof loadRecents>>[number];
 
 function doc(n: number, persisted = true): MdDocument {
     return {
@@ -266,8 +267,65 @@ describe('removeRecent', () => {
 
         const next = await removeRecent('content://test/1');
 
-        expect(next.length).toBe(0);
+        expect(next).not.toBeNull();
+        expect(next!.length).toBe(0);
         expect(fs.deleteFile).toHaveBeenCalled();
+    });
+
+    /*
+     * ★★ 2026-08-06. 못 읽었을 때 [] 를 돌려주면 호출한 화면이 그것을 새 목록으로 알고
+     *   **최근 문서를 통째로 지운 것처럼 그린다.** 저장된 목록은 멀쩡한데도 그렇다.
+     *   게다가 여기서 [] 로 흐르면 target 을 못 찾아 권한·사본은 그대로 두면서
+     *   목록만 빈 것으로 덮어썼다 — 한 줄 지우려다 전부 잃는다.
+     */
+    it('★★ 목록을 못 읽으면 null 을 돌려주고 아무것도 건드리지 않는다', async () => {
+        await rememberDoc(doc(1, false), '내용', 'intent');
+        const 저장된것 = store.get('recentDocs');
+        vi.clearAllMocks();
+
+        prefsFail.get = true;
+        let next: RecentDoc[] | null;
+        try {
+            next = await removeRecent('content://test/1');
+        } finally {
+            prefsFail.get = false;
+        }
+
+        expect(next, '[] 를 돌려주면 화면이 목록을 비운다').toBeNull();
+        expect(fs.deleteFile).not.toHaveBeenCalled();
+        expect(mdFile.releaseUri).not.toHaveBeenCalled();
+        expect(store.get('recentDocs'), '저장된 목록을 덮어썼다').toBe(저장된것);
+    });
+});
+
+/**
+ * ★★★ 2026-08-06. rememberDoc 은 **읽고-고치고-쓴다.**
+ *   못 읽은 것을 [] 로 퉁치면 saveRecents 가 최근 목록 전체를 이번 문서 하나로
+ *   덮어쓴다 — 문서 하나 연 것으로 나머지가 통째로 날아가고, 그 항목들의 사본은
+ *   참조를 잃어 정리기가 나중에 지운다.
+ */
+describe('★★ rememberDoc 은 못 읽은 목록을 덮어쓰지 않는다', () => {
+    it('네이티브가 실패하면 아무것도 쓰지 않는다', async () => {
+        await rememberDoc(doc(1, false), '내용1', 'intent');
+        await rememberDoc(doc(2, false), '내용2', 'intent');
+        const 저장된것 = store.get('recentDocs');
+        expect(JSON.parse(저장된것!)).toHaveLength(2);
+
+        prefsFail.get = true;
+        try {
+            await rememberDoc(doc(3, false), '내용3', 'intent');
+        } finally {
+            prefsFail.get = false;
+        }
+
+        expect(store.get('recentDocs'), '목록을 문서 하나로 덮어썼다').toBe(저장된것);
+        expect(await loadRecents()).toHaveLength(2);
+    });
+
+    it('값이 깨진 경우에는 새로 시작한다 (영영 안 쌓이면 그것도 고장이다)', async () => {
+        store.set('recentDocs', '{이건 JSON 이');
+        await rememberDoc(doc(1, false), '내용', 'intent');
+        expect(await loadRecents()).toHaveLength(1);
     });
 });
 

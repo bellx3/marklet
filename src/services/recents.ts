@@ -53,7 +53,7 @@ function keepUsable(raw: unknown): RecentDoc[] {
 }
 
 /**
- * 저장된 목록을 읽는다. **못 읽었으면 null 이다 — 빈 목록이 아니다.**
+ * 저장된 목록을 읽는다. **못 읽은 것과 비어 있는 것을 구분해서 돌려준다.**
  *
  * ★★★ 이 구분이 왜 필요한가 (2026-08-06). pruneSnapshotOrphans 는
  *   "목록이 안 가리키는 사본" 을 지운다. 그런데 못 읽은 것을 [] 로 퉁치면
@@ -68,27 +68,36 @@ function keepUsable(raw: unknown): RecentDoc[] {
  * ★ 화면에 뿌리는 쪽(loadRecents)은 지금까지대로 [] 로 흘러도 된다 — 한 번 못 읽은 것과
  *   비어 있는 것이 같아 보일 뿐 잃는 것이 없다. 지우는 쪽만 엄격해야 한다.
  */
-async function readStoredRecents(): Promise<RecentDoc[] | null> {
+type StoredRecents =
+    /** 읽었다. 못 쓰는 항목은 이미 걸러졌다. */
+    | { ok: true; list: RecentDoc[] }
+    /** 네이티브를 못 불렀다 — **무엇이 있었는지 모른다.** 덮어쓰거나 지우면 안 된다. */
+    | { ok: false; reason: 'native' }
+    /** 값은 있는데 모양이 아니다 — 어차피 아무도 못 읽던 것이다. 새로 시작해도 된다. */
+    | { ok: false; reason: 'corrupt' };
+
+async function readStoredRecents(): Promise<StoredRecents> {
     let value: string | null;
     try {
         ({ value } = await Preferences.get({ key: KEY }));
     } catch {
-        return null; // 네이티브를 못 불렀다. 무엇이 있었는지 모른다.
+        return { ok: false, reason: 'native' };
     }
-    if (!value) return []; // 한 번도 쓴 적이 없다 — 진짜로 비어 있다
+    if (!value) return { ok: true, list: [] }; // 한 번도 쓴 적이 없다 — 진짜로 비어 있다
 
     let raw: unknown;
     try {
         raw = JSON.parse(value);
     } catch {
-        return null; // 깨진 JSON
+        return { ok: false, reason: 'corrupt' };
     }
-    if (!Array.isArray(raw)) return null; // 모양이 아예 다르다
-    return keepUsable(raw);
+    if (!Array.isArray(raw)) return { ok: false, reason: 'corrupt' };
+    return { ok: true, list: keepUsable(raw) };
 }
 
 export async function loadRecents(): Promise<RecentDoc[]> {
-    return (await readStoredRecents()) ?? [];
+    const stored = await readStoredRecents();
+    return stored.ok ? stored.list : [];
 }
 
 async function saveRecents(list: RecentDoc[]): Promise<void> {
@@ -135,7 +144,23 @@ export async function rememberDoc(
     content: string,
     source: RecentDoc['source'],
 ): Promise<void> {
-    const all = await loadRecents();
+    /*
+     * ★★★ 목록을 못 읽었으면 **아무것도 쓰지 않는다** (2026-08-06).
+     *
+     *   여기는 읽고-고치고-쓴다. 못 읽은 것을 [] 로 퉁치면 아래에서
+     *   `saveRecents(list.slice(0, MAX))` 가 **최근 목록 전체를 이번 문서 하나로
+     *   덮어쓴다.** 문서 하나 연 것으로 나머지가 통째로 날아가고, 그 항목들의 사본은
+     *   참조를 잃어 정리기가 나중에 지운다 — 카톡으로 받아 둔 문서들을 그대로 잃는다.
+     *
+     *   이번 문서를 최근 목록에 못 남기는 것은 다음에 열면 회복된다.
+     *   목록을 덮어쓰는 것은 회복되지 않는다. 잃지 않는 쪽으로 기운다.
+     *
+     * ★ 'corrupt' 는 다르다. 그 값은 이미 아무도 못 읽던 것이라 새로 시작하는 편이 낫다 —
+     *   안 그러면 최근 목록이 영영 안 쌓인다.
+     */
+    const stored = await readStoredRecents();
+    if (!stored.ok && stored.reason === 'native') return;
+    const all = stored.ok ? stored.list : [];
     const list = all.filter((r) => r.uri !== doc.uri);
 
     /*
@@ -207,11 +232,17 @@ export async function rememberDoc(
 export async function pruneSnapshotOrphans(): Promise<void> {
     try {
         const stored = await readStoredRecents();
-        // ★★ 목록을 못 읽었으면 한 개도 지우지 않는다(readStoredRecents 주석).
-        //    청소는 미뤄도 되는 일이고, 지우는 것은 되돌릴 수 없다.
-        if (!stored) return;
+        /*
+         * ★★ 목록을 못 읽었으면 한 개도 지우지 않는다 — 깨진 경우도 마찬가지다.
+         *   깨진 목록의 사본은 '어차피 못 여는 것' 이 맞지만, 그 판단이 틀렸을 때
+         *   잃는 것은 **다시 못 여는 URI 의 유일한 사본**이다. 청소는 미뤄도 되는 일이고
+         *   지우는 것은 되돌릴 수 없다. 다음에 제대로 읽히면 그때 치운다.
+         */
+        if (!stored.ok) return;
         const used = new Set(
-            stored.map((r) => r.snapshotPath).filter((p): p is string => typeof p === 'string'),
+            stored.list
+                .map((r) => r.snapshotPath)
+                .filter((p): p is string => typeof p === 'string'),
         );
         const { files } = await Filesystem.readdir({
             path: 'snapshot',
@@ -314,8 +345,19 @@ export async function openRecent(
     }
 }
 
-export async function removeRecent(uri: string): Promise<RecentDoc[]> {
-    const list = await loadRecents();
+/**
+ * 한 줄을 지운다. **못 읽었으면 null 을 돌려주고 아무것도 하지 않는다.**
+ *
+ * ★★ [] 를 돌려주면 안 된다. 그러면 호출한 화면이 그것을 새 목록으로 알고
+ *   **최근 문서를 통째로 지운 것처럼 그린다.** 게다가 여기서 [] 로 흐르면
+ *   target 을 못 찾아 권한도 사본도 안 치우면서 목록만 빈 것으로 덮어쓴다 —
+ *   사용자는 한 줄을 지우려 했는데 전부 사라진다.
+ *   지우기가 한 번 안 되는 것은 다시 누르면 되지만, 이건 안 그렇다.
+ */
+export async function removeRecent(uri: string): Promise<RecentDoc[] | null> {
+    const stored = await readStoredRecents();
+    if (!stored.ok && stored.reason === 'native') return null;
+    const list = stored.ok ? stored.list : [];
     const target = list.find((r) => r.uri === uri);
     if (target?.persisted) await MdFile.releaseUri({ uri }).catch(() => {});
     if (target?.snapshotPath) {
