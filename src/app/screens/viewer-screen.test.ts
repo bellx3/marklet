@@ -442,11 +442,18 @@ describe('★★ withBusy — 뷰어 밖에서도 쓴다', () => {
         await screen.show(doc(), '# 가\n', {});
         const busy = screen.root.querySelector<HTMLElement>('.viewer-busy')!;
 
-        const p = screen.withBusy('만드는 중', () => {
-            throw new Error('실패');
-        });
+        /*
+         * ★ 거부를 **띄우는 즉시** 받아 둔다. 타이머를 먼저 돌리면 그사이 거부가
+         *   처리되지 않은 채로 떠서 vitest 가 "unhandled rejection" 을 올린다 —
+         *   그 상태에서는 다른 파일의 진짜 실패가 이 소음에 섞여 묻힌다.
+         */
+        const 던진다 = expect(
+            screen.withBusy('만드는 중', () => {
+                throw new Error('실패');
+            }),
+        ).rejects.toThrow('실패');
         await vi.advanceTimersByTimeAsync(50);
-        await expect(p).rejects.toThrow('실패');
+        await 던진다;
         expect(busy.hidden, '터진 뒤에 표시가 남으면 화면이 영영 가려진다').toBe(true);
     });
 });
