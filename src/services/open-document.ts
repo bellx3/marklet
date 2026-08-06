@@ -43,6 +43,12 @@ export function byteSize(doc: MdDocument, content: string): number {
 }
 
 export async function openDocument(doc: MdDocument): Promise<OpenOutcome> {
+    /*
+     * ★ 읽기 **전에** 본다. 구글 문서는 바이트 스트림이 없어서 read() 가 그냥 던지고,
+     *   그러면 사용자는 원인 없는 자바 예외 메시지를 보게 된다.
+     */
+    if (isGoogleDoc(doc)) return { kind: 'error', message: t.gate.googleDoc };
+
     let full: MdDocument;
     try {
         // ★ 계측은 이 호출만 감싼다. 게이트(확인 다이얼로그)까지 감싸면
@@ -77,6 +83,9 @@ export async function openDocument(doc: MdDocument): Promise<OpenOutcome> {
  *   (2026-08-03 에뮬레이터에서 실제로 그랬다).
  */
 export async function gateContent(full: MdDocument, content: string): Promise<OpenOutcome> {
+    // ★ 최근 문서·공유 텍스트는 openDocument 를 안 지난다. 게이트에도 같은 검사를 둔다.
+    if (isGoogleDoc(full)) return { kind: 'error', message: t.gate.googleDoc };
+
     if (!looksLikeText(content)) {
         return {
             kind: 'error',

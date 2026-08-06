@@ -226,6 +226,9 @@ export const en = {
         tooBig: 'The file is too large to open. (over 8 MB)',
         openError: (msg: string) => `Something went wrong while opening the file. (${msg})`,
         unknown: 'unknown',
+        googleDoc:
+            'This file has been converted to a Google Doc, so it cannot be read as text.\n' +
+            'Please export it from Drive with [Download → Plain text] and open that.',
     },
 
     save: {

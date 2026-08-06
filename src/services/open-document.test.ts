@@ -214,4 +214,36 @@ describe('isGoogleDoc', () => {
         expect(isGoogleDoc({ ...DOC, mimeType: 'text/markdown' })).toBe(false);
         expect(isGoogleDoc({ ...DOC, mimeType: null })).toBe(false);
     });
+
+    /**
+     * ★★★ 2026-08-06. isGoogleDoc 은 **자기 테스트에서만** 쓰이고 있었다.
+     *
+     *   함수도 있고 주석에 "조용히 실패하지 말고 안내한다(M04)" 라고 적혀 있고
+     *   테스트까지 녹색이었는데, **앱 어디에서도 부르지 않았다.**
+     *   즉 요구사항은 구현되지 않았고, 테스트는 구현된 듯한 느낌만 줌.
+     *
+     *   실제로는 read() 가 그냥 던지고(구글 문서는 바이트 스트림이 없다)
+     *   사용자는 원인 없는 자바 예외 메시지를 보게 된다.
+     */
+    it('★ 읽기 전에 막고 뭔가 해야 하는지 알려 준다', async () => {
+        const out = await openDocument({
+            ...DOC,
+            mimeType: 'application/vnd.google-apps.document',
+        });
+        expect(out).toEqual({ kind: 'error', message: t.gate.googleDoc });
+        expect(mdFile.read, '읽지도 말아야 한다').not.toHaveBeenCalled();
+    });
+
+    it('★ 최근 문서·공유 경로(gateContent)에서도 막는다', async () => {
+        const out = await gateContent(
+            { ...DOC, mimeType: 'application/vnd.google-apps.spreadsheet' },
+            '무슨 글이든',
+        );
+        expect(out).toEqual({ kind: 'error', message: t.gate.googleDoc });
+    });
+
+    it('멀줦한 파일은 그대로 열린다 (위 검사가 과하지 않다)', async () => {
+        mdFile.read.mockResolvedValue({ ...DOC, content: '본문' });
+        expect((await openDocument(DOC)).kind).toBe('render');
+    });
 });
