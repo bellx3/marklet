@@ -220,7 +220,22 @@ class TipManagerClass {
         if (this.loaded) return;
         try {
             const { value } = await Preferences.get({ key: STORAGE_KEY });
-            if (value) this.state = { count: 0, handled: [], ...JSON.parse(value) };
+            if (value) {
+                /*
+                 * ★★ 저장된 값을 그대로 합치지 마라. handled 가 배열이 아니면
+                 *   `this.state.handled.includes(txId)` 가 **결제 승인 처리 중에** 터진다.
+                 *   그러면 transaction.finish() 를 못 부르고, 소모성 상품은 완결되지
+                 *   않으면 **며칠 뒤 자동 환불된다** — 사용자는 이미 돈을 냈는데.
+                 *   조용히 초기값으로 되돌리는 편이 낫다.
+                 */
+                const raw = JSON.parse(value) as Partial<SupporterState>;
+                this.state = {
+                    count: typeof raw?.count === 'number' && raw.count >= 0 ? raw.count : 0,
+                    handled: Array.isArray(raw?.handled)
+                        ? raw.handled.filter((x): x is string => typeof x === 'string')
+                        : [],
+                };
+            }
         } catch {
             // 깨졌으면 초기값 유지
         }

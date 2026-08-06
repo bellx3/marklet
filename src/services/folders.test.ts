@@ -161,3 +161,36 @@ describe('폴더 읽기', () => {
 function KEY(): string {
     return 'folders';
 }
+
+/**
+ * ★★★ 2026-08-06. 최근 목록과 같은 자리 — 저장된 값이 배열이 아니거나
+ *   이름이 없으면 시작 화면의 `folders.map(...)`·`matchesName` 이 터진다.
+ *   **시작 화면이 안 그려지고, 켤 때마다 같은 자리에서 죽는다.**
+ */
+describe('★★ 망가진 폴더 목록으로도 시작 화면이 뜬다', () => {
+    it.each([
+        ['객체', '{"a":1}'],
+        ['숫자', '5'],
+        ['null', 'null'],
+        ['깨진 JSON', '{이건 JSON 이'],
+    ])('%s 이 저장돼 있어도 빈 목록을 준다', async (_이름, 값) => {
+        store.set('folders', 값);
+        const list = await loadFolders();
+        expect(Array.isArray(list), '배열이 아니면 화면에서 map 이 터진다').toBe(true);
+        expect(list).toEqual([]);
+    });
+
+    it('★ 이름·주소가 없는 폴더만 빼고 나머지는 살린다', async () => {
+        store.set(
+            'folders',
+            JSON.stringify([
+                { uri: 'content://tree/a', name: '가폴더', addedAt: 1 },
+                { uri: 'content://tree/b' },
+                { name: '다폴더' },
+                null,
+                { uri: 'content://tree/d', name: '라폴더', addedAt: 2 },
+            ]),
+        );
+        expect((await loadFolders()).map((f) => f.name)).toEqual(['가폴더', '라폴더']);
+    });
+});

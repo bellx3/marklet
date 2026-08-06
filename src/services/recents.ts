@@ -29,11 +29,34 @@ export interface RecentDoc {
     source: 'picker' | 'intent' | 'folder';
 }
 
+/**
+ * 저장된 것을 **믿지 않고** 쓸 수 있는 항목만 남긴다.
+ *
+ * ★★★ 예전에는 `JSON.parse(value) as RecentDoc[]` 로 그대로 돌려줬다.
+ *   그런데 배열이 아닌 값이 들어 있으면 시작 화면의 `recents.filter(...)` 가 터진다:
+ *       TypeError: recents.filter is not a function
+ *   이름이 없는 항목 하나만 있어도 `matchesName` 이 터진다:
+ *       TypeError: Cannot read properties of null (reading 'normalize')
+ *   둘 다 **시작 화면이 안 그려진다.** 저장된 값이라 켤 때마다 같은 자리에서 죽고,
+ *   사용자는 앱 데이터를 지우는 것 말고는 길이 없다 — 설정 쪽과 같은 종류다(2026-08-06).
+ *
+ * ★ 못 쓰는 항목은 조용히 뺀다. 목록 한 줄이 사라지는 것과 앱이 안 켜지는 것은
+ *   견줄 수 없다. (사본 파일은 pruneSnapshotOrphans 가 나중에 치운다.)
+ */
+function keepUsable(raw: unknown): RecentDoc[] {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((r): r is RecentDoc => {
+        if (!r || typeof r !== 'object') return false;
+        const v = r as Partial<RecentDoc>;
+        return typeof v.uri === 'string' && typeof v.name === 'string';
+    });
+}
+
 export async function loadRecents(): Promise<RecentDoc[]> {
     try {
         const { value } = await Preferences.get({ key: KEY });
         if (!value) return [];
-        return JSON.parse(value) as RecentDoc[];
+        return keepUsable(JSON.parse(value));
     } catch {
         return [];
     }

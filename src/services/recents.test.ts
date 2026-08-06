@@ -373,3 +373,52 @@ describe('★ pruneSnapshotOrphans — 이미 새어 나간 것을 치운다', (
         await expect(pruneSnapshotOrphans()).resolves.toBeUndefined();
     });
 });
+
+/**
+ * ★★★ 2026-08-06. **저장된 목록 하나로 시작 화면이 안 그려질 수 있었다.**
+ *
+ *   loadRecents 는 `JSON.parse(value) as RecentDoc[]` 로 그대로 돌려줬다.
+ *   배열이 아닌 값이 들어 있으면 시작 화면의 `recents.filter(...)` 가 터지고,
+ *   이름이 없는 항목 하나만 있어도 `matchesName` 이 터진다:
+ *       TypeError: recents.filter is not a function
+ *       TypeError: Cannot read properties of null (reading 'normalize')
+ *   둘 다 **시작 화면이 안 그려진다.** 저장된 값이라 켤 때마다 같은 자리에서 죽고,
+ *   사용자는 앱 데이터를 지우는 것 말고는 길이 없다 — 설정 쪽과 같은 종류다.
+ */
+describe('★★ 망가진 최근 목록으로도 시작 화면이 뜬다', () => {
+    it.each([
+        ['객체', '{"a":1}'],
+        ['숫자', '5'],
+        ['문자열', '"안녕"'],
+        ['null', 'null'],
+        ['깨진 JSON', '{이건 JSON 이'],
+    ])('%s 이 저장돼 있어도 빈 목록을 준다', async (_이름, 값) => {
+        store.set('recentDocs', 값);
+        const list = await loadRecents();
+        expect(Array.isArray(list), '배열이 아니면 화면에서 filter 가 터진다').toBe(true);
+        expect(list).toEqual([]);
+    });
+
+    it('★ 이름·주소가 없는 항목만 빼고 나머지는 살린다', async () => {
+        store.set(
+            'recentDocs',
+            JSON.stringify([
+                { uri: 'content://a', name: 'a.md', lastOpened: 1, persisted: true, size: 1 },
+                { uri: 'content://b' }, // 이름 없음
+                { name: 'c.md' }, // 주소 없음
+                { uri: 'content://d', name: null }, // 이름이 null
+                null,
+                'ㅋㅋ',
+                { uri: 'content://e', name: 'e.md', lastOpened: 2, persisted: true, size: 1 },
+            ]),
+        );
+        const list = await loadRecents();
+        expect(list.map((r) => r.name)).toEqual(['a.md', 'e.md']);
+    });
+
+    it('멀쩡한 목록은 그대로 살린다 (전부 버리지 않는다)', async () => {
+        await rememberDoc(doc(1), '내용', 'picker');
+        await rememberDoc(doc(2), '내용', 'picker');
+        expect((await loadRecents()).length).toBe(2);
+    });
+});

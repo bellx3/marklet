@@ -18,11 +18,27 @@ export interface Folder {
     addedAt: number;
 }
 
+/**
+ * 저장된 것을 **믿지 않고** 쓸 수 있는 폴더만 남긴다.
+ *
+ * ★ 배열이 아니면 시작 화면의 `folders.map(...)` 이 터지고, 이름이 없는 항목 하나면
+ *   `matchesName` 이 터진다 — 둘 다 **시작 화면이 안 그려진다.** 저장된 값이라
+ *   켤 때마다 같은 자리에서 죽는다(recents.ts keepUsable 주석과 같은 이유).
+ */
+function keepUsable(raw: unknown): Folder[] {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((f): f is Folder => {
+        if (!f || typeof f !== 'object') return false;
+        const v = f as Partial<Folder>;
+        return typeof v.uri === 'string' && typeof v.name === 'string';
+    });
+}
+
 export async function loadFolders(): Promise<Folder[]> {
     try {
         const { value } = await Preferences.get({ key: KEY });
         if (!value) return [];
-        return JSON.parse(value) as Folder[];
+        return keepUsable(JSON.parse(value));
     } catch {
         return [];
     }

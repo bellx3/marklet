@@ -793,7 +793,14 @@ public class MdFilePlugin extends Plugin {
         }
         if (name == null) name = uri.getLastPathSegment();
 
-        o.put("name", name == null ? "문서" : name);
+        /*
+         * ★ 이름을 못 얻었을 때의 대체값. **말을 넣지 마라** — 여기는 자바라
+         *   앱의 번역 카탈로그를 못 읽는다. 예전에는 "문서" 였는데,
+         *   영어로 쓰는 사용자에게 그대로 한국어가 보였다(2026-08-06).
+         *   파일 이름 모양이면 어느 언어에서도 어색하지 않고, 공유 캐시의
+         *   기본 이름(sanitizeFileName)과도 같은 값이다.
+         */
+        o.put("name", name == null ? "document.md" : name);
         o.put("size", size);
         o.put("mimeType", safeType(cr, uri));
         o.put("writable", isWritable(uri));
