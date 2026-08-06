@@ -134,6 +134,23 @@ describe('saveDocument — 원본을 망가뜨리지 않는 순서', () => {
         expect(r.ok === false && r.message).toBe(t.save.readOnlyLocation);
     });
 
+    /*
+     * ★★ 2026-08-06. 없어진 파일은 EIO 로 묶으면 안 된다.
+     *   EIO 문구는 "저장 공간을 확인해 주세요" 인데 저장 공간과 아무 상관이 없다 —
+     *   사용자를 엉뚱한 데로 보낸다. 할 일은 '새 이름으로 저장' 이다.
+     *   (네이티브가 예전에는 FileNotFoundException 을 전부 EIO 로 보냈다.)
+     */
+    it('★ 없어진 파일은 저장 공간 얘기를 하지 않는다', async () => {
+        mdFile.read.mockResolvedValue({ ...DOC, content: '원본' });
+        mdFile.write.mockRejectedValue(Object.assign(new Error('x'), { code: 'ENOENT' }));
+
+        const r = await saveDocument(DOC, '새 내용');
+
+        expect(r.ok === false && r.message).toBe(t.save.gone);
+        expect(r.ok === false && r.message).not.toBe(t.save.ioError);
+        expect(r.ok === false && r.backupPath).toBe(backupName(DOC.uri));
+    });
+
     it('검증 단계에서 읽기가 터져도 backupPath 를 준다', async () => {
         mdFile.read
             .mockResolvedValueOnce({ ...DOC, content: '원본' })

@@ -147,6 +147,13 @@ function describeWriteError(e: unknown): string {
             return t.save.noPermission;
         case 'EREADONLY':
             return t.save.readOnlyLocation;
+        /*
+         * ★ 지워진 파일을 EIO 로 묶지 마라. 그 문구는 "저장 공간을 확인해 주세요" 인데
+         *   저장 공간과 아무 상관이 없다 — 사용자를 엉뚱한 데로 보낸다.
+         *   (실제로는 2단계 백업이 먼저 막아 주지만, 네이티브가 이 코드를 내므로 받아 둔다.)
+         */
+        case 'ENOENT':
+            return t.save.gone;
         case 'EIO':
             return t.save.ioError;
         default:

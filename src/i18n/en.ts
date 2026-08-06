@@ -241,6 +241,7 @@ export const en = {
             'Could not verify the file after saving. Please reopen it and check the contents.',
         noPermission: 'No permission to write this file. Please open it again.',
         readOnlyLocation: 'This location cannot be written to. Please save under a new name.',
+        gone: 'The file is gone. It looks like it was deleted or moved. Please save it under a new name.',
         ioError: 'Something went wrong while saving. Please check your storage space.',
         failed: (msg: string) => `Saving failed. (${msg})`,
         unknownError: 'unknown error',

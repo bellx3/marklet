@@ -237,6 +237,7 @@ export const ko: Catalog = {
         verifyFailed: '저장 후 확인에 실패했습니다. 파일을 다시 열어 내용을 확인해 주세요.',
         noPermission: '파일에 쓸 권한이 없습니다. 파일을 다시 열어 주세요.',
         readOnlyLocation: '이 위치에는 저장할 수 없습니다. 새 이름으로 저장해 주세요.',
+        gone: '저장할 파일이 없습니다. 삭제되거나 이동된 것 같습니다. 새 이름으로 저장해 주세요.',
         ioError: '저장 중 오류가 발생했습니다. 저장 공간을 확인해 주세요.',
         failed: (msg: string) => `저장에 실패했습니다. (${msg})`,
         unknownError: '알 수 없는 오류',

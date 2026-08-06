@@ -204,11 +204,31 @@ public class MdFilePlugin extends Plugin {
             ret.put("encoding", decoded.charset);   // JS 가 안내 문구를 띄우는 데 쓴다
             call.resolve(ret);
 
-        } catch (SecurityException e) {
-            // 영속 권한이 없거나 만료된 URI. JS가 '다시 열기'를 안내해야 한다.
-            call.reject("이 파일에 접근할 권한이 없습니다", "EPERM", e);
         } catch (IOException | RuntimeException e) {
-            call.reject(String.valueOf(e.getMessage()), "EIO", e);
+            /*
+             * ★★ 분류를 여기서 짓지 말고 UriErrors 로 보낸다 — 여기 적으면 기기 없이는
+             *   한 줄도 시험할 수 없다(TextDecoding 을 떼어 낸 이유와 같다, 14-1절).
+             *
+             * ★ 예전에는 SecurityException 만 따로 잡고 나머지를 전부 EIO 로 보냈다.
+             *   그런데 **없어진 파일은 FileNotFoundException 으로 온다.** 그래서
+             *   위쪽 `is == null` 의 ENOENT 분기는 사실상 죽은 코드였고,
+             *   JS 의 "파일을 찾을 수 없습니다. 이동되거나 삭제된 것 같습니다." 도
+             *   영영 뜨지 않았다. 가장 흔한 실패인데 가장 알 수 없는 문장이 떴다.
+             */
+            String code = UriErrors.codeOf(e);
+            call.reject(readErrorMessage(code, e), code, e);
+        }
+    }
+
+    /** 화면 문구는 JS 가 만든다. 여기 문장은 로그와 폴백용이다. */
+    private static String readErrorMessage(String code, Throwable e) {
+        switch (code) {
+            case UriErrors.EPERM:
+                return "이 파일에 접근할 권한이 없습니다";
+            case UriErrors.ENOENT:
+                return "파일을 찾을 수 없습니다";
+            default:
+                return String.valueOf(e.getMessage());
         }
     }
 
@@ -283,17 +303,28 @@ public class MdFilePlugin extends Plugin {
             ret.put("uri", uri.toString());
             call.resolve(ret);
 
-        } catch (SecurityException e) {
-            call.reject("이 파일에 쓸 권한이 없습니다", "EPERM", e);
-        } catch (UnsupportedOperationException e) {
-            // Drive 등 일부 프로바이더가 쓰기 자체를 거부하는 경우
-            call.reject("이 위치에는 저장할 수 없습니다", "EREADONLY", e);
         } catch (IOException | RuntimeException e) {
-            call.reject(String.valueOf(e.getMessage()), "EIO", e);
+            // ★ 읽기와 같은 분류를 쓴다. 지워진 파일에 저장하는 것은 EIO('저장 공간을
+            //   확인해 주세요')가 아니다 — 사용자가 할 일이 완전히 다르다.
+            String code = UriErrors.codeOf(e);
+            call.reject(writeErrorMessage(code, e), code, e);
         } finally {
             if (pfd != null) {
                 try { pfd.close(); } catch (IOException ignored) { }
             }
+        }
+    }
+
+    private static String writeErrorMessage(String code, Throwable e) {
+        switch (code) {
+            case UriErrors.EPERM:
+                return "이 파일에 쓸 권한이 없습니다";
+            case UriErrors.EREADONLY:
+                return "이 위치에는 저장할 수 없습니다";
+            case UriErrors.ENOENT:
+                return "저장할 파일이 없습니다";
+            default:
+                return String.valueOf(e.getMessage());
         }
     }
 
