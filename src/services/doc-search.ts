@@ -75,25 +75,68 @@ function collectTextNodes(container: HTMLElement): Text[] {
  * @returns null 이면 검색하지 않는다(너무 짧다 / 비었다)
  */
 function normalizeQuery(raw: string): { needle: string; choseong: boolean } | null {
-    const q = raw.trim();
+    /*
+     * ★ 질의만 자모를 모은다(NFC). 맥에서 복사해 붙인 검색어가 분해된 채로 올 수 있다.
+     *
+     * ★★ **본문에는 하지 않는다.** 정규화는 길이를 바꾸므로(분해된 '마' 3자 → 1자)
+     *   변환본의 인덱스를 원문 인덱스로 쓰는 이 코드에서 하이라이트가 어긋난다.
+     *   그래서 **본문 자체가 NFD 인 문서는 여전히 안 잡힌다** — 알고 남겨 둔 한계다.
+     *   맥은 파일 **이름**을 NFD 로 만들지 내용까지 바꾸지는 않으므로 드물다.
+     *   (이름 쪽은 hangul.ts matchesName 이 모아서 처리한다.)
+     */
+    const q = raw.normalize('NFC').trim();
     if (!q) return null;
     if (isChoseongQuery(q)) {
         // ★ 공백을 지우지 않는다. 지우면 본문 오프셋과 어긋난다.
         //   (8-5절 matchesName 은 짧은 파일 이름이라 공백을 지워도 안전하다.)
         const t = q.replace(/\s+/g, '');
         if (t.length < MIN_CHOSEONG_LEN) return null;
-        return { needle: q.toLowerCase(), choseong: true };
+        return { needle: lowerSameLength(q), choseong: true };
     }
-    return { needle: q.toLowerCase(), choseong: false };
+    // ★ 본문과 **같은 규칙**으로 낮춘다. 한쪽만 İ 를 풀면 서로 안 맞는다.
+    return { needle: lowerSameLength(q), choseong: false };
+}
+
+/**
+ * ★★★ 길이를 지키는 소문자 변환 (2026-08-06).
+ *
+ *   `String.prototype.toLowerCase()` 는 **길이를 보존하지 않는다.**
+ *   BMP 전체를 훑어 확인한 결과 딱 하나가 그렇다:
+ *       U+0130  İ (터키어 대문자 I)  →  'i̇'  (1자 → 2자)
+ *
+ *   이 앱은 소문자 변환본에서 찾은 인덱스를 **원문 인덱스로 그대로** 쓴다.
+ *   그래서 문서에 `İ` 가 하나만 있어도 그 뒤 모든 오프셋이 한 칸씩 밀린다:
+ *       'İstanbul 마크다운 문서' 에서 '마크다운' 을 찾으면 → '크다운 ' 이 칠해진다
+ *       'İstanbul 마크다운'    처럼 끝에서 걸리면 →
+ *           IndexSizeError: offset 14 is larger than the node's length (13)
+ *       (2026-08-06 실측. 겹치는 일치 때와 **똑같은 신호**로 검색이 통째로 죽는다.)
+ *
+ *   터키 지명·인명 하나면 걸린다 — AI 가 쓴 문서에 İstanbul·İzmir·Türkiye 는 흔하다.
+ *
+ * ★ 길이가 달라지는 글자는 **원문 그대로 둔다.** 그러면 `i` 로 `İ` 를 찾지 못하게
+ *   되지만, 터키어에서 İ 와 i 는 애초에 다른 글자다. 자리가 어긋나는 것보다 낫다.
+ * ★ 거의 모든 문자열은 첫 줄에서 끝난다 — 비용은 길이 비교 하나다.
+ */
+function lowerSameLength(s: string): string {
+    const lower = s.toLowerCase();
+    if (lower.length === s.length) return lower;
+
+    let out = '';
+    for (const ch of s) {
+        // ★ 코드 포인트 단위로 돈다. 서로게이트 쌍을 반으로 자르면 안 된다.
+        const lo = ch.toLowerCase();
+        out += lo.length === ch.length ? lo : ch;
+    }
+    return out;
 }
 
 /**
  * 한글 음절 1자는 초성 1자로 바뀌므로 **문자 오프셋이 그대로 보존된다.**
  * 그래서 초성 변환본에서 찾은 인덱스를 원문 인덱스로 그대로 쓸 수 있다.
- * 이 성질이 깨지면(예: 공백 제거) 하이라이트 위치가 어긋난다.
+ * 이 성질이 깨지면(예: 공백 제거, 위 İ) 하이라이트 위치가 어긋난다.
  */
 function haystackOf(text: string, choseong: boolean): string {
-    return choseong ? toChoseong(text) : text.toLowerCase();
+    return choseong ? toChoseong(text) : lowerSameLength(text);
 }
 
 /**
@@ -113,6 +156,14 @@ export function runSearch(container: HTMLElement, rawQuery: string): SearchState
     outer: for (const node of nodes) {
         const original = node.nodeValue ?? '';
         const hay = haystackOf(original, q.choseong);
+
+        /*
+         * ★★ 이 앱은 변환본의 인덱스를 **원문 인덱스로 그대로** 쓴다. 그 전제가 깨진
+         *   노드는 자리가 어긋나고, 끝에서 걸리면 Range 가 터져 검색이 통째로 죽는다.
+         *   위 두 변환은 길이를 지키도록 만들었지만, 만에 하나 어긋나면
+         *   **잘못 칠하느니 이 노드를 건너뛴다.** 안전망이자 전제를 적어 두는 자리다.
+         */
+        if (hay.length !== original.length) continue;
 
         /*
          * 한 노드 안의 모든 일치를 뒤에서부터 처리한다.

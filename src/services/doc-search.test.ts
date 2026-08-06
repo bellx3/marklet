@@ -318,3 +318,62 @@ describe('★★ 빨라져도 건너뛸 것은 그대로 건너뛴다', () => {
         }
     });
 });
+
+/**
+ * ★★★ 2026-08-06. **터키 지명 하나로 검색이 어긋나거나 죽었다.**
+ *
+ *   이 코드는 소문자 변환본에서 찾은 인덱스를 **원문 인덱스로 그대로** 쓴다.
+ *   그런데 `String.prototype.toLowerCase()` 는 길이를 보존하지 않는다.
+ *   BMP 전체를 훑어 확인한 결과 딱 하나가 그렇다:
+ *       U+0130  İ (터키어 대문자 I)  →  'i̇'  (1자 → 2자)
+ *
+ *   그래서 문서에 `İ` 가 하나만 있어도 그 뒤 오프셋이 한 칸씩 밀린다(실측):
+ *       'İstanbul 마크다운 문서' 에서 '마크다운' → **'크다운 ' 이 칠해졌다**
+ *       'İstanbul 마크다운'    처럼 끝에서 걸리면 →
+ *           IndexSizeError: offset 14 is larger than the node's length (13)
+ *   **겹치는 일치 때와 똑같은 신호로 검색이 통째로 죽는다.**
+ *
+ *   AI 가 쓴 문서에 İstanbul·İzmir·Türkiye 는 흔하다. 한 번만 나와도 그 뒤가 전부 어긋난다.
+ */
+describe('★★ 소문자로 바꿔도 자리가 밀리지 않는다 (U+0130 İ)', () => {
+    it.each([
+        ['İ 하나', 'İstanbul 마크다운 문서'],
+        ['İ 여러 개', 'İİİ 마크다운'],
+        ['★ İ 뒤 맨 끝에서 일치', 'İstanbul 마크다운'],
+    ])('%s — 터지지 않고 제자리를 칠한다', (_이름, 본문) => {
+        const el = host(`<p>${본문}</p>`);
+        expect(() => runSearch(el, '마크다운')).not.toThrow();
+        const s = runSearch(el, '마크다운');
+        expect(s.marks.length).toBe(1);
+        expect(s.marks[0].textContent, '자리가 밀렸다').toBe('마크다운');
+    });
+
+    it('글자가 없어지거나 늘지 않는다', () => {
+        const 본문 = 'İstanbul 마크다운 문서';
+        const el = host(`<p>${본문}</p>`);
+        runSearch(el, '마크다운');
+        expect(el.textContent).toBe(본문);
+        clearSearch(el);
+        expect(el.textContent).toBe(본문);
+    });
+
+    it('터키어 낱말 자체도 찾을 수 있다', () => {
+        const el = host('<p>İstanbul 은 도시다</p>');
+        const s = runSearch(el, 'İstanbul');
+        expect(s.marks[0]?.textContent).toBe('İstanbul');
+    });
+
+    it('평범한 대소문자 무시는 그대로다 (고치면서 망가뜨리지 않았다)', () => {
+        expect(runSearch(host('<p>Markdown 뷰어</p>'), 'markdown').marks[0]?.textContent).toBe(
+            'Markdown',
+        );
+        expect(runSearch(host('<p>markdown 뷰어</p>'), 'MARKDOWN').marks[0]?.textContent).toBe(
+            'markdown',
+        );
+    });
+
+    it('초성 검색은 원래 영향이 없다 (toChoseong 은 길이를 지킨다)', () => {
+        const s = runSearch(host('<p>İ 마크다운 뷰어</p>'), 'ㅁㅋ');
+        expect(s.marks[0]?.textContent).toBe('마크');
+    });
+});
