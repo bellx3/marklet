@@ -276,18 +276,32 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
 
         title.textContent = doc?.name ?? 'Marklet';
 
-        // 알림 줄 — ★ 사용자가 사본을 편집하고 저장했다고 믿게 두면 그게 곧 데이터 유실이다.
+        /*
+         * 알림 줄 — ★ 사용자가 사본을 편집하고 저장했다고 믿게 두면 그게 곧 데이터 유실이다.
+         *
+         * ★★ '읽기 전용' 안내는 **파일일 때만** 한다. 그 문구는 "편집하면 새 이름으로
+         *   저장하게 됩니다" 라고 **약속**하는데, URI 가 없는 문서(예제·공유받은 텍스트)는
+         *   편집 자체가 거부된다 — 앱이 자기 말을 뒤집는 셈이다(2026-08-06 실측:
+         *   예제 문서에서 [편집] 을 누르면 "편집할 수 없습니다" 가 떴다).
+         */
         if (options.fromSnapshot) {
             notice.hidden = false;
             notice.textContent = t.viewer.snapshotNotice;
-        } else if (doc && !doc.writable) {
+        } else if (doc?.uri && !doc.writable) {
             notice.hidden = false;
             notice.textContent = t.viewer.readOnlyNotice;
         } else {
             notice.hidden = true;
             notice.textContent = '';
         }
-        editBtn.hidden = !!options.plain;
+        /*
+         * ★★ 눌러 봐야 오류만 뜨는 버튼은 두지 않는다.
+         *   openEditor 는 `!doc.uri` 면 곧바로 거부한다(예제 문서·공유받은 텍스트).
+         *   그런데 버튼은 계속 보였다 — 사용자는 누르고 나서야 안 된다는 걸 안다.
+         *   아래 shareFileItem 이 이미 같은 규칙을 쓰고 있었는데 여기만 빠져 있었다.
+         *   (예제 문서가 "편집 버튼이 나타나지 않습니다" 라고 안내하던 것도 이쪽이다.)
+         */
+        editBtn.hidden = !!options.plain || !doc?.uri;
         // ★ 파일 공유는 진짜 파일일 때만. 예제 문서·공유받은 텍스트는 URI 가 없고,
         //   사본을 보고 있을 때는 원본이 아니라 사본을 보내게 되므로 숨긴다.
         shareFileItem.hidden = !doc?.uri || !!options.fromSnapshot;

@@ -532,3 +532,66 @@ describe('★★ 청크를 받는 사이에 문서가 바뀌면', () => {
         expect(screen.root.querySelector('.md-target')?.textContent).toContain('앞문서');
     });
 });
+
+/**
+ * ★★★ 2026-08-06. **누르면 오류만 뜨는 [편집] 버튼이 보이고 있었다.**
+ *
+ *   openEditor 는 `!doc.uri` 면 곧바로 거부한다(예제 문서·공유받은 텍스트).
+ *   그런데 버튼은 계속 보였다 — 사용자는 누르고 나서야 안 된다는 걸 안다.
+ *   게다가 그 위 알림 줄은 **"편집하면 새 이름으로 저장하게 됩니다"** 라고
+ *   약속하고 있었다. 실기 확인 결과 예제 문서에서:
+ *       알림 줄 : "읽기 전용 문서입니다. 편집하면 새 이름으로 저장하게 됩니다."
+ *       [편집]  : "편집할 수 없습니다 — 이 문서는 파일이 아니라 공유받은 텍스트입니다"
+ *   **앱이 한 줄 위에서 한 약속을 바로 뒤집는다.** 게다가 예제 문서는
+ *   '공유받은 텍스트' 도 아니라 문구 자체가 맞지 않았다.
+ *
+ *   ★ 예제 문서(welcome.md)는 원래부터 "편집 버튼이 나타나지 않습니다" 라고
+ *     안내하고 있었다 — 즉 이게 처음부터의 의도였고 코드만 안 따라간 것이다.
+ *   ★ ⋮ 메뉴의 '파일로 공유' 는 이미 같은 규칙(`!doc?.uri`)을 쓰고 있었다.
+ *     한 화면 안에서 규칙이 갈라져 있었다.
+ */
+describe('★★ 파일이 아닌 문서에서는 [편집] 을 보여 주지 않는다', () => {
+    function editBtn(): HTMLElement {
+        return screen.root.querySelector<HTMLElement>(
+            '.viewer-bar [aria-label="' + t.viewer.edit + '"]',
+        )!;
+    }
+    function noticeText(): string {
+        const n = screen.root.querySelector<HTMLElement>('.viewer-notice');
+        return n && !n.hidden ? (n.textContent ?? '') : '';
+    }
+
+    it('★ URI 가 없는 문서(예제·공유받은 텍스트)에서는 숨긴다', async () => {
+        await screen.show(doc({ uri: '', name: '공유된 텍스트', writable: false }), '# 가\n', {});
+        expect(editBtn().hidden, '누르면 오류만 뜨는 버튼이 보인다').toBe(true);
+    });
+
+    it('★ 그때 "새 이름으로 저장" 을 약속하지 않는다', async () => {
+        await screen.show(doc({ uri: '', name: '예제', writable: false }), '# 가\n', {});
+        expect(noticeText(), '지키지 못할 약속이 떠 있다').not.toContain(t.viewer.readOnlyNotice);
+    });
+
+    it('진짜 파일이면 읽기 전용이어도 [편집] 을 보여 준다', async () => {
+        await screen.show(doc({ writable: false }), '# 가\n', {});
+        expect(editBtn().hidden).toBe(false);
+        expect(noticeText()).toBe(t.viewer.readOnlyNotice);
+    });
+
+    it('쓸 수 있는 파일에서는 알림 줄이 없다', async () => {
+        await screen.show(doc({ writable: true }), '# 가\n', {});
+        expect(editBtn().hidden).toBe(false);
+        expect(noticeText()).toBe('');
+    });
+
+    it('4MB 초과 원문 보기에서는 예전처럼 숨긴다 (회귀)', async () => {
+        await screen.show(doc(), '아주 긴 글', { plain: true });
+        expect(editBtn().hidden).toBe(true);
+    });
+
+    it('문서를 갈아타면 다시 나타난다 (한 번 숨기고 끝이 아니다)', async () => {
+        await screen.show(doc({ uri: '', name: '예제' }), '# 가\n', {});
+        expect(editBtn().hidden).toBe(true);
+        await screen.show(doc(), '# 나\n', {});
+        expect(editBtn().hidden).toBe(false);
+    });
+});
