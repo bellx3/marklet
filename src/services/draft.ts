@@ -186,6 +186,19 @@ async function removeOrphanDrafts(): Promise<void> {
         for (const f of files) {
             const path = `draft/${f.name}`;
             if (known.has(path)) continue;
+            /*
+             * ★★★ 갓 쓰인 파일은 건드리지 않는다.
+             *   writeDraft 는 **파일을 먼저 쓰고 목록을 나중에** 갱신한다. 그 사이에
+             *   이 정리기가 목록을 읽으면 방금 쓴 초안이 '닿을 수 없는 파일' 로 보인다 —
+             *   그리고 지운다. 여기서 지워지는 것은 **사용자가 저장하지 않은 글**이다.
+             *
+             *   사본 쪽(recents.ts)에서 같은 경합을 실기기로 잡았다(2026-08-06).
+             *   초안 쪽은 창이 훨씬 좁지만(편집은 앱이 뜬 뒤에나 시작된다) 잃는 것이
+             *   더 크다. 쓰레기 수집기는 **확실히 버려진 것**만 건드려야 한다.
+             */
+            if (typeof f.mtime === 'number' && f.mtime > 0 && Date.now() - f.mtime < 60_000) {
+                continue;
+            }
             await Filesystem.deleteFile({ path, directory: Directory.Data }).catch(() => {});
             console.warn('닿을 수 없는 초안을 정리했다:', path);
         }

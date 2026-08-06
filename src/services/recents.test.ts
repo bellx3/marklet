@@ -422,3 +422,67 @@ describe('★★ 망가진 최근 목록으로도 시작 화면이 뜬다', () =
         expect((await loadRecents()).length).toBe(2);
     });
 });
+
+/**
+ * ★★★ 2026-08-06, **실기기에서 잡았다.**
+ *
+ *   정리기(pruneSnapshotOrphans)는 부팅 직후에 돈다. 그런데 인텐트로 들어온 문서는
+ *   같은 순간에 rememberDoc() 으로 사본을 쓴다. rememberDoc 은 **파일을 먼저 쓰고
+ *   목록을 나중에** 저장하므로, 그 사이에 정리기가 목록을 읽으면
+ *   방금 쓴 사본이 '아무도 안 가리키는 파일' 로 보인다 — 그리고 지운다.
+ *
+ *   갤럭시 S22 울트라 실측: 500KB 문서를 인텐트로 열었더니
+ *       목록  snapshot/haeqg4-mk-normal-500.md 를 가리킴
+ *       파일  없음
+ *   사본은 **다시 못 여는 URI 의 유일한 사본**이다. 그게 사라지면 최근 목록에서
+ *   그 문서를 여는 순간 "원본을 찾을 수 없습니다" 가 뜬다 —
+ *   카톡으로 받은 문서를 다시 못 보게 되는 것이다.
+ *
+ *   ★ 이건 내가 오늘 넣은 기능이 만든 문제다. 브라우저에서는 두 일이 같은 순간에
+ *     돌 일이 없어 드러나지 않았다. 기기를 물려야 나오는 종류였다.
+ */
+describe('★★ 정리기가 쓰는 중인 사본을 지우지 않는다', () => {
+    const 지금 = 1_800_000_000_000;
+
+    it('★ 방금 쓴 파일은 목록에 없어도 두고 간다', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(지금));
+        try {
+            fs.readdir.mockResolvedValue({
+                files: [
+                    { name: '갓쓴것.md', mtime: 지금 - 500 }, // 0.5초 전 — 쓰는 중일 수 있다
+                    { name: '오래된것.md', mtime: 지금 - 10 * 60_000 }, // 10분 전
+                ],
+            });
+            fs.deleteFile.mockClear();
+
+            await pruneSnapshotOrphans();
+
+            const 지운것 = fs.deleteFile.mock.calls.map((c) => (c[0] as { path: string }).path);
+            expect(지운것, '방금 쓴 사본을 지웠다').not.toContain('snapshot/갓쓴것.md');
+            expect(지운것).toEqual(['snapshot/오래된것.md']);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('시각을 모르는 파일은 예전처럼 지운다 (정리가 아예 멈추면 안 된다)', async () => {
+        fs.readdir.mockResolvedValue({ files: [{ name: '시각없음.md' }] });
+        fs.deleteFile.mockClear();
+        await pruneSnapshotOrphans();
+        expect(fs.deleteFile.mock.calls.map((c) => (c[0] as { path: string }).path)).toEqual([
+            'snapshot/시각없음.md',
+        ]);
+    });
+
+    it('쓰는 중이어도 목록이 가리키면 당연히 남는다', async () => {
+        await rememberDoc({ ...doc(1, false), name: 'a.md' }, '내용', 'intent');
+        const 쓰는것 = (await loadRecents())[0].snapshotPath!;
+        fs.readdir.mockResolvedValue({
+            files: [{ name: 쓰는것.replace('snapshot/', ''), mtime: Date.now() }],
+        });
+        fs.deleteFile.mockClear();
+        await pruneSnapshotOrphans();
+        expect(fs.deleteFile).not.toHaveBeenCalled();
+    });
+});

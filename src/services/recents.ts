@@ -70,6 +70,31 @@ async function saveRecents(list: RecentDoc[]): Promise<void> {
     }
 }
 
+/**
+ * 갓 쓰인 파일인가.
+ *
+ * ★★★ 정리기는 **쓰는 쪽과 같은 순간에 돈다** (2026-08-06 실기기에서 잡았다).
+ *   부팅 직후 pruneSnapshotOrphans() 가 뜨는 동안, 인텐트로 들어온 문서가
+ *   rememberDoc() 으로 사본을 쓴다. rememberDoc 은 **파일을 먼저 쓰고 목록을 나중에**
+ *   저장하므로, 그 사이에 정리기가 목록을 읽으면 방금 쓴 사본이 '아무도 안 가리키는
+ *   파일' 로 보인다 — 그리고 지운다.
+ *
+ *   실기기 증거: 목록은 `snapshot/haeqg4-mk-normal-500.md` 를 가리키는데
+ *   파일은 없었다. 사본은 **다시 못 여는 URI 의 유일한 사본**이다. 그게 사라지면
+ *   최근 목록에서 그 문서를 여는 순간 "원본을 찾을 수 없습니다" 가 뜬다 —
+ *   카톡으로 받은 문서를 다시 못 보게 되는 것이다.
+ *
+ * ★ 순서를 바꿔 좁히는 것으로는 부족하다. 이건 **쓰레기 수집기**이고,
+ *   쓰레기 수집기는 '확실히 버려진 것' 만 건드려야 한다.
+ *   최근에 손댄 파일은 그냥 다음 기회로 미룬다 — 급할 것이 없는 일이다.
+ */
+const RECENTLY_WRITTEN_MS = 60_000;
+
+function justWritten(mtime: number | undefined): boolean {
+    if (typeof mtime !== 'number' || mtime <= 0) return false;
+    return Date.now() - mtime < RECENTLY_WRITTEN_MS;
+}
+
 /** 사본 파일 하나를 지운다. 없어도 조용히 넘어간다. */
 async function dropSnapshot(path: string | undefined): Promise<void> {
     if (!path) return;
@@ -164,6 +189,7 @@ export async function pruneSnapshotOrphans(): Promise<void> {
         for (const f of files) {
             const path = `snapshot/${f.name}`;
             if (used.has(path)) continue;
+            if (justWritten(f.mtime)) continue; // 쓰는 중일 수 있다(아래 주석)
             await Filesystem.deleteFile({ path, directory: Directory.Data }).catch(() => {});
         }
     } catch {
