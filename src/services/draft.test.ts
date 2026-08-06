@@ -282,3 +282,92 @@ describe('★ 닿을 수 없는 초안 정리', () => {
         await expect(pruneDraftOrphans()).resolves.toBeUndefined();
     });
 });
+
+/**
+ * 프로세스가 갑자기 죽는 자리 (2026-08-06).
+ *
+ * ★★★ 이 모듈은 **사용자가 아직 아무 데도 저장하지 않은 글**을 들고 있다.
+ *   되돌릴 원본이 없으므로, 여기서 잃으면 정말로 없어지고 사용자는 잃은 줄도 모른다.
+ *   그래서 '죽는 순간'과 '목록이 깨진 경우'를 못으로 박아 둔다.
+ */
+describe('초안 — 잃지 않는 순서', () => {
+    it('★★ 파일이 디스크에 닿는 순간 목록은 이미 그 파일을 안다', async () => {
+        /*
+         * 왜 이걸 재는가. 예전에는 파일을 먼저 쓰고 목록을 나중에 갱신했다.
+         * 그 사이에 앱이 저메모리로 죽으면 **파일은 있는데 목록이 모르는** 상태가 남고,
+         * 다음 부팅의 정리기가 그걸 '닿을 수 없는 파일' 로 보고 지운다.
+         * mtime 60초 가드는 그때 이미 지나 있다.
+         */
+        const 쓰는순간의목록: string[] = [];
+        const 원래 = files.set.bind(files);
+        files.set = ((path: string, data: string) => {
+            쓰는순간의목록.push(store.get('draftIndex') ?? '(목록 없음)');
+            return 원래(path, data);
+        }) as typeof files.set;
+
+        try {
+            scheduleDraftSave('content://죽는문서', '살아남아야 하는 글');
+            await vi.advanceTimersByTimeAsync(900);
+        } finally {
+            files.set = 원래;
+        }
+
+        expect(쓰는순간의목록).toHaveLength(1);
+        expect(
+            쓰는순간의목록[0],
+            '파일이 먼저 쓰였다 — 여기서 죽으면 정리기가 그 글을 지운다',
+        ).toContain('content://죽는문서');
+    });
+
+    it('★★ 목록이 깨져 있으면 초안을 한 개도 지우지 않는다', async () => {
+        // 초안 두 개를 정상으로 만들어 둔다.
+        scheduleDraftSave('content://가', '가 문서의 글');
+        await vi.advanceTimersByTimeAsync(900);
+        scheduleDraftSave('content://나', '나 문서의 글');
+        await vi.advanceTimersByTimeAsync(900);
+        expect(files.size).toBe(2);
+
+        // 목록만 망가진다. 파일은 멀쩡하다.
+        store.set('draftIndex', '{이건 JSON 이 아니다');
+
+        await pruneDraftOrphans();
+
+        expect(files.size, '목록 하나 깨졌다고 사용자 글을 통째로 버렸다').toBe(2);
+    });
+
+    it('목록이 배열로 들어와도 초안을 지우지 않는다', async () => {
+        scheduleDraftSave('content://가', '가 문서의 글');
+        await vi.advanceTimersByTimeAsync(900);
+
+        store.set('draftIndex', '[]'); // 객체가 아니다
+
+        await pruneDraftOrphans();
+        expect(files.size).toBe(1);
+    });
+
+    it('항목 하나가 망가져도 나머지는 그대로 읽힌다', async () => {
+        scheduleDraftSave('content://가', '가 문서의 글');
+        await vi.advanceTimersByTimeAsync(900);
+
+        const index = JSON.parse(store.get('draftIndex')!) as Record<string, unknown>;
+        index['content://망가진것'] = { path: 42 }; // path 가 문자열이 아니다
+        store.set('draftIndex', JSON.stringify(index));
+
+        expect(await readDraft('content://가')).toBe('가 문서의 글');
+        expect(await readDraft('content://망가진것')).toBeNull();
+    });
+
+    it('진짜 버려진 파일은 여전히 정리한다 (규칙이 과하지 않다)', async () => {
+        scheduleDraftSave('content://가', '가 문서의 글');
+        await vi.advanceTimersByTimeAsync(900);
+
+        // 목록은 멀쩡한데 목록에 없는 파일이 하나 굴러다닌다(옛 버전이 남긴 것).
+        files.set('draft/버려진것.md', '옛날 찌꺼기');
+        expect(files.size).toBe(2);
+
+        await pruneDraftOrphans();
+
+        expect(files.has('draft/버려진것.md'), '닿을 수 없는 파일은 치워야 한다').toBe(false);
+        expect(await readDraft('content://가')).toBe('가 문서의 글');
+    });
+});

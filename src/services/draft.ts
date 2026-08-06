@@ -76,23 +76,40 @@ async function writeDraft(job: { uri: string; content: string }): Promise<void> 
             directory: Directory.Data,
             recursive: true,
         }).catch(() => {});
+
+        /*
+         * ★★★ **목록을 먼저 적고 파일을 나중에 쓴다** (2026-08-06).
+         *
+         *   예전에는 반대였다. 그러면 이런 순서가 난다 —
+         *     ① writeFile 이 사용자 글을 디스크에 올린다
+         *     ② Preferences.set 전에 앱이 저메모리로 죽는다
+         *     ③ 파일은 있는데 목록이 그 파일을 모른다
+         *     ④ 다음 부팅의 pruneDraftOrphans 가 '닿을 수 없는 파일' 로 보고 **지운다**
+         *   ②의 창은 좁지만 ④가 지우는 것은 **저장하지 않은 사용자 글**이다.
+         *   mtime 60초 가드는 동시 실행 경합만 막는다 — 죽었다가 1분 뒤에 돌아오면
+         *   그대로 지워진다. 잃은 줄도 모르니 신고조차 안 된다.
+         *
+         *   순서를 뒤집으면 **파일이 목록에 없는 상태가 아예 안 생긴다.**
+         *   중간에 죽으면 목록만 남고 파일이 없는데, 그건 readDraft 가 null 을 돌려
+         *   "초안 없음" 으로 흐를 뿐 아무것도 잃지 않는다. 잃는 방향이 아니다.
+         */
+        const index = (await loadIndex()) ?? {};
+        index[job.uri] = { path, savedAt: Date.now() };
+        await Preferences.set({ key: INDEX_KEY, value: JSON.stringify(index) });
+
         await Filesystem.writeFile({
             path,
             directory: Directory.Data,
             data: job.content,
             encoding: Encoding.UTF8,
         });
-        const index = await loadIndex();
-        index[job.uri] = { path, savedAt: Date.now() };
-        await Preferences.set({ key: INDEX_KEY, value: JSON.stringify(index) });
     } catch (err) {
         console.error('초안 저장 실패:', err);
     }
 }
 
 export async function readDraft(uri: string): Promise<string | null> {
-    const index = await loadIndex();
-    const entry = index[uri];
+    const entry = (await loadIndex())?.[uri];
     if (!entry) return null;
     try {
         const f = await Filesystem.readFile({
@@ -108,8 +125,7 @@ export async function readDraft(uri: string): Promise<string | null> {
 
 /** 초안이 저장된 시각. 다이얼로그에 "N분 전"을 쓰기 위한 것. */
 export async function draftSavedAt(uri: string): Promise<number | null> {
-    const index = await loadIndex();
-    return index[uri]?.savedAt ?? null;
+    return (await loadIndex())?.[uri]?.savedAt ?? null;
 }
 
 export async function clearDraft(uri: string): Promise<void> {
@@ -145,6 +161,8 @@ export async function clearDraft(uri: string): Promise<void> {
 
 async function removeDraft(uri: string): Promise<void> {
     const index = await loadIndex();
+    // ★ 목록을 못 읽었으면 아무것도 지우지 않는다. 지우는 쪽이 되돌릴 수 없는 방향이다.
+    if (!index) return;
     const entry = index[uri];
     if (!entry) return;
     delete index[uri];
@@ -176,6 +194,14 @@ export function pruneDraftOrphans(): Promise<void> {
 async function removeOrphanDrafts(): Promise<void> {
     try {
         const index = await loadIndex();
+        /*
+         * ★★★ 목록을 **못 읽었으면 한 개도 지우지 않는다.**
+         *   예전에는 loadIndex 가 실패해도 {} 를 돌려줬다. 그러면 known 이 비어
+         *   **디스크의 모든 초안이 '버려진 것' 으로 보이고 통째로 지워진다.**
+         *   저장 한 번 안 된 사용자 글이 설정 하나 깨진 것 때문에 사라지는 셈이다.
+         *   청소는 하면 좋은 것이지 꼭 해야 하는 것이 아니다 — 확신이 없으면 손을 뗀다.
+         */
+        if (!index) return;
         const known = new Set(Object.values(index).map((e) => e.path));
 
         const { files } = await Filesystem.readdir({
@@ -187,14 +213,11 @@ async function removeOrphanDrafts(): Promise<void> {
             const path = `draft/${f.name}`;
             if (known.has(path)) continue;
             /*
-             * ★★★ 갓 쓰인 파일은 건드리지 않는다.
-             *   writeDraft 는 **파일을 먼저 쓰고 목록을 나중에** 갱신한다. 그 사이에
-             *   이 정리기가 목록을 읽으면 방금 쓴 초안이 '닿을 수 없는 파일' 로 보인다 —
-             *   그리고 지운다. 여기서 지워지는 것은 **사용자가 저장하지 않은 글**이다.
-             *
-             *   사본 쪽(recents.ts)에서 같은 경합을 실기기로 잡았다(2026-08-06).
-             *   초안 쪽은 창이 훨씬 좁지만(편집은 앱이 뜬 뒤에나 시작된다) 잃는 것이
-             *   더 크다. 쓰레기 수집기는 **확실히 버려진 것**만 건드려야 한다.
+             * ★★ 갓 쓰인 파일은 건드리지 않는다 — **두 번째 그물이다.**
+             *   writeDraft 가 목록을 먼저 적게 바뀌어서(위 주석) 이 창은 원래 닫혔다.
+             *   그래도 남겨 둔다: 옛 버전이 남긴 파일, 그리고 아직 못 본 다른 순서.
+             *   사본 쪽(recents.ts)에서는 같은 경합을 실기기로 잡았다(2026-08-06).
+             *   쓰레기 수집기는 **확실히 버려진 것**만 건드려야 한다.
              */
             if (typeof f.mtime === 'number' && f.mtime > 0 && Date.now() - f.mtime < 60_000) {
                 continue;
@@ -207,14 +230,42 @@ async function removeOrphanDrafts(): Promise<void> {
     }
 }
 
-async function loadIndex(): Promise<DraftIndex> {
+/**
+ * 저장된 목록을 **믿지 않는다.**
+ *
+ * ★★★ 읽지 못한 것과 '비어 있다'를 구분해서 돌려준다 — 못 읽었으면 null 이다.
+ *   이게 중요한 이유는 removeOrphanDrafts 다. 그쪽은 "목록에 없는 파일"을 지우는데,
+ *   목록을 못 읽어 {} 로 퉁치면 **모든 초안 파일이 한꺼번에 버려진 것으로 보인다.**
+ *   그리고 지워진다. 설정·최근 문서는 검증 실패해도 기본값으로 되돌리면 그만이지만,
+ *   초안은 되돌릴 원본이 없다 — 사용자가 아직 아무 데도 저장하지 않은 글이다.
+ *
+ * ★ 항목 하나가 망가진 것은 그것만 버린다. 나머지 초안까지 인질로 잡을 이유가 없다.
+ */
+async function loadIndex(): Promise<DraftIndex | null> {
+    let value: string | null;
     try {
-        const { value } = await Preferences.get({ key: INDEX_KEY });
-        if (!value) return {};
-        return JSON.parse(value) as DraftIndex;
+        ({ value } = await Preferences.get({ key: INDEX_KEY }));
     } catch {
-        return {};
+        return null; // 네이티브를 못 불렀다. 비었다고 단정하면 안 된다.
     }
+    if (!value) return {}; // 한 번도 쓴 적이 없다 — 이건 진짜로 비어 있는 것이다
+
+    let raw: unknown;
+    try {
+        raw = JSON.parse(value);
+    } catch {
+        return null; // 깨진 JSON. 무엇이 있었는지 모른다.
+    }
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+
+    const out: DraftIndex = {};
+    for (const [uri, entry] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof entry !== 'object' || entry === null) continue;
+        const { path, savedAt } = entry as { path?: unknown; savedAt?: unknown };
+        if (typeof path !== 'string' || !path) continue;
+        out[uri] = { path, savedAt: typeof savedAt === 'number' ? savedAt : 0 };
+    }
+    return out;
 }
 
 // ────────────────────────────────────────────────────────────
