@@ -252,6 +252,7 @@ export const ko: Catalog = {
         depthLimited: (n: number) =>
             `하위 ${n}단계까지만 훑습니다. 더 깊은 폴더의 파일은 목록에 없습니다.`,
         readFailed: '폴더를 읽지 못했습니다.',
+        listUnavailable: '폴더 목록을 읽지 못했습니다. 잠시 뒤에 다시 시도해 주세요.',
     },
 
     shell: {

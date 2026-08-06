@@ -11,6 +11,8 @@ import { t, setLanguage } from '../i18n';
  */
 
 const store = new Map<string, string>();
+/** 네이티브 Preferences 가 실패하는 상황. 드물지만 일어난다. */
+const prefsFail = { get: false };
 const mdFile = {
     pickFolder: vi.fn(),
     releaseUri: vi.fn(),
@@ -19,7 +21,10 @@ const mdFile = {
 
 vi.mock('@capacitor/preferences', () => ({
     Preferences: {
-        get: async ({ key }: { key: string }) => ({ value: store.get(key) ?? null }),
+        get: async ({ key }: { key: string }) => {
+            if (prefsFail.get) throw new Error('네이티브 실패');
+            return { value: store.get(key) ?? null };
+        },
         set: async ({ key, value }: { key: string; value: string }) => {
             store.set(key, value);
         },
@@ -47,6 +52,7 @@ const file = (name: string) => ({
 
 beforeEach(() => {
     store.clear();
+    prefsFail.get = false;
     vi.clearAllMocks();
     mdFile.releaseUri.mockResolvedValue(undefined);
     setLanguage('ko');
@@ -192,5 +198,66 @@ describe('★★ 망가진 폴더 목록으로도 시작 화면이 뜬다', () =
             ]),
         );
         expect((await loadFolders()).map((f) => f.name)).toEqual(['가폴더', '라폴더']);
+    });
+});
+
+/**
+ * ★★★ 2026-08-06. 폴더 목록도 **읽고-고치고-쓴다.**
+ *   못 읽은 것을 [] 로 퉁치면 폴더 하나 더한 결과가 '나머지가 전부 사라짐' 이 된다.
+ *   폴더는 사용자가 시스템 선택기로 하나씩 골라 권한을 받아 둔 것이라
+ *   목록이 날아가면 전부 다시 골라야 한다. 최근 문서 쪽과 같은 종류다.
+ */
+describe('★★ 목록을 못 읽으면 폴더 목록을 덮어쓰지 않는다', () => {
+    it('addFolder — 조용히 하나만 남기지 않고 알린다', async () => {
+        mdFile.pickFolder.mockResolvedValue({ ...FOLDER, persisted: true, cancelled: false });
+        await addFolder();
+        mdFile.pickFolder.mockResolvedValue({
+            uri: 'content://p/tree/B',
+            name: '두 번째',
+            persisted: true,
+            cancelled: false,
+        });
+        const 저장된것 = store.get('folders');
+
+        prefsFail.get = true;
+        try {
+            await expect(addFolder()).rejects.toThrow(t.folders.listUnavailable);
+        } finally {
+            prefsFail.get = false;
+        }
+
+        expect(store.get('folders'), '폴더 목록을 덮어썼다').toBe(저장된것);
+        expect(await loadFolders()).toHaveLength(1);
+    });
+
+    it('★★ removeFolder — 권한을 반납해 버리지 않는다 (반납은 되돌릴 수 없다)', async () => {
+        mdFile.pickFolder.mockResolvedValue({ ...FOLDER, persisted: true, cancelled: false });
+        await addFolder();
+        const 저장된것 = store.get('folders');
+        mdFile.releaseUri.mockClear();
+
+        prefsFail.get = true;
+        let 결과: unknown;
+        try {
+            결과 = await removeFolder(FOLDER.uri);
+        } finally {
+            prefsFail.get = false;
+        }
+
+        expect(결과, '[] 를 돌려주면 아무것도 안 했다는 사실이 가려진다').toBeNull();
+        expect(mdFile.releaseUri, '읽지도 못했는데 권한을 놓아 버렸다').not.toHaveBeenCalled();
+        expect(store.get('folders')).toBe(저장된것);
+    });
+
+    it('제대로 읽히면 지금까지대로 지운다 (규칙이 과하지 않다)', async () => {
+        mdFile.pickFolder.mockResolvedValue({ ...FOLDER, persisted: true, cancelled: false });
+        await addFolder();
+        mdFile.releaseUri.mockClear();
+
+        const next = await removeFolder(FOLDER.uri);
+
+        expect(next).toEqual([]);
+        expect(mdFile.releaseUri).toHaveBeenCalledWith({ uri: FOLDER.uri });
+        expect(await loadFolders()).toHaveLength(0);
     });
 });

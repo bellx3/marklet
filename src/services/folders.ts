@@ -34,14 +34,47 @@ function keepUsable(raw: unknown): Folder[] {
     });
 }
 
-export async function loadFolders(): Promise<Folder[]> {
+/**
+ * 저장된 목록을 읽는다. **못 읽은 것과 비어 있는 것을 구분한다.**
+ *
+ * ★★★ 이 파일도 읽고-고치고-쓴다(2026-08-06). 못 읽은 것을 [] 로 퉁치면
+ *   addFolder 가 **다른 폴더를 전부 지우고 방금 것 하나만 남기고**,
+ *   removeFolder 는 한 폴더를 지우려다 목록을 빈 것으로 덮어쓴다.
+ *   폴더는 사용자가 시스템 선택기로 하나씩 골라 권한을 받아 둔 것이라,
+ *   목록이 날아가면 전부 다시 골라야 한다.
+ *
+ * ★ 화면에 뿌리는 loadFolders 는 지금까지대로 [] 로 흘러도 된다 — 잃는 것이 없다.
+ *   쓰는 쪽과 권한을 반납하는 쪽만 엄격해야 한다. (최근 문서 쪽과 같은 판단이다.)
+ */
+type StoredFolders =
+    | { ok: true; list: Folder[] }
+    /** 네이티브를 못 불렀다 — 무엇이 있었는지 모른다. */
+    | { ok: false; reason: 'native' }
+    /** 값은 있는데 모양이 아니다 — 어차피 아무도 못 읽던 것이다. */
+    | { ok: false; reason: 'corrupt' };
+
+async function readStoredFolders(): Promise<StoredFolders> {
+    let value: string | null;
     try {
-        const { value } = await Preferences.get({ key: KEY });
-        if (!value) return [];
-        return keepUsable(JSON.parse(value));
+        ({ value } = await Preferences.get({ key: KEY }));
     } catch {
-        return [];
+        return { ok: false, reason: 'native' };
     }
+    if (!value) return { ok: true, list: [] };
+
+    let raw: unknown;
+    try {
+        raw = JSON.parse(value);
+    } catch {
+        return { ok: false, reason: 'corrupt' };
+    }
+    if (!Array.isArray(raw)) return { ok: false, reason: 'corrupt' };
+    return { ok: true, list: keepUsable(raw) };
+}
+
+export async function loadFolders(): Promise<Folder[]> {
+    const stored = await readStoredFolders();
+    return stored.ok ? stored.list : [];
 }
 
 async function persistFolders(list: Folder[]): Promise<void> {
@@ -59,16 +92,39 @@ export async function addFolder(): Promise<Folder | null> {
         // 영속화가 안 된 폴더는 다음 실행에서 못 읽는다. 목록에 넣지 않는다.
         throw new Error(t.folders.noPermission);
     }
-    const list = (await loadFolders()).filter((f) => f.uri !== res.uri);
+    /*
+     * ★★ 목록을 못 읽었으면 **덮어쓰지 않고 사용자에게 알린다.**
+     *   조용히 [] 로 흐르면 방금 고른 폴더 하나만 남고 나머지가 사라진다 —
+     *   폴더를 하나 더한 결과가 '다른 폴더가 전부 없어짐' 이면 안 된다.
+     *   (권한 자체는 살아 있으므로 다시 시도하면 된다. 그래서 던진다.)
+     */
+    const stored = await readStoredFolders();
+    if (!stored.ok && stored.reason === 'native') throw new Error(t.folders.listUnavailable);
+    const list = (stored.ok ? stored.list : []).filter((f) => f.uri !== res.uri);
     const folder: Folder = { uri: res.uri, name: res.name, addedAt: Date.now() };
     list.unshift(folder);
     await persistFolders(list);
     return folder;
 }
 
-export async function removeFolder(uri: string): Promise<Folder[]> {
+/** 폴더 하나를 뺀다. **못 읽었으면 null 을 돌려주고 아무것도 하지 않는다.** */
+export async function removeFolder(uri: string): Promise<Folder[] | null> {
+    /*
+     * ★★★ **목록을 먼저 읽고, 그다음에 권한을 반납한다** (2026-08-06).
+     *
+     *   예전에는 반대였다. 그러면 읽기가 실패했을 때 이미 권한을 놓아 버린 뒤라
+     *   되돌릴 수 없고, 이어서 [] 를 저장해 **폴더 목록까지 통째로 덮어썼다.**
+     *   폴더 하나를 빼려던 사용자가 등록해 둔 폴더를 전부 잃는다 —
+     *   하나씩 시스템 선택기로 다시 골라야 한다.
+     *
+     *   반납은 되돌릴 수 없는 쪽이므로 **확실해진 다음에** 한다.
+     */
+    const stored = await readStoredFolders();
+    if (!stored.ok && stored.reason === 'native') return null;
+    const before = stored.ok ? stored.list : [];
+    const list = before.filter((f) => f.uri !== uri);
+
     await MdFile.releaseUri({ uri }).catch(() => {});
-    const list = (await loadFolders()).filter((f) => f.uri !== uri);
     await persistFolders(list);
     return list;
 }
