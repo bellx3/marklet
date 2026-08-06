@@ -20,7 +20,8 @@ const fs = require('fs');
 const path = require('path');
 
 const repoRoot = path.resolve(__dirname, '..');
-const CSS = path.join(repoRoot, 'src', 'styles', 'markdown.css');
+/** 테마 변수가 들어 있는 파일들. 한 파일만 보면 --surface 같은 색을 통째로 놓친다. */
+const CSS_FILES = ['base.css', 'markdown.css'].map((f) => path.join(repoRoot, 'src', 'styles', f));
 
 /** [이름, 글자 변수, 바탕 변수, 최소 대비] — 4.5 는 본문 글자, 3 은 큰 글자·경계선. */
 const PAIRS = [
@@ -33,28 +34,40 @@ const PAIRS = [
     ['검색 결과', '--md-fg', '--md-hit-bg', 4.5],
     // ★ 이 줄이 이 파일을 만든 이유다. inherit 로 두면 어두운 테마에서 2.73:1 이 된다.
     ['현재 검색 결과', '--md-hit-fg-current', '--md-hit-bg-current', 4.5],
+    ['카드 위 글자', '--md-fg', '--surface', 4.5],
+    ['카드 위 흐린 글자', '--md-fg-muted', '--surface', 4.5],
+    ['강조 버튼 글자', '--accent-fg', '--accent', 4.5],
+    /*
+     * ★★ 포커스 링은 **버튼 바깥**(outline-offset: 2px)에 그려진다. 그래서 버튼 채움이 아니라
+     *   그 뒤 표면과 견줘야 한다. currentColor 로 뒀더니 밝은 테마 [삭제] 가 1.00:1 이었다.
+     */
+    ['포커스 링(표면 위)', '--md-fg', '--surface', 3],
+    ['포커스 링(바탕 위)', '--md-fg', '--md-bg', 3],
+    ['기본 포커스 링', '--md-link', '--surface', 3],
 ];
 
-/** 검사에서 빼도 되는 색. **이유를 적어야 뺀다.** */
+/**
+ * 검사에서 빼도 되는 **색**. ★ 이유를 적어야 뺀다.
+ * (길이·글꼴 같은 색이 아닌 변수는 아래에서 자동으로 빠진다.)
+ */
 const EXEMPT = {
     '--md-border': '경계선 장식이다. 컨트롤의 유일한 윤곽이 아니다(버튼은 글자로 읽힌다).',
     '--md-quote-bar': '인용 막대는 장식이다. 인용 글자 자체는 본문색으로 읽힌다.',
     '--md-warn-bar': '경고 막대는 장식이다. 경고 글자가 따로 검사된다.',
     '--md-hit-outline': '현재 결과를 **덧붙여** 알리는 외곽선이다. 바탕색만으로도 이미 갈린다.',
-    '--md-measure': '길이',
-    '--md-pad-x': '길이',
-    '--md-font-size': '길이',
-    '--md-line-height': '길이',
-    '--md-font-body': '글꼴',
-    '--md-font-code': '글꼴',
+    '--md-bg': '바탕 자체다. 여러 짝에서 뒷배경으로 이미 쓰인다.',
+    '--surface': '표면 자체다. 여러 짝에서 뒷배경으로 이미 쓰인다.',
+    '--accent': '강조 버튼 바탕. 그 위 글자를 따로 검사한다.',
+    '--md-code-bg-inline': '코드 바탕. 그 위 글자를 따로 검사한다.',
+    '--md-code-bg-block': '코드 바탕. 그 위 글자를 따로 검사한다.',
+    '--md-warn-bg': '경고 바탕. 그 위 글자를 따로 검사한다.',
+    '--md-hit-bg': '검색 결과 바탕. 그 위 글자를 따로 검사한다.',
+    '--md-hit-bg-current': '현재 결과 바탕. 그 위 글자를 따로 검사한다.',
 };
 
-function block(css, selector) {
-    const i = css.indexOf(selector);
-    if (i < 0) throw new Error(`${selector} 블록을 찾지 못했습니다`);
-    const open = css.indexOf('{', i);
-    const close = css.indexOf('\n}', open);
-    return css.slice(open, close);
+/** 색인가. `#rgb`·`#rrggbb` 만 잰다 — 길이·글꼴·그림자는 대비를 따질 값이 아니다. */
+function isColor(v) {
+    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim());
 }
 
 function vars(text) {
@@ -82,11 +95,34 @@ function contrast(a, b) {
     return (hi + 0.05) / (lo + 0.05);
 }
 
-const css = fs.readFileSync(CSS, 'utf8');
+const sources = CSS_FILES.map((f) => fs.readFileSync(f, 'utf8'));
+
+/** 모든 파일의 같은 셀렉터 블록을 합친다. 뒤에 오는 파일이 이긴다(CSS 순서와 같다). */
+function mergedVars(selector) {
+    let out = {};
+    for (const css of sources) {
+        let from = 0;
+        for (;;) {
+            const i = css.indexOf(selector, from);
+            if (i < 0) break;
+            const open = css.indexOf('{', i);
+            const close = css.indexOf('\n}', open);
+            out = { ...out, ...vars(css.slice(open, close)) };
+            from = close + 1;
+        }
+    }
+    return out;
+}
+const 기본 = mergedVars(':root {');
 const themes = {
-    밝은: vars(block(css, ':root {')),
-    어두운: { ...vars(block(css, ':root {')), ...vars(block(css, "[data-theme='dark'] {")) },
+    밝은: 기본,
+    어두운: { ...기본, ...mergedVars("[data-theme='dark'] {") },
 };
+
+if (Object.keys(기본).length < 10) {
+    console.error('❌ 테마 변수를 거의 못 읽었습니다. 이건 통과가 아닙니다.');
+    process.exit(1);
+}
 
 let failed = 0;
 for (const [themeName, v] of Object.entries(themes)) {
@@ -110,7 +146,9 @@ for (const [themeName, v] of Object.entries(themes)) {
 
 // ★ PAIRS 에 한 번도 안 나온 색을 보고한다. 조용히 빠지는 걸 막는 장치다.
 const used = new Set(PAIRS.flatMap(([, fg, bg]) => [fg, bg]));
-const 미검사 = Object.keys(themes.밝은).filter((k) => !used.has(k) && !EXEMPT[k]);
+const 미검사 = Object.keys(themes.밝은).filter(
+    (k) => isColor(themes.밝은[k]) && !used.has(k) && !EXEMPT[k],
+);
 if (미검사.length) {
     console.error(`\n✗ 검사되지 않은 색이 있습니다: ${미검사.join(', ')}`);
     console.error('  PAIRS 에 더하거나, 왜 안 봐도 되는지 EXEMPT 에 이유를 적으세요.');
