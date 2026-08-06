@@ -28,6 +28,43 @@ export function slugify(s: string): string {
     );
 }
 
+/**
+ * ★★★ 겹치는 제목의 번호를 **우리가** 매긴다 (2026-08-06).
+ *
+ *   markdown-it-anchor 9.2.1 은 겹칠 때마다 1부터 다시 훑는다:
+ *       for (; hasOwnProperty(slugs, a); ) { a = base + '-' + i; i += 1; }
+ *   같은 제목이 N 개면 N 번째가 N 번 도니까 **N² 이다.**
+ *
+ *   실측 (`## a` 반복, 2026-08-06 데스크톱):
+ *        1,000개   6KB     28ms
+ *        4,000개  23KB    473ms
+ *       16,000개  94KB  8,876ms      ← 입력 2배마다 시간 4.6배
+ *   2MB 면 35만 개라 **한 시간이 넘는다.** 폰에서는 몇 시간이다.
+ *
+ *   ★★ 그리고 **94KB 는 어떤 안내도 안 뜨는 크기다.** 진행 표시는 512KB,
+ *     확인 상자는 2MB 부터다. 남이 보낸 문서를 여는 앱에서 100KB 짜리 파일 하나가
+ *     화면을 수십 초 얼린다 — YAML 폭탄과 같은 종류의 자리다.
+ *
+ * ★ 번호는 세는 표로 매기므로 O(1) 이고, 결과 id 는 예전과 **똑같다**
+ *   (`제목`, `제목-1`, `제목-2` …). 목차·문서 안 링크가 그대로 동작한다.
+ * ★ 표는 env 에 둔다 — 렌더 한 번의 수명이다. 모듈 전역에 두면
+ *   문서를 다시 열 때 번호가 이어져 링크가 어긋난다(math.ts 의 mathLoaded 사고).
+ * ★ 여기서 만든 값이 우연히 다른 제목과 겹쳐도 안전하다 —
+ *   그때는 플러그인의 원래 검사가 뒤에서 한 번 더 걸러 준다.
+ */
+interface SlugState {
+    env?: Record<string, unknown>;
+}
+
+function slugifyWithState(title: string, state: SlugState): string {
+    const base = slugify(title);
+    const env = (state.env ?? {}) as { __slugCounts?: Map<string, number> };
+    const counts = (env.__slugCounts ??= new Map<string, number>());
+    const seen = counts.get(base) ?? 0;
+    counts.set(base, seen + 1);
+    return seen === 0 ? base : `${base}-${seen}`;
+}
+
 export interface RendererOptions {
     /** 한 줄 개행을 <br> 로. 기본 true (6-10절) */
     breaks: boolean;
@@ -48,7 +85,8 @@ export function createMarkdownIt(opts: RendererOptions): MarkdownIt {
     // ★ 반드시 덮어쓴다 — 기본값은 capacitor:// 를 통과시킨다.
     md.validateLink = isSafeUrl;
 
-    md.use(unwrapPlugin(anchor), { permalink: false, slugify });
+    // ★ slugify 가 아니라 slugifyWithState 다 — 겹치는 제목의 번호를 우리가 매긴다(위 주석).
+    md.use(unwrapPlugin(anchor), { permalink: false, slugifyWithState });
     md.use(unwrapPlugin(footnote));
 
     /*

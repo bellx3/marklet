@@ -125,3 +125,71 @@ describe('안전 기본값', () => {
         expect(createMarkdownIt({ breaks: false }).render('가\n나\n')).not.toContain('<br>');
     });
 });
+
+/**
+ * ★★★ 2026-08-06. **제목이 겹치면 파싱이 제곱으로 늘었다.**
+ *
+ *   markdown-it-anchor 9.2.1 은 겹칠 때마다 1부터 다시 훑는다:
+ *       for (; hasOwnProperty(slugs, a); ) { a = base + '-' + i; i += 1; }
+ *   같은 제목이 N 개면 N 번째가 N 번 도니까 N² 이다.
+ *
+ *   실측 (`## a` 반복, 데스크톱 크로뮴):
+ *        1,000개   6KB     28ms
+ *        4,000개  23KB    473ms
+ *       16,000개  94KB  8,876ms   → 고친 뒤 99ms (90배)
+ *   2MB 면 35만 개라 한 시간이 넘는다.
+ *
+ *   ★★ 그리고 **94KB 는 어떤 안내도 안 뜨는 크기다.** 진행 표시는 512KB,
+ *     확인 상자는 2MB 부터다. 남이 보낸 문서를 여는 앱에서 100KB 짜리 파일 하나가
+ *     화면을 수십 초 얼린다 — YAML 폭탄과 같은 자리다.
+ */
+describe('★★ 겹치는 제목 — 번호를 O(1) 로 매긴다', () => {
+    it('★ id 가 예전과 똑같다 (목차·문서 안 링크가 그대로 동작해야 한다)', () => {
+        const html = createMarkdownIt({ breaks: true }).render(
+            '### 예시\n\n### 예시\n\n### 예시\n\n## 개요\n\n## 개요\n',
+        );
+        const ids = [...html.matchAll(/<h\d id="([^"]*)"/g)].map((m) => decodeURIComponent(m[1]));
+        expect(ids).toEqual(['예시', '예시-1', '예시-2', '개요', '개요-1']);
+    });
+
+    it('문서마다 번호가 처음부터 다시 시작한다', () => {
+        // ★ 세는 표를 모듈 전역에 두면 두 번째 문서의 링크가 어긋난다.
+        const md = createMarkdownIt({ breaks: true });
+        const src = '## 개요\n\n## 개요\n';
+        expect(md.render(src)).toBe(md.render(src));
+    });
+
+    it('만든 번호가 진짜 제목과 겹쳐도 id 는 여전히 갈린다', () => {
+        const html = createMarkdownIt({ breaks: true }).render('## 가\n\n## 가\n\n## 가-1\n');
+        const ids = [...html.matchAll(/<h\d id="([^"]*)"/g)].map((m) => decodeURIComponent(m[1]));
+        expect(new Set(ids).size, `겹쳤다: ${ids.join(', ')}`).toBe(3);
+    });
+
+    /*
+     * ★ 시간을 재는 테스트다. 기기마다 달라지므로 **아주 헐겁게** 잡았다 —
+     *   고친 쪽은 여유가 30배 남고, 되돌리면 3배 넘게 초과한다.
+     *   (되돌려서 8.9초가 나오는 것을 확인했다.)
+     */
+    it('★ 같은 제목 16,000개가 몇 초씩 걸리지 않는다', () => {
+        const md = createMarkdownIt({ breaks: true });
+        const t0 = performance.now();
+        md.parse('## a\n\n'.repeat(16_000), {});
+        const ms = performance.now() - t0;
+        expect(ms, `${Math.round(ms)}ms 걸렸다 — 제곱으로 도는지 보라`).toBeLessThan(3000);
+    });
+
+    it('제목이 다 다를 때와 시간 차가 크지 않다', () => {
+        const 재기 = (f: (i: number) => string) => {
+            const src = Array.from({ length: 8000 }, (_, i) => `## ${f(i)}\n`).join('\n');
+            const t0 = performance.now();
+            createMarkdownIt({ breaks: true }).parse(src, {});
+            return performance.now() - t0;
+        };
+        const 다름 = 재기((i) => `제목 ${i}`);
+        const 같음 = 재기(() => '제목');
+        // 제곱이면 수십 배가 난다. 넉넉히 10배로 잡는다.
+        expect(같음, `다름 ${Math.round(다름)}ms · 같음 ${Math.round(같음)}ms`).toBeLessThan(
+            Math.max(다름, 20) * 10,
+        );
+    });
+});
