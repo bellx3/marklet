@@ -69,16 +69,41 @@ export function parseDocument(source: string): ParsedDocument {
     }
 }
 
+/**
+ * 접이식 표의 요약(제목)으로 쓸 키들. 대소문자를 가리지 않는다.
+ *
+ * ★★★ 예전에는 `fm[t.frontmatter.document]` 로 찾았다 — **표시용 라벨을 키로 쓴 것**이다.
+ *   영어 라벨은 `'Document'`(대문자 D)인데 문서에 흔히 쓰는 키는 소문자 `document` 다.
+ *   그래서 **우리가 앱에 넣어 둔 영어 예제 문서조차** 제목이 안 잡히고
+ *   'Document info' 라는 일반 문구로 떨어졌다(2026-08-06 실측).
+ *
+ *   게다가 한국어 카탈로그일 때는 라벨이 '문서'라서 `document` 를 아예 안 봤다 —
+ *   **한국어 화면에서 영어 문서를 열면 제목이 영영 안 뜬다.**
+ *   라벨과 키는 다른 것이다. 여기서는 키만 본다.
+ *
+ * ★ 언어와 무관하게 넷 다 본다. 남이 만든 문서가 어느 관례를 따를지 알 수 없다.
+ */
+const TITLE_KEYS = ['title', 'document', '문서', '제목'];
+
+function summaryText(fm: Record<string, unknown>): string {
+    const byLower = new Map(Object.keys(fm).map((k) => [k.toLowerCase(), k]));
+    for (const key of TITLE_KEYS) {
+        const actual = byLower.get(key);
+        if (actual === undefined) continue;
+        const v = fm[actual];
+        // ★ 값이 비어 있으면 다음 후보로 넘어간다. 빈 제목은 제목이 아니다.
+        if (v !== null && v !== undefined && String(v).trim() !== '') return String(v);
+    }
+    return t.frontmatter.info;
+}
+
 /** 접이식 표를 만든다. 값은 전부 textContent 로 넣는다 — HTML 을 만들지 않는다. */
 export function renderFrontmatter(fm: Record<string, unknown>): HTMLElement {
     const details = document.createElement('details');
     details.className = 'md-frontmatter';
 
     const summary = document.createElement('summary');
-    // ★ '문서' 키는 한국어 문서의 관례라 언어와 무관하게 계속 본다. 표시 기본값만 번역한다.
-    summary.textContent = String(
-        fm.title ?? fm[t.frontmatter.document] ?? fm['문서'] ?? t.frontmatter.info,
-    );
+    summary.textContent = summaryText(fm);
     details.appendChild(summary);
 
     const table = document.createElement('table');

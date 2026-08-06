@@ -1,6 +1,5 @@
 ---
 document: Marklet — Getting Started
-version: 1.0.0
 tags: [guide, sample]
 ---
 
@@ -16,12 +15,12 @@ Scroll down and try things as you go. This file is read-only, so nothing you tap
 
 ## 1. Four ways to open a document
 
-| Way | How |
-|---|---|
-| From another app | Tap a `.md` file in a file manager, a messenger, or an email client — Marklet appears in the list |
-| Open file | Use **[Open file]** on the start screen to pick any file on the device |
-| Recent | Anything you have opened stays on the start screen |
-| **Folders** | Add a folder once and every Markdown file inside it is listed — including files you add later from your computer |
+| Way              | How                                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| From another app | Tap a `.md` file in a file manager, a messenger, or an email client — Marklet appears in the list                |
+| Open file        | Use **[Open file]** on the start screen to pick any file on the device                                           |
+| Recent           | Anything you have opened stays on the start screen                                                               |
+| **Folders**      | Add a folder once and every Markdown file inside it is listed — including files you add later from your computer |
 
 > **A few apps need one extra step.**
 > Google Drive and some messengers show their own preview first. Use the `⋮` menu and choose
@@ -69,16 +68,16 @@ If a diagram is wider than the screen, **swipe it sideways.**
 
 A table with many columns scrolls sideways instead of being clipped at the edge of the screen. Try dragging the one below to the left.
 
-| Field | Type | Required | Default | Range | Unit | Description | Since | Deprecated | Notes |
-|---|---|---|---|---|---|---|---|---|---|
-| `page` | integer | no | `1` | 1–9999 | page | Page number to fetch | 1.0.0 | — | Counts from 1 |
-| `size` | integer | no | `20` | 1–100 | items | Items per page | 1.0.0 | — | Values above 100 are clamped |
-| `sort` | string | no | `createdAt` | — | — | Field to sort by | 1.0.0 | — | Comma-separated for several |
-| `order` | string | no | `desc` | asc, desc | — | Sort direction | 1.0.0 | — | Case-insensitive |
-| `query` | string | no | — | 1–200 chars | — | Search term | 1.1.0 | — | Matches the document body |
-| `from` | date | no | — | — | ISO 8601 | Start of the range | 1.2.0 | — | Inclusive |
-| `to` | date | no | — | — | ISO 8601 | End of the range | 1.2.0 | — | Inclusive |
-| `legacy` | boolean | no | `false` | — | — | Old response shape | 1.0.0 | 2.0.0 | Do not use |
+| Field    | Type    | Required | Default     | Range       | Unit     | Description          | Since | Deprecated | Notes                        |
+| -------- | ------- | -------- | ----------- | ----------- | -------- | -------------------- | ----- | ---------- | ---------------------------- |
+| `page`   | integer | no       | `1`         | 1–9999      | page     | Page number to fetch | 1.0.0 | —          | Counts from 1                |
+| `size`   | integer | no       | `20`        | 1–100       | items    | Items per page       | 1.0.0 | —          | Values above 100 are clamped |
+| `sort`   | string  | no       | `createdAt` | —           | —        | Field to sort by     | 1.0.0 | —          | Comma-separated for several  |
+| `order`  | string  | no       | `desc`      | asc, desc   | —        | Sort direction       | 1.0.0 | —          | Case-insensitive             |
+| `query`  | string  | no       | —           | 1–200 chars | —        | Search term          | 1.1.0 | —          | Matches the document body    |
+| `from`   | date    | no       | —           | —           | ISO 8601 | Start of the range   | 1.2.0 | —          | Inclusive                    |
+| `to`     | date    | no       | —           | —           | ISO 8601 | End of the range     | 1.2.0 | —          | Inclusive                    |
+| `legacy` | boolean | no       | `false`     | —           | —        | Old response shape   | 1.0.0 | 2.0.0      | Do not use                   |
 
 ---
 
@@ -115,12 +114,12 @@ Numbered and nested lists keep their shape.
 
 1. Open the file
 2. Read it
-   - Tables scroll
-   - Diagrams are drawn
+    - Tables scroll
+    - Diagrams are drawn
 3. Fix something if you need to
-   1. Tap **[Edit]** at the top right
-   2. Make the change and tap **[Save]**
-   3. It is written back to the original file[^2]
+    1. Tap **[Edit]** at the top right
+    2. Make the change and tap **[Save]**
+    3. It is written back to the original file[^2]
 
 ---
 
@@ -131,9 +130,9 @@ Alignment holds even when comments contain wide characters.
 ```typescript
 // Open a document and render it
 async function openDocument(uri: string): Promise<void> {
-    const doc = await MdFile.read({ uri });   // read the original as-is
+    const doc = await MdFile.read({ uri }); // read the original as-is
     if (doc.size > MAX_RENDER_BYTES) {
-        showRawMode(doc.content);             // too large — show the source
+        showRawMode(doc.content); // too large — show the source
         return;
     }
     render(doc.content);
@@ -161,14 +160,20 @@ adb shell ls /sdcard/Download/*.md            # just list them
 
 ## 7. Finding your way around a long document
 
-| Button | What it does |
-|---|---|
-| `≡` | **Contents.** A list of headings — tap one to jump there |
-| `⌕` | **Find.** Search inside the document, with next and previous |
-| `Aa` | **Display.** Eight text sizes, light and dark themes |
-| `⋮` | Edit · Share · View source · Settings |
+| Button | What it does                                                                              |
+| ------ | ----------------------------------------------------------------------------------------- |
+| `≡`    | **Contents.** A list of headings — tap one to jump there                                  |
+| `⌕`    | **Find.** Search inside the document, with next and previous                              |
+| `Edit` | Edit the original file in place                                                           |
+| `⋮`    | **Reading options** (eight text sizes · light and dark) · Open another · Share · Settings |
 
-**View source** switches between this rendered view and the raw Markdown. If you are curious how this page is actually written, try it.
+Sharing lives under `⋮` and comes in three forms. They differ in what the other person receives.
+
+| Share as        | What the other person gets                        |
+| --------------- | ------------------------------------------------- |
+| File            | The `.md` file itself — opens in any Markdown app |
+| Plain text      | Readable text with the markup stripped out        |
+| Markdown source | The raw text, with `#` and `*` still in it        |
 
 ---
 
@@ -202,4 +207,5 @@ Enjoy.
 There is an optional tip in Settings if this saves you time. Nothing is taken away if you never use it.
 
 [^1]: Open a real document in the editor and you can change `- [ ]` to `- [x]` yourself.
+
 [^2]: If the file sits in a read-only location, Marklet offers **Save as** instead.

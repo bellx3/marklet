@@ -170,7 +170,6 @@ export const ko: Catalog = {
     },
 
     frontmatter: {
-        document: '문서',
         info: '문서 정보',
     },
 

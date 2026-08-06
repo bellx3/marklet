@@ -182,7 +182,11 @@ export const en = {
     },
 
     frontmatter: {
-        document: 'Document',
+        /*
+         * ★ 제목으로 쓸 **키**는 여기서 오지 않는다. frontmatter.ts 의 TITLE_KEYS 가
+         *   언어와 무관하게 title·document·문서·제목 넷을 본다 —
+         *   예전에는 이 라벨을 키로 써서 소문자 `document` 를 못 찾았다.
+         */
         info: 'Document info',
     },
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseDocument, renderFrontmatter } from './frontmatter';
+import { t, setLanguage } from '../i18n';
 
 /**
  * 11-2절 #7.
@@ -135,5 +136,58 @@ note: "a * b * c"
             title: '별 * 하나 * 둘 * 셋',
             note: 'a * b * c',
         });
+    });
+});
+
+/**
+ * ★★★ 2026-08-06. **접이식 표에 제목이 안 뜨는 문서가 있었다.**
+ *
+ *   예전에는 `fm[t.frontmatter.document]` 로 제목을 찾았다 — **표시용 라벨을 키로 쓴 것**이다.
+ *   영어 라벨은 `'Document'`(대문자 D)인데 문서에 흔히 쓰는 키는 소문자 `document` 다.
+ *   그래서 **앱에 넣어 둔 우리 영어 예제 문서조차** 제목이 안 잡히고
+ *   'Document info' 라는 일반 문구로 떨어졌다(실측).
+ *
+ *   한국어 카탈로그일 때는 라벨이 '문서'라서 `document` 를 아예 안 봤다 —
+ *   **한국어 화면에서 영어 문서를 열면 제목이 영영 안 뜬다.**
+ *   라벨과 키는 다른 것이다. 이제 키만 본다.
+ */
+describe('★★ 접이식 표의 제목 — 라벨이 아니라 키를 본다', () => {
+    function 제목(fm: Record<string, unknown>): string {
+        return renderFrontmatter(fm).querySelector('summary')!.textContent ?? '';
+    }
+
+    it.each([
+        ['title', { title: '타이틀' }, '타이틀'],
+        ['document (소문자)', { document: '영어 문서' }, '영어 문서'],
+        ['Document (대문자)', { Document: '대문자 문서' }, '대문자 문서'],
+        ['DOCUMENT (전부 대문자)', { DOCUMENT: '모두 대문자' }, '모두 대문자'],
+        ['문서', { 문서: '한글 문서' }, '한글 문서'],
+        ['제목', { 제목: '한글 제목' }, '한글 제목'],
+    ])('%s 키를 제목으로 쓴다', (_이름, fm, 기대) => {
+        expect(제목(fm)).toBe(기대);
+    });
+
+    it('★ 화면 언어와 무관하게 찾는다 (한국어 화면 + 영어 문서)', () => {
+        for (const lang of ['ko', 'en'] as const) {
+            setLanguage(lang);
+            expect(제목({ document: 'Getting Started' }), lang).toBe('Getting Started');
+            expect(제목({ 문서: '사용 설명서' }), lang).toBe('사용 설명서');
+        }
+        setLanguage('system');
+    });
+
+    it('title 이 우선이다', () => {
+        expect(제목({ 문서: '뒤', document: '가운데', title: '앞' })).toBe('앞');
+    });
+
+    it('값이 비어 있으면 다음 후보로 넘어간다', () => {
+        expect(제목({ title: '   ', 문서: '진짜 제목' })).toBe('진짜 제목');
+        expect(제목({ title: null, document: '진짜 제목' })).toBe('진짜 제목');
+    });
+
+    it('제목으로 쓸 것이 없으면 일반 문구를 쓴다', () => {
+        setLanguage('ko');
+        expect(제목({ author: '누구', date: '2026-08-06' })).toBe(t.frontmatter.info);
+        setLanguage('system');
     });
 });
