@@ -48,12 +48,46 @@ export function clampStep(i: number): number {
     return Math.min(FONT_STEPS.length - 1, Math.max(0, i | 0));
 }
 
+/**
+ * 저장된 값을 **믿지 않고** 걸러 낸다.
+ *
+ * ★★★ 예전에는 `{ ...DEFAULTS, ...JSON.parse(value) }` 로 그대로 합쳤다.
+ *   그런데 language 에 모르는 값이 들어 있으면 CATALOGS[그 값] 이 undefined 가 되어
+ *   `t` 가 통째로 사라지고 첫 `t.어쩌구` 에서 **부팅이 죽는다.**
+ *   저장된 값이라 **켤 때마다 같은 자리에서 죽고**, 앱 데이터를 지우는 것 말고는
+ *   빠져나갈 길이 없다 — 최근 문서·폴더·초안까지 같이 잃는다(2026-08-06 실측).
+ *
+ *   어떻게 그런 값이 들어가나: 나중 판이 언어를 늘렸다가 사용자가 옛 판으로 되돌리는
+ *   경우, 저장소가 부분적으로 깨진 경우, 우리 쪽 실수. 어느 쪽이든 **한 번 들어가면
+ *   사용자가 스스로 못 고친다** — 그게 이 검사를 넣는 이유다.
+ *
+ * ★ 이상한 값은 조용히 기본값으로 되돌린다. 설정 하나 되돌아가는 것과
+ *   앱이 안 켜지는 것은 견줄 수 없다.
+ * ★ fontStep 도 숫자인지 본다. 예전에는 'abc' 가 들어오면 `| 0` 으로 0이 되어
+ *   **글자가 가장 작게** 바뀌었다 — 기본값(17px)으로 두는 게 맞다.
+ */
+function sanitize(raw: unknown): AppSettings {
+    const v = (raw && typeof raw === 'object' ? raw : {}) as Partial<AppSettings>;
+    const oneOf = <T extends string>(x: unknown, allowed: readonly T[], fallback: T): T =>
+        (allowed as readonly unknown[]).includes(x) ? (x as T) : fallback;
+
+    return {
+        theme: oneOf(v.theme, ['system', 'light', 'dark'] as const, DEFAULTS.theme),
+        language: oneOf(v.language, ['system', 'en', 'ko'] as const, DEFAULTS.language),
+        fontStep: clampStep(typeof v.fontStep === 'number' ? v.fontStep : DEFAULTS.fontStep),
+        breaks: typeof v.breaks === 'boolean' ? v.breaks : DEFAULTS.breaks,
+        remoteImages: typeof v.remoteImages === 'boolean' ? v.remoteImages : DEFAULTS.remoteImages,
+        fontStepInitialized: !!v.fontStepInitialized,
+    };
+}
+
 export async function loadSettings(): Promise<AppSettings> {
     try {
         const { value } = await Preferences.get({ key: KEY });
-        if (value) current = { ...DEFAULTS, ...JSON.parse(value) };
+        current = value ? sanitize(JSON.parse(value)) : { ...DEFAULTS };
     } catch {
         // 브라우저(npm run dev)에는 Preferences 네이티브가 없다. 기본값으로 간다.
+        // ★ JSON 이 깨진 경우도 여기로 온다 — 그것도 기본값이 맞다.
         current = { ...DEFAULTS };
     }
 

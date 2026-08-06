@@ -159,3 +159,33 @@ describe('★ 어순은 언어마다 다르다', () => {
         expect(ko.shell.draftBody('')).toMatch(/^편집하던/);
     });
 });
+
+/**
+ * ★★★ 2026-08-06. 두 겹 중 안쪽 방어.
+ *
+ *   `CATALOGS[모르는 값]` 은 undefined 다. 그러면 `t` 가 통째로 사라지고
+ *   첫 `t.어쩌구` 에서 **부팅이 죽는다.** 저장된 설정에 그런 값이 있으면
+ *   켤 때마다 같은 자리에서 죽고, 앱 데이터를 지우는 것 말고는 길이 없다.
+ *
+ *   바깥쪽은 settings.ts 의 sanitize 가 막는다. 여기서 한 번 더 막는 이유는
+ *   **그 검사를 지나지 않는 경로가 생길 수 있기 때문**이다 —
+ *   설정 화면이 직접 부르거나, 나중에 딥링크 같은 것이 생기거나.
+ */
+describe('★★ 모르는 언어가 와도 카탈로그가 살아 있다', () => {
+    it.each(['fr', 'ja', '', 'KO', 'en-US'])('%s → 영어로 떨어진다', (bad) => {
+        expect(resolveLang(bad as never)).toBe('en');
+    });
+
+    it('★ setLanguage 에 모르는 값을 줘도 t 가 사라지지 않는다', () => {
+        setLanguage('fr' as never);
+        expect(t?.common?.confirm, '카탈로그가 사라졌다 — 여기서 부팅이 죽는다').toBeTruthy();
+        expect(getLang()).toBe('en');
+    });
+
+    it('아는 값은 그대로 간다 (전부 영어로 밀지 않는다)', () => {
+        expect(resolveLang('ko')).toBe('ko');
+        expect(resolveLang('en')).toBe('en');
+        setLanguage('ko');
+        expect(getLang()).toBe('ko');
+    });
+});

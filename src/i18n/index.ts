@@ -45,7 +45,15 @@ export function getLang(): Lang {
  *   그 외는 전부 영어로 떨어진다(en/ko 두 개만 있다).
  */
 export function resolveLang(setting: LangSetting): Lang {
-    if (setting !== 'system') return setting;
+    if (setting === 'en' || setting === 'ko') return setting;
+    /*
+     * ★★ 모르는 값은 **영어로 떨어뜨린다.** 그냥 돌려주면 CATALOGS[그 값] 이 undefined 가
+     *   되어 `t` 가 통째로 사라지고, 첫 `t.어쩌구` 에서 부팅이 죽는다.
+     *   저장된 설정에 그런 값이 들어 있으면 **켤 때마다 실패 화면**이고
+     *   앱 데이터를 지우는 것 말고는 빠져나갈 길이 없다(2026-08-06 실측).
+     *   설정을 되돌리는 것(settings.ts)과 여기, 두 겹으로 막는다.
+     */
+    if (setting !== 'system') return 'en';
     const tags = navigator.languages?.length ? navigator.languages : [navigator.language ?? ''];
     return tags.some((tag) => tag.toLowerCase().startsWith('ko')) ? 'ko' : 'en';
 }
