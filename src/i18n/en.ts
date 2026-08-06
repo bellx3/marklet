@@ -261,8 +261,15 @@ export const en = {
         openNew: 'Open the new document',
         keepEditing: 'Keep editing',
         openOriginal: 'Open the original',
+        /*
+         * ★ 시각 어구를 **문장 뒤에** 붙인다. 한국어 카탈로그를 그대로 옮겨
+         *   앞에 붙였더니 "just now You have edits left in the app." 이 나왔다
+         *   (2026-08-06 실기기). 한국어는 '방금 편집하던…' 이 자연스럽지만
+         *   영어는 시각이 뒤로 가야 문장이 된다. 어순은 언어마다 다르다 —
+         *   틀을 베끼지 말고 그 언어로 읽어 봐라.
+         */
         draftBody: (when: string) =>
-            `${when ? `${when} ` : ''}You have edits left in the app.
+            `You have edits left in the app${when ? ` from ${when}` : ''}.
 Which one would you like to open?`,
         resumeEditing: 'Resume editing',
         noOriginal:

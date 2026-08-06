@@ -136,3 +136,26 @@ describe('언어 결정', () => {
         expect(localeTag()).toBe('en-US');
     });
 });
+
+describe('★ 어순은 언어마다 다르다', () => {
+    it('영어 초안 안내는 시각이 문장 뒤로 간다', () => {
+        const s = en.shell.draftBody('just now');
+        /*
+         * ★★ 한국어 틀을 그대로 옮겨 앞에 붙였더니
+         *   "just now You have edits left in the app." 이 나왔다(2026-08-06 실기기).
+         *   문장 한가운데에서 시작하는 꼴이라 영어로는 말이 안 된다.
+         */
+        expect(s.startsWith('just now'), '시각이 문장 앞에 붙었다').toBe(false);
+        expect(s).toContain('from just now');
+    });
+
+    it('한국어는 시각이 앞에 온다 — 그게 자연스럽다', () => {
+        expect(ko.shell.draftBody('방금').startsWith('방금')).toBe(true);
+    });
+
+    it('시각을 모르면 어느 쪽도 어색해지지 않는다', () => {
+        expect(en.shell.draftBody('')).toContain('You have edits left in the app.');
+        expect(en.shell.draftBody('')).not.toContain('from');
+        expect(ko.shell.draftBody('')).toMatch(/^편집하던/);
+    });
+});

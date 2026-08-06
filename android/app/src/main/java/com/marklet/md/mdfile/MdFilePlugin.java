@@ -694,10 +694,16 @@ public class MdFilePlugin extends Plugin {
     // ────────────────────────────────────────────────────────────
 
     /**
-     * OS의 글꼴 크기 설정 배율.
-     * 본문에 -webkit-text-size-adjust:none 을 걸어 OS 확대를 끄기 때문에,
-     * 첫 실행 시 이 값으로 기본 글자 크기 단계를 정한다(접근성, 10-2절).
-     * 1.0 = 기본, 1.3 = '크게', 2.0 = 최대 등.
+     * OS의 글꼴 크기 설정 배율. 1.0 = 기본, 1.3 = '크게', 2.0 = 최대.
+     *
+     * ★★ **글자 크기 보정에 쓰지 마라.** 예전에는 첫 실행에서 이 값으로 fontStep 을
+     *   올렸는데, 웹뷰가 이미 같은 배율을 먹이고 있어서 **두 번 곱해졌다**
+     *   (2026-08-06 실측: 배율 2.0 에서 본문이 34px 가 아니라 48px).
+     *   "본문에 text-size-adjust:none 을 걸어 OS 확대를 껐다" 는 것이 근거였는데
+     *   그 속성은 시스템 글꼴 배율(WebSettings.setTextZoom)을 끄지 못한다.
+     *
+     * ★ 지금 이 메서드는 **플러그인이 붙어 있는지 확인하는 용도**로만 남아 있다
+     *   (md-file.ts 의 isMdFileAvailable). 진단에 쓰고 싶으면 그때 다시 꺼내라.
      */
     @PluginMethod
     public void getSystemFontScale(PluginCall call) {
