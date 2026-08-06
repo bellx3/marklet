@@ -133,8 +133,10 @@ export const entryHandlers: EntryHandlers = {
             mimeType: 'text/plain',
             writable: false,
         };
+        const superseded = beginOpen();
         // ★ 공유된 텍스트도 같은 게이트를 지난다. 메모 앱이 아주 긴 글을 보낼 수 있다.
         const outcome = await gateContent(doc, text);
+        if (superseded()) return; // 그 사이 다른 문서가 들어왔다(beginOpen 주석)
         if (outcome.kind === 'cancelled') return;
         if (outcome.kind === 'error') {
             await alertDialog(t.shell.cannotOpen, outcome.message);
@@ -170,15 +172,43 @@ export async function refreshRecents(): Promise<void> {
 // 문서 열기
 // ────────────────────────────────────────────────────────────
 
+/**
+ * 문서 열기 순번.
+ *
+ * ★★★ 열기 경로에는 await 가 여럿 있고 그중 둘은 **사람이 버튼을 누를 때까지** 걸린다 —
+ *   크기 확인 상자('긴 문서입니다')와 초안 복구 상자('저장하지 않은 편집이 있습니다').
+ *   그 사이에 다른 문서가 들어오면 **먼저 시작한 쪽이 나중에 도착해 화면을 덮는다.**
+ *
+ *   예: 2MB 문서를 열어 확인 상자가 떠 있는데 카톡에서 다른 .md 를 누른다
+ *       → 새 문서가 열린다 → 그제서야 앞 상자에서 [열기] 를 누른다
+ *       → **방금 연 문서가 앞 문서로 바뀐다.**
+ *   읽기 속도만으로도 뒤집힌다. 큰 파일 A 를 먼저 누르고 작은 파일 B 를 이어 누르면
+ *   B 가 먼저 뜬 뒤 A 가 덮는다.
+ *
+ *   viewer-screen 의 renderSeq 는 render() **안**만 지킨다. 어느 문서가 render() 를
+ *   마지막에 부르느냐는 여기서 정해야 한다.
+ */
+let openSeq = 0;
+
+/** 열기 시작을 알리고 '이미 밀려났는가' 를 묻는 함수를 돌려준다. */
+function beginOpen(): () => boolean {
+    const seq = ++openSeq;
+    return () => seq !== openSeq;
+}
+
 async function openDocumentFlow(
     doc: MdDocument,
     source: RecentDoc['source'],
     from: 'external' | 'in-app',
 ): Promise<void> {
+    const superseded = beginOpen();
+
     // ★ 여기서 doc:read 를 재지 마라. readAndGate 안에는 확인 다이얼로그가 들어 있어서
     //   '사용자가 버튼을 누를 때까지'가 I/O 시간으로 잡힌다(실기기에서 10.8초로 찍혔다).
     //   실제 읽기 시간은 open-document.ts 가 MdFile.read() 전후로만 잰다.
     const outcome = await readAndGate(doc);
+    // ★ 읽기·확인 상자를 지나는 사이에 다른 문서가 들어왔으면 여기서 접는다(beginOpen 주석).
+    if (superseded()) return;
 
     switch (outcome.kind) {
         case 'error':
@@ -196,6 +226,8 @@ async function openDocumentFlow(
             return;
         case 'render': {
             const content = await resolveDraft(outcome.doc, outcome.content);
+            // ★ 초안 복구 상자도 사람이 누를 때까지 기다린다. 다시 본다.
+            if (superseded()) return;
             viewerFrom = from;
             await viewer.show(outcome.doc, content, { showProgress: outcome.showProgress });
             enterViewer();
@@ -234,7 +266,9 @@ async function resolveDraft(doc: MdDocument, original: string): Promise<string> 
 }
 
 async function openFromRecent(r: RecentDoc): Promise<void> {
+    const superseded = beginOpen();
     const opened = await openRecent(r);
+    if (superseded()) return; // 그 사이 밖에서 문서가 들어왔다(beginOpen 주석)
     if (!opened) {
         await alertDialog(t.shell.cannotOpen, t.shell.noOriginal);
         return;
@@ -252,11 +286,14 @@ async function openFromRecent(r: RecentDoc): Promise<void> {
         return;
     }
 
-    viewerFrom = 'in-app';
     const content =
         outcome.kind === 'plain'
             ? outcome.content
             : await resolveDraft(opened.doc, outcome.content);
+    // ★ 크기 확인 상자와 초안 복구 상자를 지나는 사이에 밖에서 문서가 들어왔을 수 있다.
+    if (superseded()) return;
+
+    viewerFrom = 'in-app';
     await viewer.show(opened.doc, content, {
         plain: outcome.kind === 'plain',
         fromSnapshot: opened.fromSnapshot,

@@ -42,11 +42,13 @@ const h = vi.hoisted(() => ({
         getPendingOpen: vi.fn(async () => ({})),
     },
     confirmAnswer: { value: true },
+    /** 확인 상자를 사람이 늦게 누르는 상황을 만든다. 0 이면 예전과 똑같이 즉시 답한다. */
+    confirmDelayMs: { value: 0 },
     choiceAnswer: { value: 'original' as string | null },
     alerts: [] as string[],
 }));
 
-const { exitApp, nativeStore, mdFile, confirmAnswer, choiceAnswer, alerts } = h;
+const { exitApp, nativeStore, mdFile, confirmAnswer, confirmDelayMs, choiceAnswer, alerts } = h;
 
 vi.mock('@capacitor/app', () => ({
     App: {
@@ -73,7 +75,12 @@ vi.mock('../utils/dialog', () => ({
     alertDialog: async (title: string) => {
         h.alerts.push(title);
     },
-    confirmDialog: async () => h.confirmAnswer.value,
+    confirmDialog: async () => {
+        if (h.confirmDelayMs.value) {
+            await new Promise((r) => setTimeout(r, h.confirmDelayMs.value));
+        }
+        return h.confirmAnswer.value;
+    },
     choiceDialog: async () => h.choiceAnswer.value,
 }));
 
@@ -120,6 +127,7 @@ beforeEach(() => {
     nativeStore.clear();
     alerts.length = 0;
     confirmAnswer.value = true;
+    confirmDelayMs.value = 0;
     choiceAnswer.value = 'original';
     __resetRouterForTest();
 
@@ -292,5 +300,95 @@ describe('suggestName', () => {
 
     it('점이 여럿이면 마지막 것만 확장자다', () => {
         expect(suggestName('a.b.md')).toMatch(/^a\.b \(.+\)\.md$/);
+    });
+});
+
+/**
+ * ★★★ 2026-08-06. **먼저 시작한 문서가 나중에 도착해 화면을 덮었다.**
+ *
+ *   열기 경로에는 await 가 여럿이다 — 네이티브 읽기, 크기 확인 상자, 초안 복구 상자.
+ *   뒤의 둘은 **사람이 버튼을 누를 때까지** 걸린다.
+ *
+ *   그 사이에 다른 문서가 들어오면 순서가 뒤집힌다:
+ *       큰 파일 A 를 누른다 → 읽는 중
+ *       카톡에서 작은 파일 B 를 누른다 → B 가 먼저 뜬다
+ *       A 의 읽기가 끝난다 → **B 를 덮고 A 가 뜬다**
+ *   사용자는 방금 연 문서가 아닌 것을 보게 된다.
+ *
+ *   ★ viewer-screen 의 renderSeq 는 render() **안**만 지킨다. 어느 문서가 render() 를
+ *     마지막에 부르느냐는 셸에서 정해야 한다 — 두 자리 다 필요하다.
+ */
+describe('★★ 여는 도중에 다른 문서가 들어오면', () => {
+    /**
+     * uri 마다 읽기 지연을 다르게 준다.
+     * ★ 기본 목은 어느 uri 든 같은 본문을 준다 — 그러면 어느 문서가 떠 있는지
+     *   본문으로 구분할 수 없다. 여기서는 파일 이름을 본문에 넣는다.
+     */
+    function readWithDelay(delays: Record<string, number>): void {
+        mdFile.read.mockImplementation(async ({ uri }: { uri: string }) => {
+            const ms = delays[uri] ?? 0;
+            if (ms) await new Promise((r) => setTimeout(r, ms));
+            return {
+                ...doc({ uri, name: uri.split('/').pop() ?? 'doc.md' }),
+                content: `# ${uri.split('/').pop()}\n\n본문`,
+                encoding: 'UTF-8' as const,
+                persisted: true,
+            };
+        });
+    }
+
+    function 본문(): string {
+        return root.querySelector('.md-target')?.textContent ?? '';
+    }
+
+    it('★ 느린 앞 문서가 뒤에 온 문서를 덮지 않는다', async () => {
+        readWithDelay({ 'content://docs/느린.md': 200 });
+
+        const 느린 = entryHandlers.openDocument(doc({ uri: 'content://docs/느린.md' }));
+        await vi.advanceTimersByTimeAsync(20);
+
+        await entryHandlers.openDocument(doc({ uri: 'content://docs/빠른.md' }));
+        await settle();
+        expect(본문(), '빠른 쪽이 먼저 떠 있어야 한다').toContain('빠른.md');
+
+        await vi.advanceTimersByTimeAsync(400);
+        await 느린;
+        await settle();
+
+        expect(본문(), '느린 앞 문서가 화면을 가로챘다').toContain('빠른.md');
+        expect(본문()).not.toContain('느린.md');
+    });
+
+    /**
+     * ★ 확인 상자는 **사람이 누를 때까지** 걸린다 — 열기 경로에서 가장 긴 await 다.
+     *   4MB 를 넘는 공유 텍스트는 '텍스트로만 보기' 확인 상자를 띄운다.
+     */
+    it('★ 확인 상자를 늦게 누르면 그 사이 들어온 문서를 덮지 않는다', async () => {
+        readWithDelay({});
+        confirmDelayMs.value = 300;
+        const 공유 = entryHandlers.openSharedText('가'.repeat(2 * 1024 * 1024));
+        await vi.advanceTimersByTimeAsync(20);
+
+        confirmDelayMs.value = 0;
+        await entryHandlers.openDocument(doc({ uri: 'content://docs/나중.md' }));
+        await settle();
+        expect(본문()).toContain('나중.md');
+
+        await vi.advanceTimersByTimeAsync(600); // 이제서야 [텍스트로만 보기] 를 누른다
+        await 공유;
+        await settle();
+
+        expect(본문(), '늦게 누른 확인 상자가 화면을 가로챘다').toContain('나중.md');
+        expect(본문()).not.toContain('가가가');
+    });
+
+    it('끼어드는 것이 없으면 그대로 열린다 (막는 조건이 과하지 않다)', async () => {
+        readWithDelay({ 'content://docs/느린.md': 100 });
+        // ★ 가짜 타이머에서는 **먼저 await 하면 멎는다** — 시계를 돌려 줄 사람이 없다.
+        //   시작만 해 두고 시간을 흘려보낸 뒤에 기다린다.
+        const p = entryHandlers.openDocument(doc({ uri: 'content://docs/느린.md' }));
+        await settle();
+        await p;
+        expect(본문()).toContain('느린.md');
     });
 });
