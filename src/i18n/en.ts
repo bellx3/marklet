@@ -174,7 +174,12 @@ export const en = {
     },
 
     diagram: {
-        close: 'Close',
+        /*
+         * ★ 확대·축소 단추는 화면에 '−' '+' 만 보인다. 그대로 두면 스크린 리더가
+         *   기호를 그대로 읽어 무슨 단추인지 알 수 없다 — 이름을 따로 준다.
+         */
+        zoomOut: 'Zoom out',
+        zoomIn: 'Zoom in',
         fit: 'Fit',
         label: 'Diagram',
         /** ★ CSS ::after 로 들어간다. setLanguage() 가 --i18n-zoom-hint 에 넣는다. */

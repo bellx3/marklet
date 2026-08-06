@@ -163,7 +163,8 @@ export const ko: Catalog = {
     },
 
     diagram: {
-        close: '닫기',
+        zoomOut: '축소',
+        zoomIn: '확대',
         fit: '맞춤',
         label: '다이어그램',
         zoomHint: '탭하면 크게 보기',

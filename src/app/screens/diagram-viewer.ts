@@ -57,11 +57,24 @@ export function openDiagramViewer(sourceSvg: SVGElement, label: string): void {
     const bar = document.createElement('div');
     bar.className = 'diagram-viewer__bar';
 
+    /*
+     * ★★ 확대·축소 단추에는 **이름을 따로 준다.** 화면에는 '−' '+' 만 보이는데,
+     *   그대로 두면 스크린 리더가 기호를 그대로 읽는다 — 실측으로 접근성 이름이
+     *   'U+2212' 와 '+' 였다. 무슨 단추인지 알 방법이 없다(2026-08-06).
+     *   이 앱의 다른 아이콘 단추는 전부 iconButton() 이 aria-label 을 붙여 준다.
+     *   여기만 그 그물 밖에 있었다.
+     */
     const close = button(t.common.close, 'diagram-viewer__close', closeDiagramViewer);
-    const zoomOut = button('−', '', () => setScale(scale / STEP));
+    const zoomOut = button('−', '', () => setScale(scale / STEP), t.diagram.zoomOut);
     const pct = document.createElement('span');
     pct.className = 'diagram-viewer__pct';
-    const zoomIn = button('+', '', () => setScale(scale * STEP));
+    /*
+     * ★ 배율이 바뀐 것을 소리로도 알린다. 안 그러면 확대를 눌러도 아무 반응이 없는
+     *   것처럼 느껴진다 — 그림은 눈으로만 달라지기 때문이다.
+     */
+    pct.setAttribute('role', 'status');
+    pct.setAttribute('aria-live', 'polite');
+    const zoomIn = button('+', '', () => setScale(scale * STEP), t.diagram.zoomIn);
     const fitBtn = button(t.diagram.fit, '', () => setScale(fitScale));
 
     bar.append(close, zoomOut, pct, zoomIn, fitBtn);
@@ -248,11 +261,15 @@ function isolateIds(root: SVGElement): void {
     }
 }
 
-function button(text: string, cls: string, onClick: () => void): HTMLButtonElement {
+/**
+ * @param label 글자가 기호뿐일 때 줄 접근성 이름. 글자 자체가 말이면 생략한다.
+ */
+function button(text: string, cls: string, onClick: () => void, label?: string): HTMLButtonElement {
     const b = document.createElement('button');
     b.type = 'button';
     if (cls) b.className = cls;
     b.textContent = text;
+    if (label) b.setAttribute('aria-label', label);
     b.addEventListener('click', onClick);
     return b;
 }

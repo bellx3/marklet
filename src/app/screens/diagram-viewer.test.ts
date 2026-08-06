@@ -327,3 +327,57 @@ describe('문서에서 탭하면 열린다', () => {
         expect(isDiagramViewerOpen()).toBe(true);
     });
 });
+
+/**
+ * ★★ 2026-08-06. **확대·축소 단추가 기호로만 읽혔다.**
+ *
+ *   화면에는 '−' '+' 만 보이는데 접근성 이름을 따로 주지 않아서,
+ *   스크린 리더가 잡는 이름이 그대로 'U+2212' 와 '+' 였다(실측).
+ *   무슨 단추인지 알 방법이 없다.
+ *
+ *   ★ 이 앱의 다른 아이콘 단추는 전부 iconButton() 이 aria-label 을 붙여 준다.
+ *     이 화면만 자기 button() 헬퍼를 따로 써서 그 그물 밖에 있었다 —
+ *     카탈로그 키 196개 중 **안 쓰이는 키를 찾다가** 걸렸다(t.diagram.close 가
+ *     떠 있었고, 그 자리를 보러 갔다가 옆의 두 단추가 드러났다).
+ */
+describe('★★ 확대 보기의 접근성 이름', () => {
+    function open(): HTMLElement {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        openDiagramViewer(svg, '흐름도');
+        return document.querySelector<HTMLElement>('.diagram-viewer')!;
+    }
+
+    it('★ 확대·축소 단추에 이름이 있다', () => {
+        const root = open();
+        const 이름 = [...root.querySelectorAll('button')].map(
+            (b) => b.getAttribute('aria-label') || b.textContent?.trim(),
+        );
+        expect(이름).toContain(t.diagram.zoomIn);
+        expect(이름).toContain(t.diagram.zoomOut);
+        expect(이름, '기호가 그대로 이름이 되면 안 된다').not.toContain('−');
+        closeDiagramViewer();
+    });
+
+    it('글자가 이미 말인 단추는 그대로 둔다 (이름을 두 번 붙이지 않는다)', () => {
+        const root = open();
+        const 맞춤 = [...root.querySelectorAll('button')].find(
+            (b) => b.textContent?.trim() === t.diagram.fit,
+        )!;
+        expect(맞춤.getAttribute('aria-label')).toBeNull();
+        closeDiagramViewer();
+    });
+
+    it('★ 배율이 바뀐 것을 소리로도 알린다', () => {
+        const root = open();
+        const pct = root.querySelector('.diagram-viewer__pct')!;
+        expect(pct.getAttribute('aria-live')).toBe('polite');
+        expect(pct.getAttribute('role')).toBe('status');
+
+        const 전 = pct.textContent;
+        [...root.querySelectorAll('button')]
+            .find((b) => b.getAttribute('aria-label') === t.diagram.zoomIn)!
+            .click();
+        expect(pct.textContent, '눌러도 값이 그대로면 알릴 것이 없다').not.toBe(전);
+        closeDiagramViewer();
+    });
+});
