@@ -257,3 +257,180 @@ describe('alertDialog', () => {
         await p;
     });
 });
+
+/**
+ * ★★★ 2026-08-06. 모달의 초점 다루기.
+ *
+ *   ★ 위쪽 테스트들은 전부 `prefers-reduced-motion: reduce` 로 돈다.
+ *     그러면 Overlay 가 **타이머 없이 즉시** 닫혀서, 아래 사고가 아예 재현되지 않는다.
+ *     "목이 실제보다 순한" 전형적인 경우라 여기서는 모션을 켠 채로 시험한다.
+ */
+describe('★★ 모달 초점 — 연달아 뜨는 다이얼로그', () => {
+    beforeEach(() => {
+        // 모션 켬: 닫기가 200ms 뒤에 늦게 끝난다 (실제 기기 기본값)
+        vi.spyOn(window, 'matchMedia').mockImplementation(
+            (q: string) =>
+                ({
+                    matches: false,
+                    media: q,
+                    onchange: null,
+                    addEventListener: () => {},
+                    removeEventListener: () => {},
+                    addListener: () => {},
+                    removeListener: () => {},
+                    dispatchEvent: () => false,
+                }) as unknown as MediaQueryList,
+        );
+    });
+
+    function background(): HTMLButtonElement {
+        const b = document.createElement('button');
+        b.id = 'bg';
+        b.textContent = '배경';
+        document.body.appendChild(b);
+        b.focus();
+        return b;
+    }
+
+    /*
+     * ★★ 앞 다이얼로그의 닫기는 200ms 뒤에 끝난다. 그 사이에 다음 다이얼로그가
+     *   이미 열려 있을 수 있다 — "확인 → 실패 알림" 은 이 앱에서 흔한 모양이다.
+     *   그때 무턱대고 초점을 되돌리면 **새 다이얼로그에서 초점을 빼앗는다.**
+     *   토크백 사용자는 읽던 중에 배경으로 튀어 나가고, 다이얼로그가 떠 있다는
+     *   사실 자체를 잃는다(2026-08-06 실측).
+     */
+    it('★ 앞 다이얼로그가 뒤늦게 초점을 빼앗지 않는다', async () => {
+        background();
+
+        const first = confirmDialog({ title: '첫째', body: '몸말' });
+        await vi.advanceTimersByTimeAsync(20);
+        buttonByText(t.common.confirm)!.click();
+        await first;
+
+        const second = alertDialog('둘째', '몸말');
+        await vi.advanceTimersByTimeAsync(20);
+        const 둘째버튼 = buttons()[buttons().length - 1];
+        expect(document.activeElement, '둘째를 열었는데 초점이 안 왔다').toBe(둘째버튼);
+
+        // ★ 첫째의 닫기 타이머(200ms)가 지나간다
+        await vi.advanceTimersByTimeAsync(400);
+        expect(document.activeElement, '첫째 타이머가 초점을 훔쳤다').toBe(둘째버튼);
+
+        둘째버튼.click();
+        await second;
+        await vi.advanceTimersByTimeAsync(400);
+    });
+
+    it('★ 연달아 열었다 닫아도 원래 자리로 돌아온다', async () => {
+        const bg = background();
+
+        const first = confirmDialog({ title: '첫째', body: '몸말' });
+        await vi.advanceTimersByTimeAsync(20);
+        buttonByText(t.common.confirm)!.click();
+        await first;
+
+        const second = alertDialog('둘째', '몸말');
+        await vi.advanceTimersByTimeAsync(20);
+        buttons()[buttons().length - 1].click();
+        await second;
+        await vi.advanceTimersByTimeAsync(400);
+
+        // 두 번째가 기억한 자리는 '닫히는 중인 첫째의 버튼' 이었다 —
+        // 그걸 그대로 쓰면 이미 사라진 노드라 초점이 body 로 떨어진다.
+        expect(document.activeElement).toBe(bg);
+    });
+
+    it('다이얼로그 하나만 열었다 닫아도 원래 자리로 돌아온다 (회귀)', async () => {
+        const bg = background();
+        const p = confirmDialog({ title: '하나', body: '몸말' });
+        await vi.advanceTimersByTimeAsync(20);
+        buttonByText(t.common.cancel)!.click();
+        await p;
+        await vi.advanceTimersByTimeAsync(400);
+        expect(document.activeElement).toBe(bg);
+    });
+});
+
+/**
+ * ★★ `aria-modal="true"` 는 **스크린 리더에게만** 하는 말이다.
+ *   하드웨어 키보드(덱스·크롬북·블루투스)에서는 탭이 그대로 뒤로 넘어가서,
+ *   스크림에 가려 보이지도 않는 배경 버튼을 눌러 버릴 수 있다.
+ */
+describe('★★ 모달 초점 — 탭이 밖으로 나가지 않는다', () => {
+    function tab(shift = false): void {
+        dialogEl()!.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Tab', shiftKey: shift, bubbles: true }),
+        );
+    }
+
+    it('★ 마지막 버튼에서 탭하면 첫 버튼으로 돈다', async () => {
+        const p = confirmDialog({ title: '가', body: '나' });
+        await vi.advanceTimersByTimeAsync(20);
+        const bs = buttons();
+        bs[bs.length - 1].focus();
+        tab();
+        expect(document.activeElement).toBe(bs[0]);
+        bs[0].click();
+        await p;
+        await vi.advanceTimersByTimeAsync(300);
+    });
+
+    it('★ 첫 버튼에서 시프트+탭하면 마지막으로 돈다', async () => {
+        const p = confirmDialog({ title: '가', body: '나' });
+        await vi.advanceTimersByTimeAsync(20);
+        const bs = buttons();
+        bs[0].focus();
+        tab(true);
+        expect(document.activeElement).toBe(bs[bs.length - 1]);
+        bs[0].click();
+        await p;
+        await vi.advanceTimersByTimeAsync(300);
+    });
+
+    it('가운데에서는 브라우저에 맡긴다 (막지 않는다)', async () => {
+        const p = choiceDialog({
+            title: '가',
+            body: '나',
+            actions: [
+                { label: '하나', value: '1' },
+                { label: '둘', value: '2' },
+                { label: '셋', value: '3' },
+            ],
+        });
+        await vi.advanceTimersByTimeAsync(20);
+        const bs = buttons();
+        bs[1].focus();
+        const e = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+        dialogEl()!.dispatchEvent(e);
+        expect(e.defaultPrevented, '가운데를 막으면 탭이 아예 안 움직인다').toBe(false);
+        bs[0].click();
+        await p;
+        await vi.advanceTimersByTimeAsync(300);
+    });
+
+    /*
+     * ★ 모든 갈래가 '되돌릴 수 없음'이면 기본 초점 대상이 없다(dialog.ts).
+     *   그래도 초점을 **바깥에 남기면 안 된다** — 탭 한 번으로 배경을 누르게 된다.
+     */
+    it('★ 기본 초점 대상이 없어도 초점이 상자 안에 들어온다', async () => {
+        const bg = document.createElement('button');
+        document.body.appendChild(bg);
+        bg.focus();
+
+        const p = choiceDialog({
+            title: '가',
+            body: '나',
+            actions: [
+                { label: '지우기', value: 'a', destructive: true },
+                { label: '전부 지우기', value: 'b', destructive: true },
+            ],
+        });
+        await vi.advanceTimersByTimeAsync(20);
+        expect(document.activeElement, '초점이 배경에 남았다').not.toBe(bg);
+        expect(dialogEl()!.contains(document.activeElement)).toBe(true);
+
+        buttons()[0].click();
+        await p;
+        await vi.advanceTimersByTimeAsync(300);
+    });
+});
