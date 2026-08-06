@@ -141,7 +141,24 @@
         15px/1.4 var(--md-font-body),
         sans-serif;
     text-align: left;
-    white-space: nowrap;
+    /*
+     * ★★★ nowrap 이면 안 된다 (2026-08-06 시스템 글꼴 배율 2.0 실측).
+     *
+     *   메뉴는 max-width 로 256px 에 묶여 있는데 nowrap 이면 '마크다운 원문으로 공유'가
+     *   309px 를 요구한다. .more-menu 는 overflow:visible 이라 53px 이 그대로
+     *   **화면 밖으로 나간다** — 글자가 잘려서 무슨 항목인지 못 읽는다.
+     *
+     *   ★★ 더 나쁜 것은 그 다음이다. 안드로이드 웹뷰는 넘친 내용에 맞춰
+     *     **레이아웃 뷰포트를 넓히고(384 → 429) 다시 줄이지 않는다.**
+     *     메뉴를 닫아도 앱 전체가 화면보다 넓은 채로 남아 옆으로 밀린다.
+     *     새로 켤 때까지 안 돌아온다. 메뉴를 한 번 연 것뿐인데.
+     *
+     *   기본 배율에서는 우연히 들어맞아 한 번도 보이지 않았다.
+     *   두 줄이 되어도 괜찮다 — min-height 는 이미 --tap 이라 줄만 늘어난다.
+     */
+    white-space: normal;
+    /* 한국어는 단어 안에서 끊지 않는다. .viewer-notice 와 같은 이유. */
+    word-break: keep-all;
     cursor: pointer;
 }
 .menu-item:active {
@@ -354,6 +371,23 @@
     cursor: pointer;
 }
 
+/*
+ * ★★★ 세로 열의 자식은 **컨테이너보다 넓어질 수 있다** (2026-08-06 배율 2.0 실측).
+ *
+ *   바로 위에서 align-items 를 flex-start 로 못박았다(폴더 파일 이름이 가운데로
+ *   몰리던 것을 고치려고). 그런데 세로 열에서 이 값은 자식의 **가로 크기**를
+ *   stretch 대신 fit-content 로 만든다 — 자식이 제 내용만큼 넓어진다.
+ *   .list-sub 안의 배지는 flex:0 0 auto + nowrap 이라 줄지 않으므로,
+ *   시스템 글꼴 배율 2.0 에서 .list-sub 가 362px 이 되어 292px 짜리 단추를 뚫고
+ *   **화면 밖(408 > 384)으로 나갔다.** 문서 전체에 가로 스크롤이 생기고
+ *   '읽기 전용 사본' 배지가 잘렸다 — 원본을 덮어쓸 수 없다는 표시라 잘리면 안 된다.
+ *
+ *   기본 배율에서는 우연히 들어맞아 보이지 않았다. 큰 글꼴에서만 드러난다.
+ */
+.list-main > * {
+    max-width: 100%;
+}
+
 .list-name {
     min-width: 0;
     overflow: hidden;
@@ -365,6 +399,12 @@
 .list-sub {
     display: flex;
     align-items: center;
+    /*
+     * ★ 자리가 모자라면 배지를 **다음 줄로 내린다.** 잘라 내면 안 된다 —
+     *   overflow:hidden 만 두면 큰 배율에서 배지가 통째로 사라진다.
+     *   기본 배율에서는 접힐 일이 없으니 목록 높이는 그대로다.
+     */
+    flex-wrap: wrap;
     gap: var(--sp-2);
     min-width: 0;
     overflow: hidden;
@@ -449,6 +489,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    /*
+     * ★★★ 자리가 모자라면 조작부를 **아래 줄로 내린다** (2026-08-06 배율 2.0 실측).
+     *   설정 줄은 '이름 ↔ 조작부' 를 양끝으로 미는 구조인데, 조작부(.seg)는
+     *   flex:0 0 auto 라 줄지 않는다. 시스템 글꼴 배율 2.0 에서 언어 선택
+     *   (시스템·한국어·English)이 410px 를 요구해 384px 화면을 뚫고 나갔다.
+     *   웹뷰가 거기 맞춰 레이아웃 뷰포트를 넓히고 되돌리지 않아 설정에 한 번 들어가면
+     *   앱 전체가 옆으로 밀린 채 남았다 — .menu-item 과 같은 고장이다.
+     */
+    flex-wrap: wrap;
     gap: var(--sp-3);
     width: 100%;
     min-height: 56px;
@@ -507,6 +556,12 @@
 .seg {
     display: flex;
     align-items: center;
+    /*
+     * ★ 줄을 내려 준 뒤에도 세 칸이 한 줄에 다 안 들어갈 수 있다(배율 2.0 의 언어 선택).
+     *   그때는 칸끼리도 접는다. flex:0 0 auto 는 그대로 둔다 — 칸을 좁히면
+     *   글자가 잘리고 터치 목표도 48dp 아래로 내려간다.
+     */
+    flex-wrap: wrap;
     gap: var(--sp-1);
     flex: 0 0 auto;
 }

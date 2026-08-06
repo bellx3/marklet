@@ -182,4 +182,55 @@ describe('⋮ 메뉴는 문서를 밀어내지 않는다 (2026-08-04 사용자 �
         expect(z('.menu-scrim')).toBeLessThan(z('.more-menu'));
         expect(z('.menu-scrim')).toBeGreaterThan(0);
     });
+
+    /**
+     * ★★★ 2026-08-06 실기기(배율 2.0). 메뉴 항목이 nowrap 이었다.
+     *
+     *   .more-menu 는 max-width 로 폭이 묶여 있고 overflow 는 visible 이다.
+     *   그 안에서 글자가 한 줄을 고집하면 갈 곳이 상자 밖밖에 없다 —
+     *   '마크다운 원문으로 공유'가 309px 를 요구해 256px 상자를 53px 뚫고 나갔다.
+     *
+     *   그리고 안드로이드 웹뷰는 넘친 만큼 **레이아웃 뷰포트를 넓히고 되돌리지 않는다.**
+     *   메뉴를 한 번 열면 앱 전체가 384 대신 429 폭으로 남아 옆으로 밀렸다.
+     *   기본 배율에서는 우연히 들어맞아 안 보였다.
+     *
+     *   폭이 묶인 상자 + 클립 장치 없음 + nowrap = 글자가 화면 밖으로 나간다.
+     *   셋 중 하나는 끊어야 한다.
+     */
+    it('★★ 폭이 묶인 메뉴 안에서 항목이 줄바꿈할 수 있다 (배율이 커도 밖으로 안 나간다)', () => {
+        const menu = rule(css, '.more-menu');
+        const item = rule(css, '.menu-item');
+
+        // 전제: 메뉴는 폭이 묶여 있고 스스로 잘라 내지 않는다
+        expect(menu, '이 테스트의 전제 — 메뉴 폭이 묶여 있다').toMatch(/max-width:/);
+        expect(menu).not.toMatch(/overflow:\s*(hidden|auto|scroll)/);
+
+        expect(item, '한 줄을 고집하면 상자 밖으로 나가는 수밖에 없다').not.toMatch(
+            /white-space:\s*(nowrap|pre)\b/,
+        );
+    });
+
+    /**
+     * ★★ 같은 고장이 설정 줄에도 있었다(2026-08-06 배율 2.0).
+     *   '이름 ↔ 조작부' 를 양끝으로 미는 줄인데 조작부(.seg)는 flex:0 0 auto 라 줄지 않는다.
+     *   언어 선택(시스템·한국어·English)이 410px 를 요구해 384px 화면을 뚫었다.
+     *   좁으면 조작부를 아랫줄로 내려야 한다 — 칸을 좁히면 글자가 잘리고 48dp 도 깨진다.
+     */
+    it('★★ 설정 줄은 좁으면 조작부를 아랫줄로 내린다', () => {
+        expect(rule(css, '.setting-row')).toMatch(/flex-wrap:\s*wrap/);
+        expect(rule(css, '.seg'), '세 칸이 한 줄에 안 들어가면 칸끼리도 접는다').toMatch(
+            /flex-wrap:\s*wrap/,
+        );
+        expect(rule(css, '.seg'), '칸을 좁히지는 않는다').toMatch(/flex:\s*0 0 auto/);
+    });
+
+    it('★ 폭이 묶인 세로 열의 자식은 컨테이너를 넘지 않는다 (배율 2.0 에서 배지가 화면 밖으로 나갔다)', () => {
+        // align-items:flex-start 인 세로 열은 자식을 fit-content 로 만든다 — 넓어질 수 있다.
+        expect(rule(css, '.list-main')).toMatch(/align-items:\s*flex-start/);
+        expect(rule(css, '.list-main > *'), '그래서 max-width 로 묶어 둔다').toMatch(
+            /max-width:\s*100%/,
+        );
+        // 잘라 내지 말고 접는다 — '읽기 전용 사본'은 사라지면 안 되는 표시다.
+        expect(rule(css, '.list-sub')).toMatch(/flex-wrap:\s*wrap/);
+    });
 });
