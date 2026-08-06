@@ -36,7 +36,12 @@ export function record(name: string, ms: number): void {
 function push(name: string, ms: number): void {
     samples.push({ name, ms, at: Date.now() });
     if (samples.length > MAX_SAMPLES) samples.shift();
-    // 디버그 빌드에서는 logcat 으로도 보인다.
+    /*
+     * 디버그 빌드에서는 logcat 으로도 보인다.
+     * ★ 릴리스에서는 vite.config 의 esbuild `pure` 목록이 이 호출을 지운다
+     *   (2026-08-06 확인: 릴리스 번들에 '⏱ ' 형식 문자열이 없다).
+     *   릴리스에서 재야 하면 콘솔이 아니라 진단 화면을 본다 — 그러라고 링버퍼가 있다.
+     */
     console.info(`⏱ ${name}: ${ms.toFixed(1)}ms`);
 }
 

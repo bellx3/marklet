@@ -123,10 +123,13 @@ function isDark(): boolean {
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-    return Promise.race([
-        p,
-        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
-    ]);
+    // ★ 이긴 쪽이 정해지면 타이머를 끈다. 안 끄면 다이어그램 하나마다 5초짜리 타이머가
+    //   살아남아, 다이어그램이 많은 문서에서 쓸모없는 타이머가 수십 개 쌓인다.
+    let timer: ReturnType<typeof setTimeout>;
+    const 시한 = new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout')), ms);
+    });
+    return Promise.race([p, 시한]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -141,15 +144,37 @@ export async function upgradeMermaidBlocks(container: HTMLElement): Promise<void
     if (blocks.length === 0) return;
 
     const api = await ensureMermaid();
+    /*
+     * ★★ 청크가 900KB 라 받는 동안 사용자가 다른 문서로 갈아탈 수 있다.
+     *   그러면 이 블록들은 이미 DOM 에서 떨어져 나갔다 — 손댈 것이 없다.
+     */
+    if (blocks.every((b) => !container.contains(b))) return;
+
     if (!api) {
         for (const b of blocks) {
-            fail(b, t.mermaid.loadFailed, b.dataset.mermaidSrc ?? '');
+            if (container.contains(b)) fail(b, t.mermaid.loadFailed, b.dataset.mermaidSrc ?? '');
         }
         return;
     }
 
     let seq = 0;
     for (const block of blocks) {
+        /*
+         * ★★★ 문서를 갈아탔으면 여기서 멈춘다 (2026-08-06).
+         *
+         *   이 반복문은 블록마다 한 프레임씩 양보하며 몇 초씩 돈다. 그동안 사용자가
+         *   다른 문서를 열면 renderProgressive 가 container 를 비우므로 이 블록들은
+         *   **화면에 없는 노드**가 된다. 그런데 예전에는 그대로 끝까지 그렸다:
+         *       실측 — 무거운 다이어그램 15개짜리 문서에서 갈아탄 뒤에도
+         *              **3,416ms 를 더 돌며 14개를 떨어진 채로 그렸다.**
+         *   그 시간은 전부 새 문서의 렌더와 메인 스레드를 다툰다. 사용자는 방금 연 문서가
+         *   이유 없이 버벅이는 것으로 겪는다 — 폰이면 10초가 넘는다.
+         *
+         *   renderProgressive 에 cancel() 이 있고 뷰어가 `handle === current` 를 보는 것과
+         *   같은 이유다. 여기만 그 그물 밖에 있었다.
+         */
+        if (!container.contains(block)) return;
+
         const src = block.dataset.mermaidSrc ?? '';
         block.dataset.mermaidState = 'working';
         const id = `mmd-${Date.now()}-${seq++}`;
@@ -169,6 +194,10 @@ export async function upgradeMermaidBlocks(container: HTMLElement): Promise<void
 
             // 2단계 — 실제로 그린다. id 는 문서 안에서 유일해야 한다.
             const { svg } = await withTimeout(api.render(id, src), RENDER_TIMEOUT_MS);
+
+            // ★ 그리는 동안에도 갈아탈 수 있다. 떨어진 노드에 손대지 않는다.
+            //   (아래 finally 의 임시 노드 정리는 그대로 돈다.)
+            if (!container.contains(block)) return;
 
             const holder = document.createElement('div');
             holder.className = 'mermaid-svg';

@@ -209,3 +209,68 @@ describe('★ 소리로 읽히는 이름', () => {
         expect(holder.tabIndex).toBe(0);
     });
 });
+
+/**
+ * ★★★ 2026-08-06. **문서를 갈아타도 앞 문서의 다이어그램을 끝까지 그렸다.**
+ *
+ *   이 반복문은 블록마다 한 프레임씩 양보하며 몇 초씩 돈다. 그동안 사용자가 다른 문서를
+ *   열면 renderProgressive 가 container 를 비우므로 블록들은 **화면에 없는 노드**가 된다.
+ *   그런데 그대로 끝까지 그렸다. 실측(무거운 다이어그램 15개, 데스크톱 크로뮴):
+ *       갈아탄 뒤에도 **3,416ms 를 더 돌며 14개를 떨어진 채로 그렸다** → 고친 뒤 126ms
+ *   그 시간은 전부 새 문서의 렌더와 메인 스레드를 다툰다. 사용자는 방금 연 문서가
+ *   이유 없이 버벅이는 것으로 겪는다 — 폰이면 10초가 넘는다.
+ *
+ *   renderProgressive 에 cancel() 이 있고 뷰어가 `handle === current` 를 보는 것과
+ *   같은 이유인데, 여기만 그 그물 밖에 있었다.
+ *
+ * ★ 판정은 `container.contains(block)` 으로 한다. `isConnected` 를 쓰면
+ *   **테스트의 컨테이너는 문서에 안 붙어 있어서 전부 건너뛴다** — 늘 초록인데
+ *   아무것도 안 도는 상태가 된다(처음에 그렇게 짰다가 고쳤다).
+ */
+describe('★★ 문서를 갈아타면 멈춘다', () => {
+    beforeEach(() => {
+        shouldFail = false;
+        __resetMermaidLoadForTest();
+        render.mockClear();
+    });
+
+    it('★ 컨테이너가 비워지면 남은 블록을 그리지 않는다', async () => {
+        const host = container(10);
+        const p = upgradeMermaidBlocks(host);
+
+        // 한 블록이 끝날 만큼만 기다렸다가 갈아탄다.
+        await new Promise((r) => setTimeout(r, 0));
+        host.replaceChildren();
+
+        await p;
+        expect(
+            render.mock.calls.length,
+            `${render.mock.calls.length}개를 떨어진 채로 계속 그렸다`,
+        ).toBeLessThan(10);
+    });
+
+    it('갈아타지 않으면 끝까지 다 그린다 (멈추는 조건이 과하지 않다)', async () => {
+        const host = container(5);
+        await upgradeMermaidBlocks(host);
+        expect(render).toHaveBeenCalledTimes(5);
+        expect(
+            [...host.querySelectorAll('.mermaid-block')].every(
+                (b) => (b as HTMLElement).dataset.mermaidState === 'done',
+            ),
+        ).toBe(true);
+    });
+
+    it('로드하는 동안 갈아탔으면 실패 라벨도 남기지 않는다', async () => {
+        shouldFail = true;
+        __resetMermaidLoadForTest();
+        const host = container(3);
+        const 블록들 = [...host.querySelectorAll<HTMLElement>('.mermaid-block')];
+
+        const p = upgradeMermaidBlocks(host);
+        host.replaceChildren(); // 청크를 받는 동안 갈아탔다
+        await p;
+
+        // 화면에 없는 블록에 "다이어그램 기능을 불러오지 못했습니다" 를 쓸 이유가 없다.
+        expect(블록들.every((b) => b.dataset.mermaidState === 'pending')).toBe(true);
+    });
+});
