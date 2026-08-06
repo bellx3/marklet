@@ -98,3 +98,99 @@ describe('★ 인스턴스마다 붙는다 (같은 문서를 다시 열어도 �
         expect(html).toContain('뒤 문단');
     });
 });
+
+/**
+ * ★★★ 2026-08-06. **감지는 하는데 그리지는 못하고 있었다.**
+ *
+ *   looksLikeMath 는 예전부터 `\(` 와 `\begin{` 를 수식으로 셌다. 그런데
+ *   @vscode/markdown-it-katex 1.1.2 는 기본값으로 **달러만** 안다.
+ *   결과: KaTeX 396KB 를 받아 놓고 아무것도 안 그렸다. 값만 치르고 얻는 게 없었다.
+ *
+ *   화면에 뜨던 것:  `넓이는 \(\pi r^2\) 입니다`  →  `넓이는 (pi r^2) 입니다`
+ *   수식이 안 나오는 정도가 아니라 markdown-it 의 escape 규칙이 백슬래시를 먹어서
+ *   **말이 안 되는 글자로 바뀌었다.**
+ *
+ *   이게 왜 중요한가: 이 앱은 AI 가 쓴 문서를 보는 앱이고, OpenAI 계열 모델은
+ *   `\(…\)` · `\[…\]` 를 기본 구분자로 쓴다.
+ */
+describe('★★ AI 가 실제로 뱉는 수식 구분자', () => {
+    async function render(src: string): Promise<string> {
+        const md = createMarkdownIt({ breaks: true });
+        await ensureMath(md);
+        return md.render(src);
+    }
+
+    it.each([
+        ['\\(…\\) 인라인', String.raw`넓이는 \(\pi r^2\) 입니다.`],
+        ['\\[…\\] 한 줄', String.raw`\[ E = mc^2 \]`],
+        ['\\[…\\] 여러 줄', '\\[\nE = mc^2\n\\]'],
+        ['\\[…\\] 문장 속', String.raw`식은 \[x^2\] 입니다.`],
+        ['$$ 없는 \\begin{align}', '\\begin{align}\na &= b\n\\end{align}'],
+        ['```math 펜스', '```math\nE = mc^2\n```'],
+    ])('%s → 수식으로 그린다', async (_name, src) => {
+        expect(await render(src)).toContain('katex');
+    });
+
+    it('```math 펜스도 감지한다 (감지 못 하면 KaTeX 를 아예 안 받는다)', () => {
+        expect(looksLikeMath('```math\nE = mc^2\n```')).toBe(true);
+    });
+
+    it('★ 백슬래시가 먹혀서 글자가 망가지지 않는다', async () => {
+        const html = await render(String.raw`넓이는 \(\pi r^2\) 입니다.`);
+        expect(html, '\\pi 가 pi 로 뭉개졌다').not.toContain('(pi r^2)');
+        expect(html).toContain('넓이는');
+        expect(html).toContain('입니다');
+    });
+
+    /*
+     * ★★ 원본 문자열을 통째로 치환하는 방식(`\(` → `$`)으로는 이 두 개를 못 지킨다.
+     *   코드 안의 백슬래시 괄호는 C·정규식·윈도우 경로에서 흔하다.
+     *   그래서 markdown-it 규칙으로 넣었다 — 코드는 규칙이 돌기 전에 이미 삼켜진다.
+     */
+    it('★ 인라인 코드 안의 \\( \\) 는 건드리지 않는다', async () => {
+        const html = await render('`' + String.raw`\(리터럴\)` + '` 은 그대로');
+        expect(html).toContain('<code>');
+        expect(html).toContain(String.raw`\(리터럴\)`);
+        expect(html).not.toContain('katex');
+    });
+
+    it('★ 펜스 코드 안의 \\( \\) 는 건드리지 않는다', async () => {
+        const html = await render('```c\nprintf("\\(x\\)");\n```');
+        expect(html).toContain('<pre>');
+        expect(html).not.toContain('katex');
+    });
+
+    it('★ 닫는 짝이 없으면 평범한 글로 둔다', async () => {
+        const html = await render(String.raw`경로는 \(열린 채로 남는다`);
+        expect(html).not.toContain('katex');
+        expect(html).toContain('열린 채로 남는다');
+    });
+
+    it('★ 문장 한가운데 \\[…\\] 는 문단을 쪼개지 않는다', async () => {
+        // 블록 렌더러는 <p> 를 뱉는다. 그게 문단 안에 들어가면 브라우저가 바깥 <p> 를
+        // 강제로 닫아 한 문장이 세 조각이 된다. 그래서 여기서는 인라인으로 그린다.
+        const html = await render(String.raw`식은 \[x^2\] 입니다.`);
+        expect(html).not.toContain('<p>식은 <p');
+        expect(html).toContain('katex');
+    });
+
+    it('빈 줄 없이 이어져도 앞 문단을 끊고 블록으로 그린다', async () => {
+        const html = await render('설명입니다\n\\[\nE = mc^2\n\\]\n그 다음 문장');
+        expect(html).toContain('katex-display');
+        expect(html).toContain('설명입니다');
+        expect(html).toContain('그 다음 문장');
+    });
+
+    it.each([
+        ['목록 안', '- 항목\n  \\[ x^2 \\]'],
+        ['인용 안', '> 인용\n> \\[ x^2 \\]'],
+    ])('%s 에서도 그린다', async (_name, src) => {
+        expect(await render(src)).toContain('katex');
+    });
+
+    it('★ 깨진 \\( \\) 수식도 문서를 죽이지 않는다', async () => {
+        const html = await render(String.raw`앞\(\frac{1}{\)뒤`);
+        expect(html).toContain('앞');
+        expect(html).toContain('뒤');
+    });
+});
