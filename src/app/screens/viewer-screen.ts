@@ -239,7 +239,26 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
     let content = '';
     let options: ViewerOptions = {};
 
+    /**
+     * 몇 번째 렌더인가.
+     *
+     * ★★★ render() 한가운데에 **await 가 있다**(수식·하이라이트 청크 받기).
+     *   그 사이에 다른 문서가 들어오면 앞 문서의 render() 가 나중에 깨어나
+     *   **뒤에 온 문서를 지우고 자기를 그린다** — renderProgressive 가 맨 먼저
+     *   container.replaceChildren() 을 하기 때문이다. 화면에는 앞 문서가 뜨는데
+     *   제목 줄에는 뒤 문서 이름이 남는다.
+     *
+     *   밟기 쉽다: KaTeX 는 396KB 라 모바일 데이터에서 몇 초씩 걸리고,
+     *   looksLikeMath 는 **가격 문장('$5 … $3')에도 참**이라 수식 없는 문서도 받는다.
+     *   그 몇 초 사이에 카톡에서 다른 .md 를 누르면 그대로 어긋난다.
+     *
+     *   home.ts 의 refreshSeq 와 같은 방식이다 — 그쪽은 이미 이 함정을 밟고 고쳤는데
+     *   여기는 그대로였다.
+     */
+    let renderSeq = 0;
+
     async function render(): Promise<void> {
+        const seq = ++renderSeq;
         closeDiagramViewer();
         search.close();
         handle?.cancel();
@@ -292,6 +311,13 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
             looksLikeMath(markdown) ? ensureMath(md) : null,
             looksLikeCode(markdown) ? ensureHighlight(md) : null,
         ]);
+
+        /*
+         * ★★★ 기다리는 동안 다른 문서가 들어왔으면 **여기서 멈춘다**(renderSeq 주석).
+         *   아래 renderProgressive 는 맨 먼저 container 를 비우므로, 그냥 두면
+         *   뒤에 온 문서를 지우고 앞 문서를 그린다 — 제목만 뒤 문서인 채로.
+         */
+        if (seq !== renderSeq) return;
 
         if (frontmatter) frontmatterSlot.appendChild(renderFrontmatter(frontmatter));
 

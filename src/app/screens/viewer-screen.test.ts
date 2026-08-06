@@ -15,7 +15,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const h = vi.hoisted(() => ({
     nativeStore: new Map<string, string>(),
+    /** 수식 청크 받기를 일부러 늦춘다. 0 이면 예전과 똑같이 돈다. */
+    mathDelayMs: 0,
 }));
+
+/*
+ * ★ KaTeX 는 396KB 라 모바일 데이터에서 몇 초씩 걸린다. 그 사이에 다른 문서가
+ *   들어오는 상황을 재현하려면 **기다리는 시간**이 있어야 한다.
+ *   목이 즉시 끝나면 경합 자체가 생기지 않아 테스트가 아무것도 못 본다.
+ */
+vi.mock('../../markdown/math', async (importOriginal) => {
+    const real = await importOriginal<typeof import('../../markdown/math')>();
+    return {
+        ...real,
+        ensureMath: async (md: Parameters<typeof real.ensureMath>[0]) => {
+            if (h.mathDelayMs) await new Promise((r) => setTimeout(r, h.mathDelayMs));
+            return real.ensureMath(md);
+        },
+    };
+});
 
 vi.mock('@capacitor/app', () => ({
     App: {
@@ -430,5 +448,87 @@ describe('★★ withBusy — 뷰어 밖에서도 쓴다', () => {
         await vi.advanceTimersByTimeAsync(50);
         await expect(p).rejects.toThrow('실패');
         expect(busy.hidden, '터진 뒤에 표시가 남으면 화면이 영영 가려진다').toBe(true);
+    });
+});
+
+/**
+ * ★★★ 2026-08-06. **기다리는 사이에 들어온 문서를 앞 문서가 지웠다.**
+ *
+ *   render() 한가운데에 await 가 있다 — 수식(KaTeX 396KB)·하이라이트 청크 받기다.
+ *   그 사이에 다른 문서가 들어오면 앞 문서의 render() 가 나중에 깨어나
+ *   **뒤에 온 문서를 지우고 자기를 그린다.** renderProgressive 가 맨 먼저
+ *   container.replaceChildren() 을 하기 때문이다.
+ *   결과: 화면에는 앞 문서가 뜨는데 **제목 줄에는 뒤 문서 이름**이 남는다.
+ *
+ *   ★★ 밟기 쉽다. KaTeX 는 모바일 데이터에서 몇 초씩 걸리고,
+ *     looksLikeMath 는 **가격 문장('$5 … $3')에도 참**이라 수식 없는 문서도 받는다.
+ *     그 몇 초 사이에 카톡에서 다른 .md 를 누르면 그대로 어긋난다 —
+ *     그리고 문서를 갈아타는 길은 사실상 그 인텐트 하나뿐이다.
+ *
+ *   home.ts 의 refreshSeq 와 같은 함정인데, 그쪽만 고쳐져 있었다.
+ */
+describe('★★ 청크를 받는 사이에 문서가 바뀌면', () => {
+    afterEach(() => {
+        h.mathDelayMs = 0;
+    });
+
+    it('★ 앞 문서가 뒤에 온 문서를 지우지 않는다', async () => {
+        h.mathDelayMs = 50;
+
+        // A: 수식이 있어 청크를 기다린다
+        const a = screen.show(doc({ name: 'a.md' }), '# 앞문서\n\n수식 $x^2$ 가 있다\n', {});
+        await vi.advanceTimersByTimeAsync(10);
+
+        // B: 수식이 없어 곧바로 그려진다
+        h.mathDelayMs = 0;
+        await screen.show(doc({ uri: 'content://docs/b.md', name: 'b.md' }), '# 뒷문서\n', {});
+        expect(screen.root.querySelector('.md-target')?.textContent).toContain('뒷문서');
+
+        // A 의 청크가 뒤늦게 도착한다
+        await vi.advanceTimersByTimeAsync(200);
+        await a;
+        await settle();
+
+        const 본문 = screen.root.querySelector('.md-target')?.textContent ?? '';
+        expect(본문, '앞 문서가 화면을 가로챘다').toContain('뒷문서');
+        expect(본문, '앞 문서의 본문이 남았다').not.toContain('앞문서');
+    });
+
+    it('★ 제목과 본문이 어긋나지 않는다', async () => {
+        h.mathDelayMs = 50;
+        const a = screen.show(doc({ name: 'a.md' }), '# 앞문서\n\n$x^2$\n', {});
+        await vi.advanceTimersByTimeAsync(10);
+
+        h.mathDelayMs = 0;
+        await screen.show(doc({ uri: 'content://docs/b.md', name: 'b.md' }), '# 뒷문서\n', {});
+        await vi.advanceTimersByTimeAsync(200);
+        await a;
+        await settle();
+
+        expect(screen.root.querySelector('.topbar-title')?.textContent).toBe('b.md');
+        expect(screen.root.querySelector('.md-target')?.textContent).toContain('뒷문서');
+    });
+
+    it('앞 문서의 frontmatter 가 뒤 문서 위에 남지 않는다', async () => {
+        h.mathDelayMs = 50;
+        const a = screen.show(doc({ name: 'a.md' }), '---\ntitle: 앞문서표\n---\n\n$x^2$\n', {});
+        await vi.advanceTimersByTimeAsync(10);
+
+        h.mathDelayMs = 0;
+        await screen.show(doc({ uri: 'content://docs/b.md', name: 'b.md' }), '# 뒷문서\n', {});
+        await vi.advanceTimersByTimeAsync(200);
+        await a;
+        await settle();
+
+        expect(screen.root.textContent, '앞 문서의 접이식 표가 남았다').not.toContain('앞문서표');
+    });
+
+    it('갈아타지 않으면 수식 문서가 정상적으로 그려진다 (멈추는 조건이 과하지 않다)', async () => {
+        h.mathDelayMs = 20;
+        const p = screen.show(doc({ name: 'a.md' }), '# 앞문서\n\n$x^2$\n', {});
+        await vi.advanceTimersByTimeAsync(200);
+        await p;
+        await settle();
+        expect(screen.root.querySelector('.md-target')?.textContent).toContain('앞문서');
     });
 });
