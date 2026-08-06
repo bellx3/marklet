@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitize, isSafeUrl } from './sanitize';
+import { sanitize, sanitizeMermaidSvg, isSafeUrl } from './sanitize';
 
 /**
  * 11-2절 #1 · #2.
@@ -143,5 +143,102 @@ describe('isSafeUrl — 허용 목록', () => {
     it('앞뒤 공백이 있어도 판정이 같다', () => {
         expect(isSafeUrl('  javascript:alert(1)  ')).toBe(false);
         expect(isSafeUrl('  https://example.com  ')).toBe(true);
+    });
+});
+
+describe('★★ 실제 공격 벡터 — 남이 만든 문서를 여는 앱이다', () => {
+    /** 결과에 실행 가능한 것이 남았는지. 대소문자·공백을 무시하고 본다. */
+    function dangerous(html: string): string[] {
+        const found: string[] = [];
+        const flat = html.replace(/\s+/g, ' ');
+        /*
+         * ★ style 속성 **안의** url(javascript:…) 는 세지 않는다.
+         *   크롬·안드로이드 웹뷰는 CSS 에서 javascript: 를 실행하지 않는다(옛 IE 이야기다).
+         *   진짜 위험이 아닌 것으로 빨간불이 켜지면 테스트가 무시당한다.
+         *   href·src 등 **실행되는 자리**의 javascript: 는 아래에서 그대로 잡힌다.
+         */
+        const outsideStyle = flat.replace(/style\s*=\s*"[^"]*"/gi, 'style=""');
+        if (/<script/i.test(flat)) found.push('<script>');
+        if (/\son\w+\s*=/i.test(flat)) found.push('on* 핸들러');
+        if (/javascript\s*:/i.test(outsideStyle)) found.push('javascript:');
+        if (/vbscript\s*:/i.test(flat)) found.push('vbscript:');
+        if (/data\s*:\s*text\/html/i.test(flat)) found.push('data:text/html');
+        if (/<iframe|<object|<embed|<base|<form/i.test(flat)) found.push('삽입 태그');
+        return found;
+    }
+
+    const VECTORS: Array<[string, string]> = [
+        ['평범한 javascript:', '<a href="javascript:alert(1)">x</a>'],
+        ['대소문자 섞기', '<a href="jAvAsCrIpT:alert(1)">x</a>'],
+        ['탭 끼워넣기', '<a href="java&#09;script:alert(1)">x</a>'],
+        ['개행 끼워넣기', '<a href="java\nscript:alert(1)">x</a>'],
+        ['앞 공백', '<a href="  javascript:alert(1)">x</a>'],
+        ['vbscript', '<a href="vbscript:msgbox(1)">x</a>'],
+        ['data:text/html', '<a href="data:text/html,<script>alert(1)</script>">x</a>'],
+        ['img onerror', '<img src=x onerror="alert(1)">'],
+        ['onclick', '<a href="#" onclick="alert(1)">x</a>'],
+        ['svg script', '<svg><script>alert(1)</script></svg>'],
+        [
+            'svg animate href',
+            '<svg><a><animate attributeName="href" to="javascript:alert(1)"/></a></svg>',
+        ],
+        [
+            'svg use 외부참조',
+            '<svg><use href="data:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+"/></svg>',
+        ],
+        ['style 안 javascript', '<div style="background:url(javascript:alert(1))">x</div>'],
+        ['iframe', '<iframe src="javascript:alert(1)"></iframe>'],
+        ['form action', '<form action="javascript:alert(1)"><input></form>'],
+        ['base 태그', '<base href="//evil.example/">'],
+        ['meta refresh', '<meta http-equiv="refresh" content="0;url=javascript:alert(1)">'],
+        [
+            'mXSS (math/mglyph/style)',
+            '<math><mtext><table><mglyph><style><!--</style><img src=x onerror=alert(1)>',
+        ],
+        ['noscript 우회', '<noscript><p title="</noscript><img src=x onerror=alert(1)>">'],
+        ['srcset', '<img srcset="x.jpg 1x, javascript:alert(1) 2x">'],
+    ];
+
+    for (const [name, payload] of VECTORS) {
+        it(`본문 살균 — ${name}`, () => {
+            const out = sanitize(payload);
+            expect(dangerous(out), `살아남았다: ${out.slice(0, 120)}`).toEqual([]);
+        });
+    }
+
+    const SVG_VECTORS: Array<[string, string]> = [
+        ['script', '<svg><script>alert(1)</script></svg>'],
+        ['onload', '<svg onload="alert(1)"><g/></svg>'],
+        [
+            'foreignObject 안 img',
+            '<svg><foreignObject><img src=x onerror="alert(1)"></foreignObject></svg>',
+        ],
+        ['a href javascript', '<svg><a href="javascript:alert(1)"><text>x</text></a></svg>'],
+        [
+            'animate 로 href 바꾸기',
+            '<svg><a><animate attributeName="href" to="javascript:alert(1)"/></a></svg>',
+        ],
+        ['style 안 @import', '<svg><style>@import url("//evil.example/x.css");</style><g/></svg>'],
+        ['iframe 끼워넣기', '<svg><iframe src="javascript:alert(1)"></iframe></svg>'],
+        ['handler 속성', '<svg><rect onmouseover="alert(1)" width="10" height="10"/></svg>'],
+    ];
+
+    for (const [name, payload] of SVG_VECTORS) {
+        it(`다이어그램 SVG 살균 — ${name}`, () => {
+            const out = sanitizeMermaidSvg(payload);
+            expect(dangerous(out), `살아남았다: ${out.slice(0, 120)}`).toEqual([]);
+        });
+    }
+
+    it('★ 살균해도 멀쩡한 다이어그램은 그대로다', () => {
+        const svg =
+            '<svg viewBox="0 0 100 50"><style>.n{fill:#eee}</style>' +
+            '<g class="n"><rect width="40" height="20"/><text x="5" y="15">노드</text></g>' +
+            '<path d="M0 0 L10 10" marker-end="url(#arrow)"/></svg>';
+        const out = sanitizeMermaidSvg(svg);
+        expect(out).toContain('<style>');
+        expect(out).toContain('노드');
+        expect(out).toContain('marker-end');
+        expect(out).toContain('viewBox');
     });
 });

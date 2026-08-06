@@ -70,3 +70,70 @@ describe('renderFrontmatter', () => {
         expect(el.textContent).toContain('b');
     });
 });
+
+describe('★★★ YAML 폭탄 (별칭 확장)', () => {
+    /** billion laughs. 입력은 작지만 결과가 지수로 분다. */
+    function aliasBomb(levels: number, fanout = 9): string {
+        let y = `a0: &a0 [${Array(fanout).fill('"x"').join(',')}]\n`;
+        for (let i = 1; i <= levels; i++) {
+            y += `a${i}: &a${i} [${Array(fanout)
+                .fill(`*a${i - 1}`)
+                .join(',')}]\n`;
+        }
+        return `---\n${y}---\n\n# 본문\n`;
+    }
+
+    it('별칭이 많은 frontmatter 는 파싱하지 않는다', () => {
+        const src = aliasBomb(6);
+        expect(src.length, '입력은 1KB 도 안 된다').toBeLessThan(1024);
+
+        const t0 = performance.now();
+        const { frontmatter, body } = parseDocument(src);
+        const ms = performance.now() - t0;
+
+        /*
+         * ★★★ 크기 상한(64KB)만으로는 못 막는다. 실측(js-yaml 4.3.1):
+         *     레벨 6 · 322바이트 → 21.8MB · 150ms
+         *     레벨 8 · 414바이트 → 약 1.8GB
+         *   남이 보낸 .md 하나로 앱이 죽는다.
+         */
+        expect(frontmatter, '폭탄을 그대로 파싱했다').toBeNull();
+        expect(ms, '파싱을 시도해서 시간을 썼다').toBeLessThan(50);
+
+        // ★ 문서는 열려야 한다. 사용자가 잃는 것은 접이식 표 하나뿐이다.
+        expect(body).toContain('# 본문');
+    });
+
+    it('레벨을 더 올려도 즉시 거부한다', () => {
+        const t0 = performance.now();
+        expect(parseDocument(aliasBomb(9)).frontmatter).toBeNull();
+        expect(performance.now() - t0).toBeLessThan(50);
+    });
+
+    it('★ 별칭을 조금 쓴 정상 문서는 그대로 읽는다', () => {
+        const src = `---
+base: &b 공통값
+title: *b
+author: *b
+---
+
+# 본문
+`;
+        const { frontmatter } = parseDocument(src);
+        expect(frontmatter).toEqual({ base: '공통값', title: '공통값', author: '공통값' });
+    });
+
+    it('★ 따옴표 속 별표가 몇 개 있어도 막지 않는다', () => {
+        const src = `---
+title: "별 * 하나 * 둘 * 셋"
+note: "a * b * c"
+---
+
+# 본문
+`;
+        expect(parseDocument(src).frontmatter).toEqual({
+            title: '별 * 하나 * 둘 * 셋',
+            note: 'a * b * c',
+        });
+    });
+});
