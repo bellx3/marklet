@@ -12,7 +12,7 @@ import { installDraftFlushHooks, pruneDraftOrphans } from './services/draft';
 import { initRouter } from './app/router';
 import { initDocumentEntry } from './services/document-entry';
 import { reconcileRecents, pruneSnapshotOrphans } from './services/recents';
-import { mark, measure } from './utils/perf';
+import { mark, measure, record } from './utils/perf';
 import * as shell from './app/shell';
 
 async function boot(): Promise<void> {
@@ -38,6 +38,20 @@ async function boot(): Promise<void> {
         shell.entryHandlers.showHome();
     }
     measure('boot:first-screen', 'boot:start');
+    /*
+     * ★★★ 위 값은 **JS 부팅만** 잰다. 사용자가 기다리는 시간이 아니다 (2026-08-07 실측).
+     *   같은 실행에서 —
+     *       boot:first-screen        135ms   (boot() 안에서 흐른 시간)
+     *       페이지 로드까지            583ms   (HTML·CSS·JS 받고 파싱)
+     *       시스템 TotalTime         3578ms  (아이콘을 누른 순간부터)
+     *   진단 화면만 보면 "0.1초 만에 뜬다" 로 읽힌다. 그런데 사용자는 3.6초를 기다렸다.
+     *   그 상태로 "느리다" 는 문의를 받으면 **엉뚱한 데를 파게 된다.**
+     *
+     *   performance.now() 는 페이지 로드 시작 기준이므로 HTML·JS 받고 파싱한 시간까지
+     *   포함한다. 네이티브 프로세스 시작·웹뷰 초기화는 여기서 볼 수 없지만,
+     *   보이는 창이 5배 넓어지고 시스템 값과 나란히 놓고 읽을 수 있게 된다.
+     */
+    record('boot:page-to-screen', performance.now());
 
     // 5. 여기부터는 첫 화면 이후여도 되는 것들
     await hideSplash();
