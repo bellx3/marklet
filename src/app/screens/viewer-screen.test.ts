@@ -59,7 +59,7 @@ vi.mock('@capacitor/preferences', () => ({
 }));
 
 import { createViewerScreen, type ViewerScreen } from './viewer-screen';
-import { __resetRouterForTest, hasLayer } from '../router';
+import { __resetRouterForTest, hasLayer, pushLayer, __pressBackForTest } from '../router';
 import { t } from '../../i18n';
 import type { MdDocument } from '../../plugins/md-file';
 
@@ -201,6 +201,66 @@ describe('⋮ 메뉴', () => {
         expect(scrim.hidden).toBe(false);
         scrim.dispatchEvent(new Event('pointerdown', { bubbles: true }));
         expect(screen.root.querySelector<HTMLElement>('.more-menu')!.hidden).toBe(true);
+    });
+
+    /*
+     * ★★★ 2026-08-07 실기기. 이 앱의 겹침은 전부 레이어를 얹는데 **⋮ 메뉴만 빠져 있었다.**
+     *   메뉴를 열어 두고 뒤로가기를 누르면 메뉴가 아니라 **문서가 닫히고 홈으로 떨어졌다** —
+     *   읽던 자리를 통째로 잃는다. 메뉴를 열었다 무르는 건 흔한 동작이다.
+     *
+     * ★ 아래 화면(문서)을 흉내 낸 레이어를 깔고 본다. 그래야 "메뉴만 닫혔는가"와
+     *   "아래 것까지 닫혔는가"가 갈린다 — 메뉴 하나만 두고 재면 둘 다 통과한다.
+     */
+    it('★★ 열려 있으면 뒤로가기를 받는다 — 문서가 대신 닫히면 안 된다', async () => {
+        await screen.show(doc(), '# 문서');
+        const 아래 = vi.fn(() => true);
+        pushLayer('viewer', 아래);
+
+        buttonByLabel(t.viewer.more)!.click();
+        expect(hasLayer('menu'), '열면 레이어를 얹는다').toBe(true);
+
+        expect(await __pressBackForTest()).toBe('menu');
+        expect(screen.root.querySelector<HTMLElement>('.more-menu')!.hidden).toBe(true);
+        expect(아래, '아래 화면까지 닫히면 안 된다').not.toHaveBeenCalled();
+        expect(hasLayer('menu')).toBe(false);
+
+        // 닫힌 뒤의 뒤로가기는 아래 화면 몫이다 — 메뉴가 한 번을 더 먹으면 안 된다.
+        expect(await __pressBackForTest()).toBe('viewer');
+        expect(아래).toHaveBeenCalledTimes(1);
+    });
+
+    it('메뉴를 닫는 다른 길들도 레이어를 뗀다 — 남으면 뒤로가기 한 번이 먹힌다', async () => {
+        await screen.show(doc(), '# 문서');
+
+        /** ⋮ 를 누르고, 레이어가 실제로 얹혔는지까지 본다 — 안 그러면 아래 검사가 공치다. */
+        const 메뉴열기 = () => {
+            buttonByLabel(t.viewer.more)!.click();
+            expect(hasLayer('menu'), '열면 레이어를 얹는다').toBe(true);
+        };
+
+        // ⋮ 를 한 번 더 눌러 닫기
+        메뉴열기();
+        buttonByLabel(t.viewer.more)!.click();
+        expect(hasLayer('menu'), '토글로 닫았을 때').toBe(false);
+
+        // 스크림 누르기
+        메뉴열기();
+        screen.root
+            .querySelector<HTMLElement>('.menu-scrim')!
+            .dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        expect(hasLayer('menu'), '바깥을 눌러 닫았을 때').toBe(false);
+
+        // 항목 누르기
+        메뉴열기();
+        [...screen.root.querySelectorAll<HTMLElement>('.menu-item')]
+            .find((b) => b.textContent === t.common.settings)!
+            .click();
+        expect(hasLayer('menu'), '항목을 눌러 닫았을 때').toBe(false);
+
+        // 화면을 갈아탈 때 (closeOverlays)
+        메뉴열기();
+        screen.closeOverlays();
+        expect(hasLayer('menu'), '문서를 갈아탈 때').toBe(false);
     });
 });
 

@@ -15,6 +15,7 @@ import { createTocSheet, type TocSheet } from './toc-sheet';
 import { createSearchBar, type SearchBar } from './search-bar';
 import { createViewSheet, type ViewSheet } from './view-sheet';
 import { getSettings } from '../../services/settings';
+import { pushLayer, removeLayer } from '../router';
 import { iconButton } from '../icons';
 import { t } from '../../i18n';
 import { mark, measure, record } from '../../utils/perf';
@@ -129,10 +130,33 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
     scrim.hidden = true;
     scrim.addEventListener('pointerdown', () => setMenu(false));
 
+    /*
+     * ★★★ 열려 있는 동안 **뒤로가기를 받는다** (2026-08-07 실기기).
+     *
+     *   이 앱의 겹침은 전부 레이어를 얹는다 — 시트(overlay.ts)·찾기(search-bar.ts)·
+     *   다이어그램(diagram-viewer.ts). **⋮ 메뉴만 빠져 있었다.**
+     *   그래서 메뉴를 열어 놓고 뒤로가기를 누르면 메뉴가 아니라 **문서가 닫히고**
+     *   홈으로 떨어졌다(읽던 자리를 통째로 잃는다). 실측:
+     *       ⋮ 탭 → screen-viewer, 겹침 .more-menu
+     *       뒤로  → screen-home,   겹침 없음      ← 메뉴가 아니라 문서가 닫혔다
+     *   메뉴를 열었다가 무르는 건 흔한 동작이고, 안드로이드에서 떠 있는 팝업은
+     *   뒤로가기를 먹는 것이 규칙이다. 사용자는 자기가 뭘 잘못 눌렀다고 생각한다.
+     *
+     * ★ 여는 순간 동기적으로 얹고, 닫기 시작하는 순간 동기적으로 뗀다(router.ts 규칙).
+     *   ★ 초점은 건드리지 않는다 — 열 때 메뉴 안으로 옮기지 않으므로 여전히 ⋮ 버튼에 있다.
+     */
     function setMenu(open: boolean): void {
         more.hidden = !open;
         scrim.hidden = !open;
         moreBtn.setAttribute('aria-expanded', String(open));
+        if (open) {
+            pushLayer('menu', () => {
+                setMenu(false);
+                return true;
+            });
+        } else {
+            removeLayer('menu');
+        }
     }
 
     // 공유 3형태 (5-8절). 받는 사람이 무엇을 보게 되는지가 라벨에 드러나야 한다.
