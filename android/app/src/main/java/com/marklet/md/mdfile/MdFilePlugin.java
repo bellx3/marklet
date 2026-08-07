@@ -332,6 +332,33 @@ public class MdFilePlugin extends Plugin {
     // SAF 파일 선택 (ACTION_OPEN_DOCUMENT) + 영속 권한
     // ────────────────────────────────────────────────────────────
 
+    /**
+     * 선택기가 처음 보여 줄 자리를 알려 준다.
+     *
+     * ★★ 안 주면 안드로이드 9 의 DocumentsUI 는 **'최근'에서 열리는데 거기엔 아무것도 없다.**
+     *   [파일 열기]·[폴더 추가]를 누른 사용자가 보는 첫 화면이 "항목 없음" 이다
+     *   (2026-08-07 LG Q7 실측). 내 파일에 닿으려면 오버플로 메뉴에서
+     *   '내부 저장소 표시'를 켜야 하는데, 그걸 아는 사람은 거의 없다.
+     *   이 앱의 첫 번째 행동 버튼이 빈 화면으로 이어지면 안 된다.
+     *   실측으로 이 힌트를 주자 Documents 폴더에서 바로 열렸다.
+     *
+     * ★ 어디까지나 힌트다. 프로바이더가 무시하면 예전과 같아질 뿐 나빠지지 않는다.
+     *   그래서 실패는 조용히 넘긴다 — 이것 때문에 선택기가 안 뜨면 그게 더 나쁘다.
+     *
+     * ★ Documents 를 고른 이유: 사용자가 문서를 두는 표준 자리다. 거기가 없으면
+     *   프로바이더가 알아서 상위(내부 저장소)를 보여 준다.
+     */
+    private static void suggestInitialLocation(Intent intent) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        try {
+            Uri hint = DocumentsContract.buildDocumentUri(
+                    "com.android.externalstorage.documents", "primary:Documents");
+            intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, hint);
+        } catch (Exception ignored) {
+            // 힌트를 못 만들어도 선택기는 열려야 한다.
+        }
+    }
+
     @PluginMethod
     public void pickFile(PluginCall call) {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -349,6 +376,7 @@ public class MdFilePlugin extends Plugin {
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
                 | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        suggestInitialLocation(intent);
 
         startActivityForResult(call, intent, "pickFileResult");
     }
@@ -384,6 +412,7 @@ public class MdFilePlugin extends Plugin {
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
                 | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        suggestInitialLocation(intent);
         startActivityForResult(call, intent, "pickFolderResult");
     }
 
@@ -603,6 +632,7 @@ public class MdFilePlugin extends Plugin {
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
                 | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        suggestInitialLocation(intent);
         startActivityForResult(call, intent, "createFileResult");
     }
 
