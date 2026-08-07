@@ -181,9 +181,22 @@ export function renderProgressive(
      *   여기서는 '붙이기 시작'부터 '브라우저가 다음 프레임을 준 순간'까지를 잰다.
      *   그게 사용자가 스크롤을 못 하는 시간이다. 이미 있는 yield 를 가로질러 재므로
      *   추가 비용은 없다.
+     *
+     * ★★★ **0번 청크도 반드시 잰다** (2026-08-07 LG Q7 실측으로 발견).
+     *   예전에는 appendedAt 을 루프 안에서만 세웠다. 그래서
+     *     ① 동기로 붙이는 0번 청크의 멈춤이 **한 번도 안 잡혔다** — 문서를 여는 순간
+     *        사용자가 제일 크게 느끼는 그 멈춤이다
+     *     ② 청크가 하나뿐인 문서는 루프가 아예 안 돌아 **기록 자체가 없었다**
+     *   실측: 600KB 를 문단 두 개로만 담은 문서(줄바꿈 없는 긴 글)는 토큰이 6개라
+     *   청크가 1개가 된다. 화면은 **729ms** 멎었는데 진단에는 chunk-max 50.3ms 만 남고
+     *   chunk-stall-max 는 없었다. 차이는 브라우저의 스타일·레이아웃·페인트다 —
+     *   이 지표가 존재하는 이유가 정확히 그것인데, 가장 심한 경우에 침묵했다.
+     *
+     *   ★ 그리고 이 경우는 TOKENS_PER_CHUNK 를 줄여도 소용없다. 토큰이 6개뿐이라
+     *     더 쪼갤 자리가 없다. 그래서 숫자를 보고 상수를 만지기 전에 청크 수부터 봐야 한다.
      */
     let maxStallMs = 0;
-    let appendedAt = 0;
+    let appendedAt = performance.now();
 
     const loop = async () => {
         while (next < ranges.length) {
@@ -202,6 +215,15 @@ export function renderProgressive(
             appendedAt = performance.now();
             container.appendChild(renderRange(next));
             next++;
+        }
+        /*
+         * ★ 아직 재지 못한 붙이기가 남아 있으면(=청크가 하나뿐이라 루프가 안 돌았거나
+         *   마지막 청크였다) 프레임 하나를 더 기다려 그 멈춤까지 담는다.
+         */
+        if (!cancelled && appendedAt > 0) {
+            await yieldToBrowser();
+            maxStallMs = Math.max(maxStallMs, performance.now() - appendedAt);
+            appendedAt = 0;
         }
         if (maxChunkMs > 0) record('doc:chunk-max', maxChunkMs);
         /*

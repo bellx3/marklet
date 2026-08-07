@@ -3,6 +3,7 @@ import { createMarkdownIt } from './renderer';
 import { sliceTokens, renderProgressive, extractHeadings } from './render-pipeline';
 import { sanitize } from './sanitize';
 import { liftTaskCheckedState } from './post-process';
+import { getSamples, clearSamples } from '../utils/perf';
 
 /**
  * 11-2절 #3 · #4.
@@ -197,5 +198,43 @@ describe('★★ 내용이 없는 문서', () => {
         expect(host.textContent).toContain('제목');
         expect(host.textContent).toContain('본문입니다');
         expect(host.querySelectorAll('.md-chunk').length).toBe(1);
+    });
+});
+
+/**
+ * 멈춤 측정이 **첫 청크와 단일 청크에서도 돈다** (2026-08-07).
+ *
+ * ★★★ 예전에는 appendedAt 을 루프 안에서만 세웠다. 그래서 0번 청크 —
+ *   문서를 여는 순간 동기로 붙는, 사용자가 제일 크게 느끼는 그 청크 — 의 멈춤이
+ *   한 번도 안 잡혔고, 청크가 하나뿐인 문서는 **기록 자체가 없었다.**
+ *
+ *   실기기에서 600KB 를 문단 두 개로만 담은 문서(줄바꿈 없는 긴 글)를 열었더니
+ *   화면이 729ms 멎었는데 진단에는 chunk-max 50.3ms 만 남았다. 그 지표가
+ *   존재하는 이유가 바로 그 차이(브라우저 레이아웃)인데 가장 심한 경우에 침묵했다.
+ */
+describe('★★ 멈춤 기록이 침묵하지 않는다', () => {
+    it('청크가 하나뿐인 문서도 doc:chunk-stall-max 를 남긴다', async () => {
+        clearSamples();
+        const md = createMarkdownIt({});
+        const container = document.createElement('div');
+        // 토큰이 몇 개 안 되는 문서 — sliceTokens 가 범위 하나만 만든다.
+        const handle = renderProgressive(md, '# 제목\n\n짧은 한 문단.\n', container);
+        await handle.complete;
+
+        const 이름들 = getSamples().map((s) => s.name);
+        expect(이름들, 'doc:chunk-stall-max 가 아예 없다').toContain('doc:chunk-stall-max');
+    });
+
+    it('여러 청크 문서에서도 그대로 남는다 (규칙이 과하지 않다)', async () => {
+        clearSamples();
+        const md = createMarkdownIt({});
+        const container = document.createElement('div');
+        const 긴글 = Array.from({ length: 400 }, (_, i) => `## 절 ${i}\n\n본문 ${i}.\n`).join('\n');
+        const handle = renderProgressive(md, 긴글, container);
+        await handle.complete;
+
+        const 이름들 = getSamples().map((s) => s.name);
+        expect(이름들).toContain('doc:chunk-stall-max');
+        expect(이름들).toContain('doc:chunk-max');
     });
 });
