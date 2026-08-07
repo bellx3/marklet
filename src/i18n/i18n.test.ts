@@ -232,3 +232,41 @@ describe('문구의 숫자가 코드와 맞는가', () => {
         }
     });
 });
+
+/**
+ * navigator.languages 는 **사용자가 매긴 우선순위 목록**이다 (2026-08-07 실기기).
+ *
+ * ★★★ 예전에는 `tags.some(startsWith('ko'))` 였다 — 목록 어딘가에 한국어가 있기만
+ *   하면 한국어를 골랐다. 안드로이드 13+ 의 '앱별 언어' 로 마크릿만 영어로 지정하면
+ *       navigator.languages = ['en-US', 'ko-KR']
+ *   가 되는데 화면이 **한국어로 떴다.** 사용자가 이 앱만 콕 집어 영어로 바꿨는데
+ *   그 지정이 통째로 무시된 것이다.
+ */
+describe('★★ 시스템 언어는 순서를 지킨다', () => {
+    const 목록으로 = (tags: string[]): string => {
+        const spy = vi.spyOn(navigator, 'languages', 'get').mockReturnValue(tags);
+        try {
+            return resolveLang('system');
+        } finally {
+            spy.mockRestore();
+        }
+    };
+
+    it('★★ 영어가 1순위면 목록에 한국어가 있어도 영어다', () => {
+        expect(목록으로(['en-US', 'ko-KR']), '앱별 언어 지정이 무시된다').toBe('en');
+    });
+
+    it('한국어가 1순위면 한국어다', () => {
+        expect(목록으로(['ko-KR', 'en-US'])).toBe('ko');
+    });
+
+    it('모르는 언어는 건너뛰고 다음 순위를 본다', () => {
+        expect(목록으로(['ja-JP', 'ko-KR', 'en-US'])).toBe('ko');
+        expect(목록으로(['fr-FR', 'en-GB', 'ko-KR'])).toBe('en');
+    });
+
+    it('아는 언어가 하나도 없으면 영어다', () => {
+        expect(목록으로(['ja-JP', 'fr-FR'])).toBe('en');
+        expect(목록으로([])).toBe('en');
+    });
+});

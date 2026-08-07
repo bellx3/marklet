@@ -55,7 +55,28 @@ export function resolveLang(setting: LangSetting): Lang {
      */
     if (setting !== 'system') return 'en';
     const tags = navigator.languages?.length ? navigator.languages : [navigator.language ?? ''];
-    return tags.some((tag) => tag.toLowerCase().startsWith('ko')) ? 'ko' : 'en';
+
+    /*
+     * ★★★ **순서를 지킨다.** 예전에는 `tags.some(startsWith('ko'))` 였다 —
+     *   목록 어딘가에 한국어가 있기만 하면 한국어를 골랐다. 그런데
+     *   navigator.languages 는 **사용자가 매긴 우선순위 목록**이다.
+     *
+     *   실기기 확인(2026-08-07, S22 Ultra / 안드로이드 16):
+     *   안드로이드 13+ 의 '앱별 언어' 로 마크릿만 영어로 지정하면
+     *       navigator.languages = ['en-US', 'ko-KR']
+     *   가 되는데, 화면은 **한국어로 떴다.** 사용자가 이 앱만 콕 집어 영어로 바꿨는데
+     *   그 지정이 무시된 것이다. 시스템 언어 목록을 '영어 1순위, 한국어 2순위' 로
+     *   둔 사람(한국어 사용자 중에 흔하다)도 똑같이 겪는다.
+     *
+     * ★ 모르는 언어는 건너뛰고 다음 순위를 본다 — ['ja','ko'] 는 한국어가 맞다.
+     *   아는 것이 하나도 없으면 영어다(카탈로그가 en/ko 둘뿐이다).
+     */
+    for (const tag of tags) {
+        const base = tag.toLowerCase().split('-')[0];
+        if (base === 'ko') return 'ko';
+        if (base === 'en') return 'en';
+    }
+    return 'en';
 }
 
 /**
