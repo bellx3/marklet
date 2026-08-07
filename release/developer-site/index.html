@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bellx3 — 앱 개발</title>
+<meta name="description" content="개인 개발자 bellx3 가 만드는 안드로이드 앱. 광고 없음, 추적 없음.">
+
+<!--
+  ★ 이 파일은 그대로 올리면 되는 상태다. 바깥에서 아무것도 불러오지 않는다 —
+    폰트도 스크립트도 없다. "추적하지 않는다"고 적어 놓고 구글 폰트를 불러오면
+    그 문장이 거짓이 된다.
+
+  ★ 올리기 전에 아래 【 】 자리를 채울 것. README.md 를 볼 것.
+-->
+
+<style>
+:root {
+    --bg: #ffffff;
+    --fg: #1a1c1f;
+    --dim: #5c6370;
+    --line: #e3e6ea;
+    --accent: #2c6fbb;
+    --card: #f7f8fa;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #16181c;
+        --fg: #e8eaed;
+        --dim: #9aa2ad;
+        --line: #2b2f36;
+        --accent: #6fb3f2;
+        --card: #1d2025;
+    }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+    margin: 0;
+    padding: 0 20px 64px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.7 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo',
+        'Malgun Gothic', system-ui, sans-serif;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+}
+.wrap { max-width: 640px; margin: 0 auto; }
+
+header { padding: 56px 0 8px; }
+h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -0.02em; }
+.tagline { color: var(--dim); margin: 0; }
+
+.langbar { display: flex; gap: 8px; padding: 20px 0 0; }
+.langbar button {
+    font: inherit;
+    font-size: 14px;
+    padding: 6px 14px;
+    min-height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+}
+.langbar button[aria-pressed='true'] {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+h2 {
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+    margin: 44px 0 14px;
+    font-weight: 600;
+}
+
+.app {
+    display: block;
+    padding: 18px 20px;
+    margin-bottom: 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+    text-decoration: none;
+    color: inherit;
+}
+a.app:hover, a.app:focus-visible { border-color: var(--accent); }
+.app-name { font-weight: 600; font-size: 17px; margin-bottom: 2px; }
+.app-desc { color: var(--dim); font-size: 15px; }
+.badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--dim);
+    margin-left: 6px;
+    vertical-align: 2px;
+    letter-spacing: 0;
+    text-transform: none;
+    font-weight: 500;
+}
+
+dl { margin: 0; }
+dl div {
+    display: flex;
+    gap: 16px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 15px;
+}
+dt { color: var(--dim); flex: 0 0 128px; }
+dd { margin: 0; flex: 1; }
+
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+footer {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    color: var(--dim);
+    font-size: 14px;
+}
+[hidden] { display: none !important; }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+<header>
+    <h1>bellx3</h1>
+    <p class="tagline" data-t="tagline">광고 없이, 추적 없이 쓰는 앱을 만듭니다.</p>
+</header>
+
+<nav class="langbar">
+    <button type="button" data-lang="ko" aria-pressed="true">한국어</button>
+    <button type="button" data-lang="en" aria-pressed="false">English</button>
+</nav>
+
+<main>
+    <h2 data-t="appsTitle">앱</h2>
+
+    <a class="app" href="https://play.google.com/store/apps/details?id=com.pixeloasis.game">
+        <div class="app-name">Pixel Oasis</div>
+        <div class="app-desc" data-t="pixelDesc">한 칸씩 칠해 그림을 완성하는 픽셀 아트 게임.</div>
+    </a>
+
+    <!--
+      ★ 마크릿은 아직 비공개 테스트라 스토어 주소가 404 다.
+        프로덕션에 올라간 뒤 아래를 <a class="app" href="...">…</a> 로 바꿀 것.
+        **죽은 링크를 미리 걸어 두지 마라** — 심사에서 개발자 웹사이트를 실제로 열어 본다.
+    -->
+    <div class="app">
+        <div class="app-name">
+            Marklet<span class="badge" data-t="badgeTesting">테스트 중</span>
+        </div>
+        <div class="app-desc" data-t="markletDesc">
+            마크다운 문서를 읽고 고치는 뷰어. 표·수식·다이어그램을 그대로 봅니다.
+        </div>
+    </div>
+
+    <h2 data-t="contactTitle">문의</h2>
+    <dl>
+        <div>
+            <dt data-t="labelEmail">이메일</dt>
+            <dd><a href="mailto:bellx3@hanmail.net">bellx3@hanmail.net</a></dd>
+        </div>
+        <div>
+            <dt data-t="labelPrivacy">개인정보처리방침</dt>
+            <dd>
+                <a href="https://bellx3.github.io/marklet-privacy/">Marklet</a>
+                <!-- ★ 픽셀오아시스 방침 주소를 확인해 여기에 더할 것 (README) -->
+            </dd>
+        </div>
+    </dl>
+
+    <!--
+      ★ 아래는 전자상거래법상 통신판매업자의 표시사항이다.
+        두 앱 모두 인앱 결제가 있으므로 적어 두는 편이 맞다.
+        【 】 를 실제 값으로 바꾸기 전에는 이 구역을 지우고 올려도 된다 —
+        **빈칸을 그대로 공개하지는 마라.**
+    -->
+    <h2 data-t="bizTitle">사업자 정보</h2>
+    <dl>
+        <div><dt data-t="labelBizName">상호</dt><dd>【상호】</dd></div>
+        <div><dt data-t="labelOwner">대표자</dt><dd>【대표자명】</dd></div>
+        <div><dt data-t="labelBizNo">사업자등록번호</dt><dd>【000-00-00000】</dd></div>
+        <div><dt data-t="labelMailOrder">통신판매업 신고번호</dt><dd>【제0000-지역-0000호】</dd></div>
+        <div><dt data-t="labelAddress">주소</dt><dd>【사업장 주소】</dd></div>
+    </dl>
+</main>
+
+<footer>
+    <p data-t="footer">
+        이 사이트는 방문자를 추적하지 않습니다. 쿠키도, 분석 도구도, 외부에서 불러오는
+        글꼴이나 스크립트도 없습니다.
+    </p>
+</footer>
+
+</div>
+
+<script>
+/*
+ * 언어 전환. 사전을 여기 한 곳에만 둔다 — 화면 구조를 두 벌로 복사해 두면
+ * 한쪽만 고치는 일이 반드시 생긴다.
+ */
+var STRINGS = {
+    ko: {
+        tagline: '광고 없이, 추적 없이 쓰는 앱을 만듭니다.',
+        appsTitle: '앱',
+        pixelDesc: '한 칸씩 칠해 그림을 완성하는 픽셀 아트 게임.',
+        markletDesc: '마크다운 문서를 읽고 고치는 뷰어. 표·수식·다이어그램을 그대로 봅니다.',
+        badgeTesting: '테스트 중',
+        contactTitle: '문의',
+        labelEmail: '이메일',
+        labelPrivacy: '개인정보처리방침',
+        bizTitle: '사업자 정보',
+        labelBizName: '상호',
+        labelOwner: '대표자',
+        labelBizNo: '사업자등록번호',
+        labelMailOrder: '통신판매업 신고번호',
+        labelAddress: '주소',
+        footer: '이 사이트는 방문자를 추적하지 않습니다. 쿠키도, 분석 도구도, 외부에서 불러오는 글꼴이나 스크립트도 없습니다.',
+        title: 'bellx3 — 앱 개발'
+    },
+    en: {
+        tagline: 'Apps with no ads and no tracking.',
+        appsTitle: 'Apps',
+        pixelDesc: 'A pixel art game — fill one square at a time.',
+        markletDesc: 'A markdown viewer and editor. Tables, formulas and diagrams as written.',
+        badgeTesting: 'In testing',
+        contactTitle: 'Contact',
+        labelEmail: 'Email',
+        labelPrivacy: 'Privacy policy',
+        bizTitle: 'Business information',
+        labelBizName: 'Business name',
+        labelOwner: 'Representative',
+        labelBizNo: 'Registration no.',
+        labelMailOrder: 'Mail-order licence',
+        labelAddress: 'Address',
+        footer: 'This site does not track visitors. No cookies, no analytics, and no fonts or scripts loaded from anywhere else.',
+        title: 'bellx3 — Android apps'
+    }
+};
+
+function setLang(lang) {
+    var s = STRINGS[lang] || STRINGS.en;
+    document.documentElement.lang = lang;
+    document.title = s.title;
+    var nodes = document.querySelectorAll('[data-t]');
+    for (var i = 0; i < nodes.length; i++) {
+        var key = nodes[i].getAttribute('data-t');
+        if (s[key]) nodes[i].textContent = s[key];
+    }
+    var buttons = document.querySelectorAll('.langbar button');
+    for (var j = 0; j < buttons.length; j++) {
+        buttons[j].setAttribute(
+            'aria-pressed',
+            String(buttons[j].getAttribute('data-lang') === lang)
+        );
+    }
+    try { localStorage.setItem('lang', lang); } catch (e) { /* 사생활 보호 모드 */ }
+}
+
+(function () {
+    var saved = null;
+    try { saved = localStorage.getItem('lang'); } catch (e) { /* 무시 */ }
+    /* 저장된 것이 없으면 브라우저 설정을 따른다. 한국어가 아니면 영어다. */
+    var guess = (navigator.language || 'en').toLowerCase().indexOf('ko') === 0 ? 'ko' : 'en';
+    setLang(saved === 'ko' || saved === 'en' ? saved : guess);
+
+    var buttons = document.querySelectorAll('.langbar button');
+    for (var i = 0; i < buttons.length; i++) {
+        buttons[i].addEventListener('click', function (e) {
+            setLang(e.currentTarget.getAttribute('data-lang'));
+        });
+    }
+})();
+</script>
+</body>
+</html>
