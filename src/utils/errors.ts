@@ -24,7 +24,19 @@ export interface ErrorEntry {
     /** 'error' = 잡히지 않은 예외, 'rejection' = 처리되지 않은 프라미스 거부 */
     kind: 'error' | 'rejection';
     message: string;
-    /** 'file:line:col'. 네이티브가 문자열로 평가한 코드는 자리가 문서 자체로 찍힌다. */
+    /**
+     * 'file:line:col'.
+     *
+     * ★★ `https://localhost/:1:NN` 은 **파일이 아니라 문자열로 평가된 코드**다.
+     *   출처가 셋 중 하나다 —
+     *     ① Capacitor 가 플러그인 콜백을 evaluateJavascript 로 밀어 넣은 것
+     *     ② 개발 중 CDP(Runtime.evaluate)로 우리가 넣은 진단 코드
+     *     ③ 웹뷰가 주입하는 것
+     *   ②는 사용자 기기에서는 있을 수 없다. 그러나 **개발자가 조사하는 동안에는 흔하고**,
+     *   그래서 어제 본 `:1:44` 의 null.style 이 앱 것인지 우리 진단 코드 것인지
+     *   끝내 가르지 못했다(일부러 낸 대조 오류가 `:1:43` 으로 똑같이 찍혔다).
+     *   자리만 보고 앱 버그로 단정하지 마라. 스택이 함께 남았는지부터 봐라.
+     */
     where: string;
     /** 스택 앞부분. 없을 수도 있다(리스너 안에서 난 것). */
     stack: string;
