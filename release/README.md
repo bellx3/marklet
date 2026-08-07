@@ -5,6 +5,7 @@
 | `release-notes-console.txt` | Play Console 출시 노트 칸에 **그대로 붙여 넣는** 태그 포함 전문 |
 | `store-listing.md` | 스토어 등재 문구 (제목·짧은 설명·전체 설명) |
 | `privacy-site/` | GitHub Pages 로 띄우는 개인정보처리방침 |
+| `프로덕션액세스_예상질의응답.md` | 비공개 테스트 14일이 끝난 뒤 낼 **프로덕션 액세스 신청** 답안 (빈칸 있음) |
 
 ## 출시 노트가 두 벌인 이유
 
