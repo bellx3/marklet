@@ -1,11 +1,12 @@
-Closed three paths where your writing could disappear.
+Fixed three paths where writing could disappear.
 
-• Recent documents and folder lists could go empty — fixed
-• Unsaved writing could vanish on the next launch — fixed
-• A successful save left the copy holding old text — fixed
+• Recent documents and folder lists could go empty
+• Unsaved writing could vanish on the next launch
+• A save left the stored copy holding old text
 • Missing files and folders now say what happened
-• Setting this app alone to English no longer shows Korean
+• This app alone set to English no longer shows Korean
 • Settings no longer overflow at large font sizes
 • Back with the menu open no longer shuts the document
+• Settings shows the correct version number
 
 Report anything odd to the address in Settings.
