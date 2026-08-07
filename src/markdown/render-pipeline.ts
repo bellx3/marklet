@@ -77,18 +77,45 @@ export function sliceTokens(tokens: Token[], perChunk = TOKENS_PER_CHUNK): Array
     return ranges;
 }
 
-/** 다음 프레임까지 양보. 화면이 꺼지면 rAF 가 멈추므로 setTimeout 폴백을 함께 둔다. */
+/**
+ * 다음 프레임이 **다 그려질 때까지** 양보한다.
+ *
+ * ★★★ rAF 만으로 끝내면 안 된다 (2026-08-07 LG Q7 실측).
+ *
+ *   requestAnimationFrame 콜백은 프레임의 **맨 앞**, 스타일 계산·레이아웃·페인트
+ *   **이전에** 불린다. 그래서 rAF 로 돌아오는 시점은 "브라우저가 일을 마친 순간" 이
+ *   아니라 "이제 일을 시작하겠다는 순간" 이다. 실측으로 그 차이가 얼마나 큰지 —
+ *   20만 자 문단 하나를 붙이고 잰 값:
+ *       JS 만            0ms
+ *       rAF 까지         5~9ms      ← 예전에 이걸 '멈춤' 이라고 기록했다
+ *       프레임 완료까지   532~547ms  ← 사용자가 실제로 못 만지는 시간
+ *   **100배 축소 보고였다.** 그리고 양보도 못 한 셈이라, 다음 청크를 앞 청크가
+ *   아직 배치되지도 않은 상태에서 밀어 넣고 있었다.
+ *
+ *   rAF 뒤에 태스크를 하나 더 태우면 그 태스크는 **프레임이 커밋된 뒤에** 돈다.
+ *
+ * ★ 화면이 꺼지면 rAF 가 아예 안 온다. 그때만 폴백이 대신한다.
+ *   ★★ 폴백 시각을 rAF 와 경쟁시키지 마라 — 프레임이 500ms 걸리는 큰 청크에서
+ *     폴백이 먼저 터지면 고친 것이 도로 무의미해진다. rAF 가 한 번이라도 왔으면
+ *     폴백은 손을 뗀다.
+ */
 function yieldToBrowser(): Promise<void> {
     return new Promise((resolve) => {
         let done = false;
+        let rafCame = false;
         const finish = () => {
             if (!done) {
                 done = true;
                 resolve();
             }
         };
-        requestAnimationFrame(finish);
-        setTimeout(finish, 32);
+        requestAnimationFrame(() => {
+            rafCame = true;
+            setTimeout(finish, 0);
+        });
+        setTimeout(() => {
+            if (!rafCame) finish();
+        }, 64);
     });
 }
 
@@ -178,9 +205,15 @@ export function renderProgressive(
      *   83.9ms 로 찍혔다(2026-08-05 2.5MB 실측). 상한이 100ms 인데
      *   **넘는 일이 영영 없으니 "줄여라"는 지침이 발동하지 않았다.**
      *
-     *   여기서는 '붙이기 시작'부터 '브라우저가 다음 프레임을 준 순간'까지를 잰다.
+     *   여기서는 '붙이기 시작'부터 '브라우저가 그 프레임을 다 그린 순간'까지를 잰다.
      *   그게 사용자가 스크롤을 못 하는 시간이다. 이미 있는 yield 를 가로질러 재므로
      *   추가 비용은 없다.
+     *
+     * ★★★ **'프레임을 준 순간' 이라고 적혀 있었는데 그게 틀렸다** (2026-08-07).
+     *   그때 yield 는 requestAnimationFrame 하나였고, rAF 콜백은 레이아웃 **이전에**
+     *   불린다. 그래서 이 값은 브라우저가 일을 시작하기도 전의 시각이었다 —
+     *   20만 자 문단에서 rAF 까지 5ms, 프레임 완료까지 532ms 였다.
+     *   yieldToBrowser 를 프레임 완료 뒤에 돌아오게 고쳐 그 구멍을 메웠다(위 주석).
      *
      * ★★★ **0번 청크도 반드시 잰다** (2026-08-07 LG Q7 실측으로 발견).
      *   예전에는 appendedAt 을 루프 안에서만 세웠다. 그래서

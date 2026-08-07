@@ -215,7 +215,7 @@ describe('★★ 내용이 없는 문서', () => {
 describe('★★ 멈춤 기록이 침묵하지 않는다', () => {
     it('청크가 하나뿐인 문서도 doc:chunk-stall-max 를 남긴다', async () => {
         clearSamples();
-        const md = createMarkdownIt({});
+        const md = createMarkdownIt({ breaks: false });
         const container = document.createElement('div');
         // 토큰이 몇 개 안 되는 문서 — sliceTokens 가 범위 하나만 만든다.
         const handle = renderProgressive(md, '# 제목\n\n짧은 한 문단.\n', container);
@@ -227,7 +227,7 @@ describe('★★ 멈춤 기록이 침묵하지 않는다', () => {
 
     it('여러 청크 문서에서도 그대로 남는다 (규칙이 과하지 않다)', async () => {
         clearSamples();
-        const md = createMarkdownIt({});
+        const md = createMarkdownIt({ breaks: false });
         const container = document.createElement('div');
         const 긴글 = Array.from({ length: 400 }, (_, i) => `## 절 ${i}\n\n본문 ${i}.\n`).join('\n');
         const handle = renderProgressive(md, 긴글, container);
@@ -236,5 +236,51 @@ describe('★★ 멈춤 기록이 침묵하지 않는다', () => {
         const 이름들 = getSamples().map((s) => s.name);
         expect(이름들).toContain('doc:chunk-stall-max');
         expect(이름들).toContain('doc:chunk-max');
+    });
+});
+
+/**
+ * 양보는 **프레임이 끝난 뒤에** 돌아와야 한다 (2026-08-07 LG Q7 실측).
+ *
+ * ★★★ requestAnimationFrame 콜백은 프레임의 맨 앞, 레이아웃 **이전에** 불린다.
+ *   거기서 양보를 끝내면 두 가지가 한꺼번에 어긋난다 —
+ *     ① 멈춤 측정이 브라우저가 일을 **시작하기도 전**의 시각을 찍는다
+ *        (20만 자 문단: rAF 까지 5ms, 프레임 완료까지 532ms — 100배 축소 보고)
+ *     ② 다음 청크를 앞 청크가 배치되지도 않은 상태에서 밀어 넣는다
+ *   rAF 뒤에 태스크를 하나 더 태워야 프레임이 커밋된 뒤에 돌아온다.
+ */
+describe('★★ 양보 시점', () => {
+    it('rAF 콜백만으로는 다음 청크가 붙지 않는다', async () => {
+        const 잡힌rAF: FrameRequestCallback[] = [];
+        const 원래 = globalThis.requestAnimationFrame;
+        globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+            잡힌rAF.push(cb);
+            return 1;
+        }) as typeof requestAnimationFrame;
+
+        try {
+            const md = createMarkdownIt({ breaks: false });
+            const container = document.createElement('div');
+            // 청크가 여러 개 나오도록 넉넉히
+            const 긴글 = Array.from({ length: 600 }, (_, i) => `## 절 ${i}\n\n본문 ${i}.\n`).join(
+                '\n',
+            );
+            renderProgressive(md, 긴글, container);
+
+            expect(container.querySelectorAll('.md-chunk').length, '0번은 동기로 붙는다').toBe(1);
+
+            // 프레임이 시작됐다고만 알린다(레이아웃 전 시점).
+            await Promise.resolve();
+            for (const cb of 잡힌rAF.splice(0)) cb(0);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(
+                container.querySelectorAll('.md-chunk').length,
+                'rAF 콜백만으로 다음 청크를 붙였다 — 앞 청크는 아직 배치도 안 됐다',
+            ).toBe(1);
+        } finally {
+            globalThis.requestAnimationFrame = 원래;
+        }
     });
 });
