@@ -178,13 +178,24 @@ export async function listFolder(folder: Folder): Promise<FolderListing> {
         };
     } catch (e) {
         // ★ 권한이 만료된 폴더를 자동으로 지우지 마라. SD 카드를 잠깐 뺐을 뿐일 수 있다.
+        /*
+         * ★★ 이유마다 사용자가 할 일이 다르다. 뭉뚱그리지 마라.
+         *   EPERM  권한 만료 — 폴더를 다시 추가하면 된다
+         *   ENOENT 폴더가 없다 — 옮겼거나 지웠다. 어디로 갔는지부터 찾아야 한다
+         *   그 밖   읽기 실패 — 다시 시도해 볼 만하다
+         *   (ENOENT 갈래는 2026-08-07 에 네이티브가 알려 주기 시작했다. 그전에는
+         *    없는 폴더가 **'빈 폴더'로 그려졌다** — 파일이 사라진 것처럼 보였다.)
+         */
+        const code = (e as { code?: string })?.code;
         return {
             folder,
             files: [],
             error:
-                (e as { code?: string })?.code === 'EPERM'
+                code === 'EPERM'
                     ? t.folders.expired
-                    : t.folders.readFailed,
+                    : code === 'ENOENT'
+                      ? t.folders.notFound
+                      : t.folders.readFailed,
         };
     }
 }

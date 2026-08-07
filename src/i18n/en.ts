@@ -268,6 +268,7 @@ export const en = {
         depthLimited: (n: number) =>
             `Only ${n} levels of subfolders are scanned. Files deeper than that are not listed.`,
         readFailed: 'Could not read the folder.',
+        notFound: 'Folder not found. It looks like it was moved or deleted.',
         listUnavailable: 'Could not read the folder list. Please try again in a moment.',
     },
 

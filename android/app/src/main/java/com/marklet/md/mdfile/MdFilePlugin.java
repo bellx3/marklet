@@ -449,6 +449,32 @@ public class MdFilePlugin extends Plugin {
         Uri tree = Uri.parse(uriStr);
         try {
             String rootDocId = DocumentsContract.getTreeDocumentId(tree);
+
+            /*
+             * ★★★ 폴더가 **아직 있는지 먼저 본다** (2026-08-07 LG Q7 실측으로 발견).
+             *
+             *   walk() 는 자식 커서가 null 이거나 비면 조용히 돌아온다. 그래서 폴더를
+             *   밖에서 지우거나 이름을 바꾸면 여기서 files:[] 로 성공해 버리고,
+             *   화면에는 **"이 폴더에는 마크다운 파일이 없습니다"** 가 뜬다.
+             *   못 찾는 것을 '비어 있다'고 말하는 것이다 — 사용자는 자기 파일이
+             *   사라진 줄 알거나 폴더를 잘못 골랐다고 생각한다.
+             *
+             *   JS 쪽에는 이미 '폴더를 읽지 못했습니다' 갈래가 있었는데(folders.ts),
+             *   네이티브가 오류를 안 주니 한 번도 안 쓰였다.
+             *
+             * ★ 루트 문서를 한 줄만 조회한다. DocumentFile.exists() 가 하는 것과 같다.
+             */
+            Uri rootDoc = DocumentsContract.buildDocumentUriUsingTree(tree, rootDocId);
+            try (Cursor probe = getContext().getContentResolver().query(
+                    rootDoc,
+                    new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID},
+                    null, null, null)) {
+                if (probe == null || !probe.moveToFirst()) {
+                    call.reject("폴더를 찾을 수 없습니다", "ENOENT");
+                    return;
+                }
+            }
+
             Scan scan = new Scan();
             walk(tree, rootDocId, 0, maxDepth, scan);
 

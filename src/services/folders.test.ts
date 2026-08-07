@@ -261,3 +261,49 @@ describe('★★ 목록을 못 읽으면 폴더 목록을 덮어쓰지 않는다
         expect(await loadFolders()).toHaveLength(0);
     });
 });
+
+/**
+ * 폴더를 못 읽었을 때 **이유마다 다른 말을 한다** (2026-08-07 LG Q7 실측).
+ *
+ * ★★★ 폴더를 밖에서 지우거나 이름을 바꾸면, 네이티브 walk() 가 자식 커서를 못 얻고
+ *   조용히 빈 목록으로 성공했다. 그래서 화면에는
+ *   **"이 폴더에는 마크다운 파일이 없습니다"** 가 떴다 —
+ *   못 찾는 것을 '비어 있다' 고 말한 것이다. 사용자는 자기 파일이 사라진 줄 알거나
+ *   폴더를 잘못 골랐다고 생각한다. 실제로 할 일(어디로 옮겼는지 찾기)은 화면에 없다.
+ *
+ *   네이티브가 ENOENT 를 주게 고쳤고, 여기서 그 갈래를 문구로 잇는다.
+ */
+describe('★★ 폴더를 못 읽은 이유를 구분한다', () => {
+    beforeEach(() => {
+        mdFile.pickFolder.mockResolvedValue({ ...FOLDER, persisted: true, cancelled: false });
+    });
+
+    const 실패로listFolder = async (code: string): Promise<string | undefined> => {
+        await addFolder();
+        mdFile.listFolder.mockRejectedValue(Object.assign(new Error('x'), { code }));
+        const [listing] = await Promise.all([listFolder({ ...FOLDER })]);
+        return listing.error;
+    };
+
+    it('★★ 폴더가 없으면 "찾을 수 없다" 고 한다 (빈 폴더가 아니다)', async () => {
+        const err = await 실패로listFolder('ENOENT');
+        expect(err).toBe(t.folders.notFound);
+        expect(err, '없는 폴더를 빈 폴더라고 하면 안 된다').not.toBe(t.folders.readFailed);
+    });
+
+    it('권한이 만료됐으면 그렇게 말한다', async () => {
+        expect(await 실패로listFolder('EPERM')).toBe(t.folders.expired);
+    });
+
+    it('그 밖의 실패는 "읽지 못했다" 로 남긴다', async () => {
+        expect(await 실패로listFolder('EIO')).toBe(t.folders.readFailed);
+    });
+
+    it('★ 진짜로 비어 있는 폴더는 오류가 아니다 (규칙이 과하지 않다)', async () => {
+        await addFolder();
+        mdFile.listFolder.mockResolvedValue({ files: [] });
+        const listing = await listFolder({ ...FOLDER });
+        expect(listing.error).toBeUndefined();
+        expect(listing.files).toEqual([]);
+    });
+});
