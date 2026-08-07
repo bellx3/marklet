@@ -117,4 +117,45 @@ public class UriErrorsTest {
         }
         assertEquals(UriErrors.EIO, UriErrors.codeOf(new Loop()));
     }
+
+    /**
+     * ★★★ 2026-08-07 LG Q7 실측. **폴더 목록의 파일을 밖에서 지우고 누른 경우.**
+     *
+     *   최상위 타입이 IllegalArgumentException 이고, 진짜 원인은 바인더를 건너오며
+     *   **메시지 문자열로 눌려** 온다(getCause 는 비어 있다). 그래서 타입만 보던
+     *   예전 코드는 EIO 로 떨어뜨렸고, 사용자 화면에는 이 영어 내부 문구가 그대로 떴다:
+     *       "파일을 여는 중 오류가 발생했습니다. (Failed to determine if home:… is child of …)"
+     *   실제로 할 일은 '다시 고르기' 하나뿐인데 그 말이 어디에도 없었다.
+     */
+    @Test
+    public void 바인더를_건너온_없는_파일은_ENOENT() {
+        Throwable e = new IllegalArgumentException(
+                "Failed to determine if home:내폴더/문서.md is child of home:내폴더: "
+                        + "java.io.FileNotFoundException: Missing file for home:내폴더/문서.md "
+                        + "at /storage/emulated/0/Documents/내폴더/문서.md");
+        assertEquals(UriErrors.ENOENT, UriErrors.codeOf(e));
+    }
+
+    @Test
+    public void 타입이_아니라_메시지에만_ENOENT_가_있어도_잡는다() {
+        assertEquals(
+                UriErrors.ENOENT,
+                UriErrors.codeOf(new IllegalStateException("open failed: ENOENT (No such file)")));
+    }
+
+    /** ★ 없는 파일처럼 보여도 권한 흔적이 있으면 권한 쪽이다 — 사용자가 할 일이 다르다. */
+    @Test
+    public void 없는_파일_문구에_권한_흔적이_섞이면_EPERM() {
+        Throwable e = new IllegalArgumentException(
+                "Missing file for home:x.md: open failed: EACCES (Permission denied)");
+        assertEquals(UriErrors.EPERM, UriErrors.codeOf(e));
+    }
+
+    /** ★ 규칙이 과하지 않은지 — 파일과 무관한 실패는 그대로 EIO 다. */
+    @Test
+    public void 파일과_무관한_실패는_여전히_EIO() {
+        assertEquals(UriErrors.EIO, UriErrors.codeOf(new IllegalArgumentException("bad uri")));
+        assertEquals(UriErrors.EIO, UriErrors.codeOf(new RuntimeException("provider crashed")));
+    }
+
 }

@@ -1,7 +1,6 @@
 package com.marklet.md.mdfile;
 
 import java.io.FileNotFoundException;
-import java.io.IOException;
 
 /**
  * 예외를 JS 가 알아보는 오류 코드로 바꾼다. **순수 함수만 있다.**
@@ -51,14 +50,47 @@ final class UriErrors {
     static String codeOf(Throwable e) {
         if (e instanceof SecurityException) return EPERM;
         if (e instanceof UnsupportedOperationException) return EREADONLY;
-        if (e instanceof FileNotFoundException) {
-            return looksLikePermission(e) ? EPERM : ENOENT;
-        }
-        if (e instanceof IOException) {
-            // 스트림을 여는 데는 성공했는데 도중에 끊긴 경우다. 권한 문구가 섞여 있으면 그쪽이다.
-            return looksLikePermission(e) ? EPERM : EIO;
-        }
+        // ★ 권한을 먼저 본다. '없는 파일' 처럼 보이는 메시지에 EACCES 가 섞여 오기도 한다.
+        if (looksLikePermission(e)) return EPERM;
+        if (looksMissing(e)) return ENOENT;
         return EIO;
+    }
+
+    /**
+     * 파일이 없어서 난 실패인가.
+     *
+     * ★★★ **타입만 보면 못 잡는다** (2026-08-07 LG Q7 실측).
+     *   폴더 목록에 있던 파일을 파일 관리자에서 지우고 그 항목을 누르면 이렇게 온다:
+     *       java.lang.IllegalArgumentException: Failed to determine if
+     *       home:내폴더/문서.md is child of home:내폴더:
+     *       java.io.FileNotFoundException: Missing file for home:내폴더/문서.md at /storage/...
+     *
+     *   ① 최상위 타입이 IllegalArgumentException 이다 — FileNotFoundException 이 아니다.
+     *   ② 진짜 원인은 **바인더를 건너오며 메시지 문자열로 눌렸다.** getCause() 는 비어 있다
+     *      (DatabaseUtils.readExceptionFromParcel 이 그렇게 만든다).
+     *   그래서 예전에는 EIO 로 떨어졌고, 화면에는 이 영어 내부 문구가 그대로 떴다 —
+     *       "파일을 여는 중 오류가 발생했습니다. (Failed to determine if home:… is child of …)"
+     *   사용자가 할 일(다시 고르기)은 어디에도 없고, 앱이 고장 난 것처럼 보인다.
+     *
+     * ★ 권한 검사(looksLikePermission)는 이미 원인 사슬을 타고 있었다. 같은 그물을
+     *   여기에도 친다 — 사슬의 **타입과 메시지 양쪽**을 본다.
+     */
+    private static boolean looksMissing(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof FileNotFoundException) return true;
+            String m = t.getMessage();
+            if (m != null) {
+                String lower = m.toLowerCase();
+                if (lower.contains("filenotfoundexception")
+                        || lower.contains("no such file")
+                        || lower.contains("missing file")
+                        || lower.contains("enoent")) {
+                    return true;
+                }
+            }
+            if (t.getCause() == t) break; // 자기 자신을 원인으로 가리키는 예외 방어
+        }
+        return false;
     }
 
     /**
