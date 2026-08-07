@@ -19,6 +19,8 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { assertNoDevServer } = require('./lib/assert-no-dev-server.cjs');
+const { assertWebAssetsFresh } = require('./lib/assert-web-assets-fresh.cjs');
+const { buildWebAndSync } = require('./lib/build-web.cjs');
 
 const repoRoot = path.resolve(__dirname, '..');
 const androidDir = path.join(repoRoot, 'android');
@@ -121,6 +123,15 @@ async function main() {
      */
     const flag = process.argv.find((a) => a.startsWith('--status='));
     const status = flag ? flag.split('=')[1] : track === 'internal' ? 'completed' : 'draft';
+
+    /*
+     * ★★★ gradle 은 웹을 만들지 않는다 (build-aab.cjs 와 같은 이유).
+     *   이걸 빼면 **마지막으로 손수 npm run build 를 돌린 시점의 웹**이 올라간다.
+     *   버전 표시만의 문제가 아니라, 그 뒤에 고친 웹 코드가 통째로 빠진 채 나간다.
+     * ★ 확인 프롬프트(production) 뒤에 둔다 — 취소할 사람에게 빌드를 시키지 않는다.
+     */
+    buildWebAndSync();
+    assertWebAssetsFresh();
 
     console.log(`🚀 v${version} → ${track} 트랙 업로드 중... (상태: ${status})`);
 

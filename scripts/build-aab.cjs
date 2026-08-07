@@ -20,6 +20,8 @@ const { spawnSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { assertNoDevServer } = require('./lib/assert-no-dev-server.cjs');
+const { assertWebAssetsFresh } = require('./lib/assert-web-assets-fresh.cjs');
+const { buildWebAndSync } = require('./lib/build-web.cjs');
 
 const repoRoot = path.resolve(__dirname, '..');
 const androidDir = path.join(repoRoot, 'android');
@@ -81,6 +83,14 @@ function main() {
         );
         console.warn('   android/keystore.properties.example을 복사해 값을 채우세요.');
     }
+
+    /*
+     * ★★★ gradle 은 웹을 만들지 않는다. 여기서 만들어 넣지 않으면 **마지막으로 손수
+     *   npm run build 를 돌린 시점의 웹**이 그대로 AAB 에 들어간다(2026-08-07 실제 사고 —
+     *   assert-web-assets-fresh.cjs 주석). 만들고, 그러고도 검사한다.
+     */
+    buildWebAndSync();
+    assertWebAssetsFresh();
 
     console.log('🏗️  릴리스 AAB 빌드 중...');
     // Windows의 .bat는 Node 20+에서 shell 없이는 실행되지 않으므로 shell 경유로 실행합니다.
