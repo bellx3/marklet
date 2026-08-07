@@ -203,10 +203,19 @@ describe('진단 화면 (12-3절)', () => {
         return screen;
     }
 
+    /**
+     * ★ 구획을 지정해서 찾는다. 화면에 .list-empty 를 쓰는 목록이 둘이다
+     *   (오류 · 시간 기록). 첫 번째를 집으면 엉뚱한 구획을 보게 된다
+     *   — 실제로 오류 구획이 생기자 이 테스트가 그렇게 깨졌다(2026-08-07).
+     */
+    const 시간기록구획 = (): HTMLElement =>
+        [...document.querySelectorAll<HTMLElement>('.diag-list')].at(-2) ??
+        document.querySelector<HTMLElement>('.diag-list')!;
+
     it('계측값이 없으면 그렇게 말한다', () => {
         const screen = mount();
         screen.refresh();
-        expect(document.querySelector('.list-empty')?.textContent).toBe(t.diagnostics.empty);
+        expect(시간기록구획().querySelector('.list-empty')?.textContent).toBe(t.diagnostics.empty);
     });
 
     it('최신이 위로 온다', () => {
@@ -256,7 +265,7 @@ describe('진단 화면 (12-3절)', () => {
             .click();
 
         expect(h.cleared).toBe(1);
-        expect(document.querySelector('.list-empty')?.textContent).toBe(t.diagnostics.empty);
+        expect(시간기록구획().querySelector('.list-empty')?.textContent).toBe(t.diagnostics.empty);
     });
 
     it('복사에는 버전과 기기 정보가 함께 들어간다', async () => {

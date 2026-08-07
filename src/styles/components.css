@@ -660,6 +660,32 @@
     display: flex;
     flex-direction: column;
 }
+/*
+ * 잡히지 않은 오류 한 줄. 시간 기록(.diag-row)과 달리 **줄바꿈을 살린다** —
+ * 스택은 한 줄로 뭉치면 읽을 수가 없다.
+ * ★ 가로로 넘치지 않게 감싼다. 긴 URL·경로가 그대로 들어오므로 anywhere 로 끊는다
+ *   (배율 2.0 에서 화면을 뚫던 것과 같은 종류를 여기서 미리 막는다).
+ */
+.diag-error {
+    padding: var(--sp-2) 0;
+    border-bottom: 1px solid var(--md-border);
+    font-size: 13px;
+}
+.diag-error-msg {
+    color: var(--md-warn-fg);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.diag-error-where {
+    margin-top: var(--sp-1);
+    color: var(--md-fg-muted);
+    font-family: var(--md-font-code);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .diag-row {
     display: flex;
     align-items: baseline;

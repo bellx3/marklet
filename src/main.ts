@@ -13,7 +13,14 @@ import { initRouter } from './app/router';
 import { initDocumentEntry } from './services/document-entry';
 import { reconcileRecents, pruneSnapshotOrphans } from './services/recents';
 import { mark, measure, record } from './utils/perf';
+import { installErrorLog } from './utils/errors';
 import * as shell from './app/shell';
+
+/*
+ * ★★ 부팅보다 **먼저** 건다. boot() 안에서 나는 오류도 잡아야 하고,
+ *   그게 가장 알고 싶은 오류다 — 부팅이 반쯤 된 상태는 사용자가 신고하기도 어렵다.
+ */
+installErrorLog();
 
 async function boot(): Promise<void> {
     mark('boot:start');

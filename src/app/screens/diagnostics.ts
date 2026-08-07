@@ -1,4 +1,5 @@
 import { getSamples, clearSamples } from '../../utils/perf';
+import { getErrors, clearErrors } from '../../utils/errors';
 import { measureStorage, formatBytes, type StorageBucket } from '../../services/storage-usage';
 import { Toast } from '../../utils/toast';
 import { iconButton } from '../icons';
@@ -51,6 +52,7 @@ export function createDiagnostics(onBack: () => void): DiagnosticsScreen {
     clear.textContent = t.diagnostics.clear;
     clear.addEventListener('click', () => {
         clearSamples();
+        clearErrors();
         refresh();
     });
 
@@ -72,8 +74,23 @@ export function createDiagnostics(onBack: () => void): DiagnosticsScreen {
     storageHint.className = 'setting-hint';
     storageHint.textContent = t.diagnostics.storageHint;
 
+    /*
+     * ── 잡히지 않은 오류.
+     *
+     * ★★ 여기가 없어서 실기기에서 본 예외 하나를 이틀 동안 못 쫓았다(utils/errors.ts).
+     *   화면이 멀쩡해 보이는 오류는 사용자도 신고하지 않으므로, 문의가 왔을 때
+     *   **함께 보내지는 것**이 유일한 단서가 된다.
+     * ★ 시간 기록보다 위에 둔다. 오류가 있다면 그게 먼저 볼 것이다.
+     */
+    const errorList = document.createElement('div');
+    errorList.className = 'diag-list';
+
+    const errorTitle = document.createElement('h2');
+    errorTitle.className = 'home-section-title';
+    errorTitle.textContent = t.diagnostics.errors;
+
     actions.append(copy, clear);
-    main.append(actions, table, storageTitle, storage, storageHint);
+    main.append(actions, errorTitle, errorList, table, storageTitle, storage, storageHint);
     root.append(bar, main);
 
     const BUCKET_LABEL: Record<string, string> = {
@@ -81,6 +98,39 @@ export function createDiagnostics(onBack: () => void): DiagnosticsScreen {
         backup: t.diagnostics.bucketBackup,
         draft: t.diagnostics.bucketDraft,
     };
+
+    function renderErrors(): void {
+        errorList.replaceChildren();
+        const list = getErrors();
+        if (list.length === 0) {
+            const p = document.createElement('p');
+            p.className = 'list-empty';
+            p.textContent = t.diagnostics.noErrors;
+            errorList.appendChild(p);
+            return;
+        }
+        // 최신이 위로
+        for (const e of [...list].reverse()) {
+            const row = document.createElement('div');
+            row.className = 'diag-error';
+
+            const msg = document.createElement('div');
+            msg.className = 'diag-error-msg';
+            msg.textContent = e.count > 1 ? `${e.message} (×${e.count})` : e.message;
+
+            const where = document.createElement('div');
+            where.className = 'diag-error-where';
+            // ★ 스택이 없을 때가 많다(네이티브가 문자열로 평가한 코드). 자리만이라도 남긴다.
+            where.textContent = [e.where, e.stack].filter(Boolean).join('\n');
+
+            const at = document.createElement('div');
+            at.className = 'diag-at';
+            at.textContent = new Date(e.at).toLocaleTimeString(localeTag());
+
+            row.append(msg, where, at);
+            errorList.appendChild(row);
+        }
+    }
 
     function renderStorage(buckets: StorageBucket[]): void {
         storage.replaceChildren();
@@ -110,6 +160,12 @@ export function createDiagnostics(onBack: () => void): DiagnosticsScreen {
             (s) => `${new Date(s.at).toISOString()}\t${s.name}\t${s.ms.toFixed(1)}ms`,
         );
         // ★ 사본 크기도 함께 넣는다. 문의를 받았을 때 이 한 덩이만 있으면 되게 한다.
+        // ★ 오류를 복사 글에 반드시 넣는다 — 문의에서 제일 값어치 있는 부분이다.
+        const errorLines = getErrors().flatMap((e) => [
+            `[${e.kind}] ${e.message}${e.count > 1 ? ` (×${e.count})` : ''}`,
+            `  ${e.where}`,
+            ...(e.stack ? e.stack.split('\n').map((l) => `  ${l}`) : []),
+        ]);
         const storageLines = lastBuckets.map(
             (b) => `${b.name}\t${b.files}개\t${formatBytes(b.bytes)}`,
         );
@@ -119,6 +175,7 @@ export function createDiagnostics(onBack: () => void): DiagnosticsScreen {
             '',
             ...lines,
             '',
+            ...(errorLines.length ? ['-- errors --', ...errorLines, ''] : []),
             ...storageLines,
         ].join('\n');
     }
@@ -147,6 +204,8 @@ export function createDiagnostics(onBack: () => void): DiagnosticsScreen {
             lastBuckets = b;
             renderStorage(b);
         });
+
+        renderErrors();
 
         table.replaceChildren();
         const samples = getSamples();

@@ -170,6 +170,8 @@ export const en = {
         empty: 'No measurements yet. Try opening a document first.',
         storage: 'Copies kept by the app',
         storageHint: 'Including these numbers in a report helps a lot.',
+        errors: 'Uncaught errors',
+        noErrors: 'No errors recorded.',
         bucketSnapshot: 'Copies of documents that cannot be reopened',
         bucketBackup: 'Backups taken before saving',
         bucketDraft: 'Unsaved edits',

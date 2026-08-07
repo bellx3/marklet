@@ -159,6 +159,8 @@ export const ko: Catalog = {
         empty: '아직 측정값이 없습니다. 문서를 한 번 열어 보세요.',
         storage: '앱이 보관 중인 사본',
         storageHint: '문의하실 때 이 숫자를 함께 알려 주시면 도움이 됩니다.',
+        errors: '잡히지 않은 오류',
+        noErrors: '기록된 오류가 없습니다.',
         bucketSnapshot: '다시 못 여는 문서의 사본',
         bucketBackup: '저장 전 백업',
         bucketDraft: '저장하지 않은 편집',
