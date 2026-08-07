@@ -1,11 +1,11 @@
-Korean search did not work at all. Fixed — please give it a try.
+Closed three paths where your writing could disappear.
 
-• Typing Korean in Find by name now shows results as you type
-  (initial consonants work too)
-• Find in document works the same way. Until now it only
-  searched after you pressed space or enter.
-• Folders with very many files say when only part is shown
-• Temporary copies left after saving are cleaned up
-• Settings, then five taps on the version, shows storage used
+• Recent documents and folder lists could go empty — fixed
+• Unsaved writing could vanish on the next launch — fixed
+• A successful save left the copy holding old text — fixed
+• Missing files and folders now say what happened
+• Setting this app alone to English no longer shows Korean
+• Settings no longer overflow at large font sizes
+• Back with the menu open no longer shuts the document
 
-Report anything odd to the address at the bottom of Settings.
+Report anything odd to the address in Settings.
