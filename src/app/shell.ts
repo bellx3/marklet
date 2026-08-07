@@ -2,7 +2,7 @@ import { App } from '@capacitor/app';
 import { MdFile, type MdDocument } from '../plugins/md-file';
 import type { EntryHandlers } from '../services/document-entry';
 import { openDocument as readAndGate, gateContent } from '../services/open-document';
-import { rememberDoc, openRecent, type RecentDoc } from '../services/recents';
+import { rememberDoc, refreshRemembered, openRecent, type RecentDoc } from '../services/recents';
 import { addFolder } from '../services/folders';
 import { readDraft, draftSavedAt, clearDraft, flushDraft } from '../services/draft';
 import { saveDocument, readBackup, isCloudUri } from '../services/save';
@@ -567,6 +567,12 @@ async function saveFlow(): Promise<void> {
     if (result.ok) {
         editor.markSaved();
         viewer.setContent(content);
+        /*
+         * ★★ 사본과 크기를 새 글로 맞춘다. 안 하면 사본이 옛 글로 남아,
+         *   나중에 원본을 못 열게 됐을 때 저장까지 마친 글이 조용히 되돌아간다
+         *   (refreshRemembered 주석). 목록의 크기 표시도 옛 값으로 굳는다.
+         */
+        void refreshRemembered(doc, content);
         await clearDraft(doc.uri);
         Toast.success(t.shell.saved);
 

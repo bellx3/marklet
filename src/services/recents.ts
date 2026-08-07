@@ -139,6 +139,30 @@ async function dropSnapshot(path: string | undefined): Promise<void> {
     await Filesystem.deleteFile({ path, directory: Directory.Data }).catch(() => {});
 }
 
+/**
+ * 저장에 성공한 뒤 **사본과 크기를 새 글로 맞춘다.**
+ *
+ * ★★★ 안 하면 사본이 옛 글로 남는다 (2026-08-07).
+ *   사본은 **다시 못 여는 URI 의 유일한 사본**이다. 원본은 새 글이 됐는데 사본만
+ *   옛 글이면, 나중에 원본을 못 열게 됐을 때 **저장까지 마친 글이 조용히 되돌아간다.**
+ *   사용자는 "저장했습니다" 토스트까지 본 뒤다. 되돌아간 줄도 모른다.
+ *
+ *   writable 이면서 persisted 가 아닌 조합은 실제로 있다 — 파일 관리자가 쓰기 권한은
+ *   주지만 영속 권한(ACTION_OPEN_DOCUMENT 로만 받는다)은 아닌 경우다.
+ *
+ * ★ 목록에 없는 문서면 아무것도 하지 않는다. 저장했다고 해서 최근 목록에 없던 것을
+ *   새로 밀어 넣을 이유는 없다 — 그건 여는 쪽(rememberDoc)이 할 일이다.
+ */
+export async function refreshRemembered(doc: MdDocument, content: string): Promise<void> {
+    const stored = await readStoredRecents();
+    if (!stored.ok) return;
+    const 있던것 = stored.list.find((r) => r.uri === doc.uri);
+    if (!있던것) return;
+
+    const size = new TextEncoder().encode(content).length;
+    await rememberDoc({ ...doc, size }, content, 있던것.source);
+}
+
 export async function rememberDoc(
     doc: MdDocument,
     content: string,

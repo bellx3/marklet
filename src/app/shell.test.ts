@@ -619,3 +619,75 @@ describe('★★ 새 이름으로 저장', () => {
         expect(entryHandlers.hasUnsavedChanges(), '고친 글이 사라졌다').toBe(true);
     });
 });
+
+/**
+ * 저장에 성공한 뒤의 뒷정리.
+ *
+ * ★★ 이 갈래는 **오늘까지 한 번도 안 돌았다.** read 대역이 늘 같은 글을 돌려줘서
+ *   save.ts 의 되읽기 검증이 항상 실패했기 때문이다(위 대역 주석). 대역을 고치고
+ *   처음으로 열린 길이라, 여기서 무엇이 갱신되고 무엇이 안 되는지 못으로 박아 둔다.
+ */
+describe('저장 성공 뒤', () => {
+    async function 열고고치고저장(over: Partial<MdDocument> = {}): Promise<string> {
+        const uri = over.uri ?? 'content://docs/쓸수있는.md';
+        await entryHandlers.openDocument(doc({ uri, ...over }));
+        await settle();
+        buttonByLabel(t.viewer.edit)!.click();
+        await settle();
+        const ta = root.querySelector<HTMLTextAreaElement>('#editor')!;
+        ta.value = '# 문서\n\n저장된 새 글';
+        ta.dispatchEvent(new Event('input'));
+        await settle();
+        [...root.querySelectorAll('button')]
+            .find((x) => (x.textContent ?? '').trim() === t.editor.save)!
+            .click();
+        await settle();
+        return uri;
+    }
+
+    it('편집을 끝내고 뷰어로 돌아간다', async () => {
+        await 열고고치고저장();
+        expect(visibleScreen(root)).toContain('screen-viewer');
+        expect(hasLayer('editor')).toBe(false);
+        expect(entryHandlers.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('원본 파일에 새 글이 들어갔다', async () => {
+        const uri = await 열고고치고저장();
+        expect(docContent.get(uri)).toContain('저장된 새 글');
+    });
+
+    it('초안을 지운다 (다음에 열 때 헛되이 묻지 않는다)', async () => {
+        await 열고고치고저장();
+        expect([...fsStore.keys()].filter((p) => p.startsWith('draft/'))).toEqual([]);
+    });
+
+    it('뷰어가 새 글을 보여 준다', async () => {
+        await 열고고치고저장();
+        expect(root.querySelector('.md-target')?.textContent).toContain('저장된 새 글');
+    });
+
+    /**
+     * ★★★ 사본(snapshot)은 **다시 못 여는 URI 의 유일한 사본**이다.
+     *   저장에 성공하면 원본은 새 글이 되는데 사본이 옛 글 그대로면,
+     *   나중에 원본을 못 열게 됐을 때 **저장까지 마친 글이 조용히 옛 글로 되돌아간다.**
+     *   사용자는 저장에 성공했다는 토스트까지 봤다.
+     *
+     *   writable 이면서 persisted 가 아닌 조합은 실제로 있다 — 파일 관리자가
+     *   쓰기 권한은 주지만 영속 권한(ACTION_OPEN_DOCUMENT)은 아닌 경우다.
+     */
+    it('★★ 사본도 새 글로 갱신된다', async () => {
+        mdFile.read.mockImplementation(async ({ uri }: { uri: string }) => ({
+            ...doc({ uri, name: uri.split('/').pop() ?? 'doc.md' }),
+            content: docContent.get(uri) ?? '# 문서\n\n본문',
+            encoding: 'UTF-8' as const,
+            persisted: false, // 다시 못 여는 URI — 사본이 남는다
+        }));
+
+        await 열고고치고저장({ uri: 'content://docs/사본.md' });
+
+        const 사본 = [...fsStore.entries()].filter(([p]) => p.startsWith('snapshot/'));
+        expect(사본.length, '사본이 하나는 있어야 한다').toBe(1);
+        expect(사본[0][1], '저장했는데 사본은 옛 글 그대로다').toContain('저장된 새 글');
+    });
+});
