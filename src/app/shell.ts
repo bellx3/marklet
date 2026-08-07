@@ -619,17 +619,11 @@ async function saveAsFlow(content: string): Promise<void> {
         await viewer.show(created, content);
 
         /*
-         * ★★ 편집기를 새 URI 로 다시 묶는다.
-         *   createEditor 는 만들 때 받은 uri 로 초안을 저장한다. 여기서 다시 묶지 않으면
-         *   이어서 친 글자가 **이미 없어진 옛 파일의 초안**으로 쌓이고,
-         *   저장 성공 시 clearDraft 는 새 URI 만 지워서 옛 초안이 영영 남는다.
-         *   (2026-08-03 에뮬레이터에서 '새 이름으로 저장' 뒤에 확인한 것)
+         * ★ 옛 URI 의 초안을 지운다. 글은 새 파일로 옮겨 갔으니 남아 있으면 안 된다 —
+         *   나중에 그 파일을 열 때 있지도 않은 "저장하지 않은 편집" 을 묻게 된다.
+         *   ★★ 편집기를 접기 **전에** 지운다. clearDraft 가 대기 중인 쓰기를 취소하므로,
+         *     아래 destroy() 의 flushDraft 가 방금 지운 초안을 되살리지 않는다.
          */
-        if (editor) {
-            editor.destroy();
-            editor = createEditor(editorTa, created.uri, content);
-            editorTitle.textContent = created.name;
-        }
         if (previous?.uri) await clearDraft(previous.uri);
 
         Toast.success(t.shell.savedAsNew(created.name));
@@ -637,6 +631,24 @@ async function saveAsFlow(content: string): Promise<void> {
         //   최근 문서 목록에 0 B 로 뜬다(2026-08-03 확인). 실제로 쓴 크기를 넣는다.
         const written = new TextEncoder().encode(content).length;
         void rememberDoc({ ...created, size: written }, content, 'picker');
+
+        /*
+         * ★★★ 저장했으면 **편집을 끝내고 뷰어로 돌아간다** (2026-08-07).
+         *
+         *   saveFlow 에는 이 처리가 있는데 여기에는 없었다. 그래서 새 이름으로 저장하면
+         *   화면은 편집기에 남고 뷰어만 뒤에서 조용히 바뀌었다 — 사용자는 토스트를 보고도
+         *   뒤로가기를 한 번 더 눌러야 했다. 2026-08-04 에 지적받아 saveFlow 를 고쳤는데,
+         *   같은 불편이 이쪽에 그대로 남아 있었다.
+         *
+         *   ★★ 하필 **읽기 전용 문서는 언제나 이 길로 온다.** 카톡·파일 관리자에서 들어온
+         *     문서는 쓰기 권한을 못 받으므로 [저장] → 실패 → [새 이름으로 저장] 이
+         *     정상 경로다. 즉 고쳤다던 불편이 가장 흔한 경로에서는 살아 있었다.
+         */
+        await flushDraft();
+        editor?.destroy();
+        editor = null;
+        removeLayer('editor');
+        showScreen('viewer');
     } catch (err) {
         await alertDialog(
             t.shell.createFailedTitle,

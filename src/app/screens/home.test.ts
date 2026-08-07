@@ -512,7 +512,7 @@ describe('★★ 아무것도 없을 때의 시작 화면', () => {
     });
 
     it('최근 문서가 하나라도 있으면 안내를 치운다', async () => {
-        seedRecents(1);
+        seedRecents({});
         await home.refresh();
         expect(안내().hidden).toBe(true);
     });

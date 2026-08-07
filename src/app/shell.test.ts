@@ -42,6 +42,19 @@ const h = vi.hoisted(() => ({
         getPendingOpen: vi.fn(async () => ({})),
     },
     fsStore: new Map<string, string>(),
+    /*
+     * ★★ 네이티브가 들고 있는 **파일 내용**. write 가 여기에 쓰고 read 가 여기서 읽는다.
+     *   예전에는 read 가 늘 같은 글을 돌려줬는데, save.ts 는 쓴 뒤에 **되읽어 검증한다**.
+     *   그래서 어떤 저장도 verify-failed 로 끝났고 — 그 갈래를 시험하는 줄 알았지만
+     *   실제로는 **저장 성공 경로를 한 번도 안 밟았다.** 대역이 구현보다 순하면 이렇게 된다.
+     */
+    docContent: new Map<string, string>(),
+    /**
+     * uri → 쓰기 가능 여부. 안 넣으면 쓸 수 있는 문서다.
+     * ★ 이게 없을 때는 read 대역이 doc() 기본값(writable:true)을 돌려줘서
+     *   **읽기 전용 문서를 시험할 방법이 아예 없었다.**
+     */
+    docWritable: new Map<string, boolean>(),
     confirmAnswer: { value: true },
     /** 확인 상자를 사람이 늦게 누르는 상황을 만든다. 0 이면 예전과 똑같이 즉시 답한다. */
     confirmDelayMs: { value: 0 },
@@ -53,6 +66,8 @@ const {
     exitApp,
     nativeStore,
     fsStore,
+    docContent,
+    docWritable,
     mdFile,
     confirmAnswer,
     confirmDelayMs,
@@ -169,6 +184,8 @@ beforeEach(() => {
     vi.useFakeTimers();
     nativeStore.clear();
     fsStore.clear();
+    docContent.clear();
+    docWritable.clear();
     alerts.length = 0;
     confirmAnswer.value = true;
     confirmDelayMs.value = 0;
@@ -176,16 +193,26 @@ beforeEach(() => {
     __resetRouterForTest();
 
     // read() 는 넘긴 uri 의 문서를 통째로 돌려준다 — 네이티브가 그렇게 한다.
+    /*
+     * ★★ read 는 **write 가 쓴 내용을 돌려줘야 한다.**
+     *   save.ts 는 쓴 뒤에 되읽어 검증한다(5-6절 4단계). 늘 같은 글을 돌려주면
+     *   **어떤 저장도 verify-failed 로 끝난다** — 저장 성공 경로를 한 번도 안 밟는다.
+     *   대역이 구현보다 순하면 초록불만 보게 된다(11장).
+     *
+     * ★ writable 도 넘겨받은 대로 돌려준다. 예전에는 doc() 기본값(true)이 덮어써서
+     *   **읽기 전용 문서를 시험할 방법이 아예 없었다.**
+     */
     mdFile.read.mockImplementation(async ({ uri }: { uri: string }) => ({
         ...doc({ uri, name: uri.split('/').pop() ?? 'doc.md' }),
-        content: '# 문서\n\n본문',
+        writable: docWritable.get(uri) ?? true,
+        content: docContent.get(uri) ?? '# 문서\n\n본문',
         encoding: 'UTF-8' as const,
         persisted: true,
     }));
-    mdFile.write.mockImplementation(async ({ uri, content }: { uri: string; content: string }) => ({
-        uri,
-        bytesWritten: new TextEncoder().encode(content).length,
-    }));
+    mdFile.write.mockImplementation(async ({ uri, content }: { uri: string; content: string }) => {
+        docContent.set(uri, content);
+        return { uri, bytesWritten: new TextEncoder().encode(content).length };
+    });
     mdFile.pickFile.mockResolvedValue({ cancelled: true });
     mdFile.createFile.mockResolvedValue({ cancelled: true });
 
@@ -516,5 +543,79 @@ describe('셸 — 초안 복구', () => {
         await settle();
 
         expect(visibleScreen(root)).toContain('screen-viewer');
+    });
+});
+
+/**
+ * 읽기 전용 문서를 고쳐 '새 이름으로 저장' 하는 길 (5-6절).
+ *
+ * ★★★ 2026-08-07. **이 길로 저장하면 편집 화면에 그대로 남았다.**
+ *
+ *   일반 저장(saveFlow)은 성공하면 편집을 끝내고 뷰어로 돌아간다. 주석에도 이유가
+ *   적혀 있다 — "저장은 '이 편집을 마쳤다'는 뜻이다. 저장 뒤에도 편집 화면에 남겨 두면
+ *   사용자가 토스트를 보고도 뒤로가기를 한 번 더 눌러야 한다(2026-08-04 사장님 지적)."
+ *   그런데 그 처리가 saveAsFlow 에는 없었다.
+ *
+ *   ★★ 하필 **읽기 전용 문서는 언제나 이 길로 간다.** 카톡·파일 관리자에서 들어온
+ *     문서는 쓰기 권한을 못 받으므로 [저장] → 실패 → [새 이름으로 저장] 이 정상 경로다.
+ *     즉 지적받아 고친 그 불편이, 가장 흔한 경로에서는 그대로 남아 있었다.
+ */
+describe('★★ 새 이름으로 저장', () => {
+    /** 저장 단추는 글자로 되어 있다(아이콘이 아니다). */
+    function 저장단추(): HTMLButtonElement {
+        const b = [...root.querySelectorAll('button')].find(
+            (x) => (x.textContent ?? '').trim() === t.editor.save,
+        );
+        expect(b, '편집 화면에 저장 단추가 없다').toBeTruthy();
+        return b!;
+    }
+
+    async function 읽기전용문서를편집한다(): Promise<void> {
+        // ★ 네이티브가 돌려주는 값이 기준이다 — openDocument 인자만 바꿔선 소용없다.
+        docWritable.set('content://docs/읽기.md', false);
+        await entryHandlers.openDocument(doc({ uri: 'content://docs/읽기.md', writable: false }));
+        await settle();
+        buttonByLabel(t.viewer.edit)!.click();
+        await settle();
+        const ta = root.querySelector<HTMLTextAreaElement>('#editor')!;
+        ta.value = '# 문서\n\n고친 글';
+        ta.dispatchEvent(new Event('input'));
+        await settle();
+    }
+
+    it('★★ 저장에 성공하면 편집을 끝내고 뷰어로 돌아간다', async () => {
+        await 읽기전용문서를편집한다();
+        expect(visibleScreen(root)).toContain('screen-editor');
+
+        // 읽기 전용이라 저장이 실패하고, 사용자는 [새 이름으로 저장] 을 고른다.
+        choiceAnswer.value = 'saveas';
+        mdFile.createFile.mockResolvedValue({
+            uri: 'content://docs/새이름.md',
+            name: '새이름.md',
+            size: 0,
+            mimeType: 'text/markdown',
+            writable: true,
+            cancelled: false,
+        });
+
+        저장단추().click();
+        await settle();
+
+        expect(visibleScreen(root), '저장했는데 편집 화면에 남아 있다').toContain('screen-viewer');
+        expect(hasLayer('editor'), "back 스택에 'editor' 가 남았다").toBe(false);
+        expect(entryHandlers.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('사용자가 파일 만들기를 취소하면 편집 화면에 그대로 있는다', async () => {
+        await 읽기전용문서를편집한다();
+
+        choiceAnswer.value = 'saveas';
+        mdFile.createFile.mockResolvedValue({ cancelled: true });
+
+        저장단추().click();
+        await settle();
+
+        expect(visibleScreen(root), '취소했는데 편집 화면을 닫았다').toContain('screen-editor');
+        expect(entryHandlers.hasUnsavedChanges(), '고친 글이 사라졌다').toBe(true);
     });
 });
