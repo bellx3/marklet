@@ -33,6 +33,8 @@ export const ko: Catalog = {
         example: '예제 문서',
         recents: '최근 문서',
         myFolders: '내 폴더',
+        nothingYet:
+            '아직 연 문서가 없습니다. 위에서 파일을 열거나 폴더를 더하세요. 어떤 앱인지 먼저 보려면 [예제 문서] 를 누르세요.',
         noMatchingDoc: '찾는 이름의 문서가 없습니다.',
         noMatchingFile: '찾는 이름의 파일이 없습니다.',
         emptyFolder: '이 폴더에는 마크다운 파일이 없습니다.',

@@ -479,3 +479,56 @@ describe('★★ 잘린 목록에서 검색이 빈손일 때', () => {
         expect(home.root.querySelector('.list-empty')?.textContent).toBe(t.home.noMatchingFile);
     });
 });
+
+/**
+ * ★★★ 2026-08-06 LG Q7(안드로이드 9) 실기기. **갓 설치한 기기에서 화면이 통째로 비었다.**
+ *
+ *   최근 문서·내 폴더 두 구획은 각각 비면 스스로를 감춘다. 그래서 아무것도 없을 때는
+ *   단추 세 개 아래로 흰 화면만 남는다 — 그게 이 앱을 처음 켠 사람이 보는 첫 화면이다.
+ *
+ *   ★★ 검색창이 더 나빴다. 보이고 눌리고 글자도 들어가는데 **화면이 전혀 반응하지
+ *     않는다.** 결과도 없고 "없습니다" 도 없다. 사용자는 자기가 뭘 잘못했는지
+ *     앱이 멈춘 건지 알 방법이 없다.
+ *
+ *   갤럭시 쪽에서는 최근 문서가 쌓여 있어 이 상태를 한 번도 못 봤다.
+ */
+describe('★★ 아무것도 없을 때의 시작 화면', () => {
+    const 안내 = () => home.root.querySelector<HTMLElement>('.home-empty')!;
+
+    it('최근 문서도 폴더도 없으면 무엇을 하면 되는지 알려 준다', async () => {
+        await home.refresh();
+
+        expect(안내(), '.home-empty 가 아예 없다').not.toBeNull();
+        expect(안내().hidden, '빈 화면인데 안내가 숨어 있다').toBe(false);
+        expect(안내().textContent).toBe(t.home.nothingYet);
+    });
+
+    it('★ 안내 말고는 아무것도 안 보이는 상태가 아니어야 한다 (화면이 비어 있지 않다)', async () => {
+        await home.refresh();
+        const 보이는글 = [...home.root.querySelectorAll<HTMLElement>('*')]
+            .filter((el) => !el.hidden && el.children.length === 0 && (el.textContent ?? '').trim())
+            .map((el) => (el.textContent ?? '').trim());
+        expect(보이는글).toContain(t.home.nothingYet);
+    });
+
+    it('최근 문서가 하나라도 있으면 안내를 치운다', async () => {
+        seedRecents(1);
+        await home.refresh();
+        expect(안내().hidden).toBe(true);
+    });
+
+    it('폴더만 있어도 안내를 치운다', async () => {
+        seedFolder('content://f/tree/A', '노트', ['a.md']);
+        await home.refresh();
+        await vi.advanceTimersByTimeAsync(50);
+        expect(안내().hidden).toBe(true);
+    });
+
+    it('★★ 아무것도 없을 때 검색해도 안내가 남는다 (친 글에 아무 반응이 없으면 안 된다)', async () => {
+        await home.refresh();
+        typeSearch('아무거나');
+        await vi.advanceTimersByTimeAsync(200);
+
+        expect(안내().hidden, '검색 중이라고 안내까지 사라지면 화면이 다시 텅 빈다').toBe(false);
+    });
+});

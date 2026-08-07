@@ -35,6 +35,8 @@ export const en = {
         example: 'Example',
         recents: 'RECENT',
         myFolders: 'MY FOLDERS',
+        nothingYet:
+            'No documents yet. Open a file or add a folder above. Tap [Example] to see what this app does.',
         noMatchingDoc: 'No document matches that name.',
         noMatchingFile: 'No file matches that name.',
         emptyFolder: 'This folder has no Markdown files.',

@@ -78,7 +78,23 @@ export function createHome(cb: HomeCallbacks): HomeScreen {
     const recentsSection = section(t.home.recents);
     const foldersSection = section(t.home.myFolders);
 
-    main.append(actions, recentsSection.root, foldersSection.root);
+    /*
+     * ★★★ 아무것도 없을 때 **화면이 통째로 비어 있었다** (2026-08-06 LG Q7 실기기).
+     *
+     *   두 섹션은 각각 비면 스스로를 숨긴다. 그래서 갓 설치한 기기에서는 단추 세 개
+     *   아래로 아무것도 없는 흰 화면이 남는다. 그게 이 앱을 처음 켠 사람이 보는 첫 화면이다.
+     *
+     *   ★★ 더 나쁜 것은 검색창이다. 보이고 눌리고 글자도 들어가는데 **화면이 전혀
+     *     반응하지 않는다.** 결과도 없고 "없습니다" 도 없다. 사용자는 자기가 뭘 잘못했는지,
+     *     앱이 멈춘 건지 알 방법이 없다. 조작할 수 있는 것은 언제나 답을 해야 한다.
+     *
+     *   기존 기기에는 최근 문서가 쌓여 있어서 이 상태를 한 번도 못 봤다.
+     */
+    const firstRun = document.createElement('p');
+    firstRun.className = 'home-empty';
+    firstRun.textContent = t.home.nothingYet;
+
+    main.append(actions, recentsSection.root, foldersSection.root, firstRun);
     root.append(bar, main);
 
     let recents: RecentDoc[] = [];
@@ -90,6 +106,8 @@ export function createHome(cb: HomeCallbacks): HomeScreen {
     const rerender = () => {
         renderRecents();
         renderFolders();
+        // ★ 두 섹션이 모두 숨은 뒤에 판단한다 — 그때만 화면이 비어 있다.
+        firstRun.hidden = !(recents.length === 0 && listings.length === 0);
     };
 
     const onQuery = debounce(() => {

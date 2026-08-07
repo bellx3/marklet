@@ -432,6 +432,19 @@
     font-size: 14px;
     word-break: keep-all;
 }
+
+/*
+ * 아무것도 없을 때의 시작 화면. 단추 세 개 아래가 통째로 비어 있던 자리다.
+ * ★ 화면 한가운데로 띄우지 않는다 — 위의 단추들이 답이므로 그 바로 아래에서
+ *   가리키는 편이 눈이 덜 움직인다.
+ */
+.home-empty {
+    margin: var(--sp-5) var(--sp-3) 0;
+    color: var(--md-fg-muted);
+    font-size: 15px;
+    line-height: 1.7;
+    word-break: keep-all;
+}
 .list-error {
     color: var(--md-warn-fg);
 }
