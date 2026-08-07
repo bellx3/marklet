@@ -57,6 +57,14 @@ export interface ViewerScreen {
     closeOverlays(): void;
     getDoc(): MdDocument | null;
     getContent(): string;
+    /**
+     * '파일로 공유' 를 쓸 수 있는 문서인가.
+     *
+     * ★★ 메뉴 항목의 숨김 규칙과 **같은 값**이어야 한다. 셸은 이걸 보고
+     *   "너무 큽니다" 안내에 [파일로 공유] 를 가리킬지 정한다 —
+     *   어긋나면 **없는 단추를 쓰라고 안내하게 된다**(2026-08-07 실제로 그랬다).
+     */
+    canShareFile(): boolean;
     getHandle(): RenderHandle | null;
     setContent(content: string): void;
     /**
@@ -237,6 +245,8 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
 
     let doc: MdDocument | null = null;
     let content = '';
+    /** '파일로 공유' 가 가능한가. 메뉴 숨김과 셸의 안내가 함께 보는 하나의 값이다. */
+    let canShareFileNow = false;
     let options: ViewerOptions = {};
 
     /**
@@ -304,7 +314,8 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
         editBtn.hidden = !!options.plain || !doc?.uri;
         // ★ 파일 공유는 진짜 파일일 때만. 예제 문서·공유받은 텍스트는 URI 가 없고,
         //   사본을 보고 있을 때는 원본이 아니라 사본을 보내게 되므로 숨긴다.
-        shareFileItem.hidden = !doc?.uri || !!options.fromSnapshot;
+        canShareFileNow = !!doc?.uri && !options.fromSnapshot;
+        shareFileItem.hidden = !canShareFileNow;
 
         if (options.plain) {
             // ★ 여기서 markdown-it 을 부르면 안 된다. 그 크기를 감당 못 해서 이 경로로 왔다.
@@ -399,6 +410,7 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
         },
         getDoc: () => doc,
         getContent: () => content,
+        canShareFile: () => canShareFileNow,
         getHandle: () => handle,
         setContent(next) {
             content = next;

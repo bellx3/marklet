@@ -310,6 +310,10 @@ export const ko: Catalog = {
         tooBigTextBody: (limitKb: number, sizeKb: string) =>
             `글자 공유는 ${limitKb}KB 까지만 됩니다. 이 문서는 ${sizeKb}KB 입니다.\n` +
             '[파일로 공유] 를 쓰시면 크기 제한 없이 보낼 수 있습니다.',
+        /** ★ [파일로 공유] 가 없는 문서(공유받은 글·예제 문서·사본)에 쓴다. */
+        tooBigTextBodyNoFile: (limitKb: number, sizeKb: string) =>
+            `글자 공유는 ${limitKb}KB 까지만 됩니다. 이 문서는 ${sizeKb}KB 입니다.\n` +
+            '이 문서는 파일이 아니라서 파일로 보낼 수도 없습니다.',
         plainNoticeTitle: '보이는 대로 보냅니다',
         plainNoticeBody:
             '#, |, ``` 같은 기호를 걷어내고 화면에 보이는 글자만 보냅니다.\n' +

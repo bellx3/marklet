@@ -751,9 +751,23 @@ async function shareFileCurrent(): Promise<void> {
 async function shareText(name: string, text: string): Promise<void> {
     const bytes = new TextEncoder().encode(text).length;
     if (bytes > SHARE_TEXT_LIMIT) {
+        /*
+         * ★★★ **없는 단추를 쓰라고 하면 안 된다** (2026-08-07).
+         *   이 안내는 "[파일로 공유] 를 쓰시면 크기 제한 없이 보낼 수 있습니다" 라고
+         *   말하는데, 그 메뉴 항목은 URI 가 없거나(공유받은 글·예제 문서) 사본으로 열린
+         *   문서에서는 **숨어 있다.** 긴 글을 카톡에서 마크릿으로 보낸 뒤 다시 보내려 할 때
+         *   바로 밟는 길이다. 사용자는 없는 단추를 찾아 헤매고, 자기가 못 찾는 줄 안다.
+         *
+         *   ★ 뷰어가 메뉴를 숨길 때 쓰는 값을 그대로 본다. 규칙을 여기서 다시 쓰면
+         *     한쪽만 고쳐질 때 또 어긋난다.
+         */
+        const kb = Math.round(SHARE_TEXT_LIMIT / 1024);
+        const size = (bytes / 1024).toFixed(0);
         await alertDialog(
             t.shell.tooBigTextTitle,
-            t.shell.tooBigTextBody(Math.round(SHARE_TEXT_LIMIT / 1024), (bytes / 1024).toFixed(0)),
+            viewer.canShareFile()
+                ? t.shell.tooBigTextBody(kb, size)
+                : t.shell.tooBigTextBodyNoFile(kb, size),
         );
         return;
     }

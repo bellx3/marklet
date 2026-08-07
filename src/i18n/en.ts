@@ -326,6 +326,9 @@ Which one would you like to open?`,
         tooBigTextBody: (limitKb: number, sizeKb: string) =>
             `Text sharing works up to ${limitKb} KB. This document is ${sizeKb} KB.\n` +
             'Use [Share as file] to send it without a size limit.',
+        tooBigTextBodyNoFile: (limitKb: number, sizeKb: string) =>
+            `Text sharing works up to ${limitKb} KB. This document is ${sizeKb} KB.\n` +
+            'This document is not a file, so it cannot be sent as one either.',
         plainNoticeTitle: 'Sending it as it looks',
         plainNoticeBody:
             'Symbols like #, |, and ``` are stripped, and only the text you see is sent.\n' +

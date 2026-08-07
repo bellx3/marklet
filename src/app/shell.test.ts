@@ -130,8 +130,12 @@ vi.mock('@capacitor/filesystem', () => ({
 vi.mock('../plugins/md-file', () => ({ MdFile: h.mdFile }));
 
 vi.mock('../utils/dialog', () => ({
-    alertDialog: async (title: string) => {
-        h.alerts.push(title);
+    /*
+     * ★ 제목만 모으면 **본문에 든 안내가 시험 밖에 남는다.** 사용자가 실제로 읽고
+     *   따라 하는 것은 본문이다. 둘을 함께 적어 둔다.
+     */
+    alertDialog: async (title: string, body?: string) => {
+        h.alerts.push(body ? `${title} | ${body}` : title);
     },
     confirmDialog: async () => {
         if (h.confirmDelayMs.value) {
@@ -689,5 +693,64 @@ describe('저장 성공 뒤', () => {
         const 사본 = [...fsStore.entries()].filter(([p]) => p.startsWith('snapshot/'));
         expect(사본.length, '사본이 하나는 있어야 한다').toBe(1);
         expect(사본[0][1], '저장했는데 사본은 옛 글 그대로다').toContain('저장된 새 글');
+    });
+});
+
+/**
+ * 너무 큰 글자를 공유하려 할 때의 안내 (5-8절).
+ *
+ * ★★★ 2026-08-07. 안내문이 **없는 단추를 쓰라고 했다.**
+ *   "글자 공유는 100KB 까지만 됩니다 … [파일로 공유] 를 쓰시면 크기 제한 없이
+ *   보낼 수 있습니다" 라고 말하는데, 그 메뉴 항목은 doc.uri 가 없거나 사본으로
+ *   열린 문서에서는 **숨어 있다.** 공유받은 글(uri 없음)이 딱 그 경우다 —
+ *   긴 글을 카톡에서 마크릿으로 보낸 뒤 다시 보내려 할 때 바로 밟는다.
+ *
+ *   이 앱은 "실패를 토스트로 끝내지 마라. 반드시 출구를 함께 줘라(5-6절)" 를 규칙으로
+ *   두고 있다. 있지도 않은 출구를 가리키는 것은 출구가 없는 것보다 나쁘다.
+ */
+describe('★★ 너무 큰 글자 공유 안내', () => {
+    const 큰글 = `# 큰 문서\n\n${'가'.repeat(120 * 1024)}\n`;
+
+    async function 원문공유를누른다(): Promise<void> {
+        const more = buttonByLabel(t.viewer.more);
+        more!.click();
+        await settle();
+        [...root.querySelectorAll<HTMLElement>('.menu-item')]
+            .find((x) => (x.textContent ?? '').trim() === t.viewer.shareSource)!
+            .click();
+        await settle();
+    }
+
+    it('파일로 공유가 가능한 문서에서는 그쪽을 가리킨다', async () => {
+        docContent.set('content://docs/큰.md', 큰글);
+        await entryHandlers.openDocument(doc({ uri: 'content://docs/큰.md' }));
+        await settle();
+
+        await 원문공유를누른다();
+        expect(alerts.join(' ')).toContain(t.shell.tooBigTextTitle);
+    });
+
+    it('★★ 파일로 공유가 없는 문서(공유받은 글)에서는 그것을 가리키지 않는다', async () => {
+        await entryHandlers.openSharedText(큰글);
+        await settle();
+
+        // 전제 확인 — 이 문서에는 [파일로 공유] 가 정말 없다.
+        buttonByLabel(t.viewer.more)!.click();
+        await settle();
+        const 파일공유 = [...root.querySelectorAll<HTMLElement>('.menu-item')].find(
+            (x) => (x.textContent ?? '').trim() === t.viewer.shareFile,
+        );
+        expect(파일공유?.hidden ?? true, '이 시험의 전제가 깨졌다').toBe(true);
+
+        [...root.querySelectorAll<HTMLElement>('.menu-item')]
+            .find((x) => (x.textContent ?? '').trim() === t.viewer.shareSource)!
+            .click();
+        await settle();
+
+        expect(alerts.length, '안내가 떠야 한다').toBeGreaterThan(0);
+        expect(
+            alerts.join(' '),
+            '없는 단추를 쓰라고 안내하면 사용자는 자기가 못 찾는 줄 안다',
+        ).not.toContain(t.viewer.shareFile);
     });
 });
