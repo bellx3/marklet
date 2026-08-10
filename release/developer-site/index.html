@@ -11,7 +11,9 @@
     폰트도 스크립트도 없다. "추적하지 않는다"고 적어 놓고 구글 폰트를 불러오면
     그 문장이 거짓이 된다.
 
-  ★ 올리기 전에 아래 【 】 자리를 채울 것. README.md 를 볼 것.
+  ★ 사업자 정보는 2026-08-07 에 채웠다. 사업자등록증·통신판매업 신고증과
+    **글자 그대로** 같아야 한다 — 표시 의무가 있는 항목이라 다르면 그게 문제다.
+    상호나 주소가 바뀌면 여기도 같이 고칠 것.
 -->
 
 <style>
@@ -116,6 +118,16 @@ dl div {
 dt { color: var(--dim); flex: 0 0 128px; }
 dd { margin: 0; flex: 1; }
 
+/*
+ * ★ 좁은 화면에서는 위아래로 쌓는다. 라벨 칸을 128px 로 묶어 두면
+ *   '통신판매업 신고번호'가 두 줄로 접히고 남은 191px 에 주소가 다섯 줄로 들어간다.
+ *   한국어 라벨은 영어보다 길고 주소는 더 길다 — 두 칸으로 나눌 폭이 아니다.
+ */
+@media (max-width: 480px) {
+    dl div { display: block; padding: 12px 0; }
+    dt { margin-bottom: 2px; font-size: 13px; }
+}
+
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -181,18 +193,17 @@ footer {
     </dl>
 
     <!--
-      ★ 아래는 전자상거래법상 통신판매업자의 표시사항이다.
-        두 앱 모두 인앱 결제가 있으므로 적어 두는 편이 맞다.
-        【 】 를 실제 값으로 바꾸기 전에는 이 구역을 지우고 올려도 된다 —
-        **빈칸을 그대로 공개하지는 마라.**
+      ★ 전자상거래법상 통신판매업자의 표시사항. 두 앱 모두 인앱 결제가 있어 의무다.
+      ★ 값에는 data-t 를 달지 않는다 — 상호·대표자·주소는 **법적 표기라 번역하지 않는다.**
+        영어로 바꿔도 라벨만 영어가 되고 값은 그대로 남는 것이 맞다.
     -->
     <h2 data-t="bizTitle">사업자 정보</h2>
     <dl>
-        <div><dt data-t="labelBizName">상호</dt><dd>【상호】</dd></div>
-        <div><dt data-t="labelOwner">대표자</dt><dd>【대표자명】</dd></div>
-        <div><dt data-t="labelBizNo">사업자등록번호</dt><dd>【000-00-00000】</dd></div>
-        <div><dt data-t="labelMailOrder">통신판매업 신고번호</dt><dd>【제0000-지역-0000호】</dd></div>
-        <div><dt data-t="labelAddress">주소</dt><dd>【사업장 주소】</dd></div>
+        <div><dt data-t="labelBizName">상호</dt><dd>알리미 스튜디오</dd></div>
+        <div><dt data-t="labelOwner">대표자</dt><dd>백세종</dd></div>
+        <div><dt data-t="labelBizNo">사업자등록번호</dt><dd>231-20-02430</dd></div>
+        <div><dt data-t="labelMailOrder">통신판매업 신고번호</dt><dd>제 2026-제주아라-0004호</dd></div>
+        <div><dt data-t="labelAddress">주소</dt><dd>제주특별자치도 제주시 첨단로동길 24, 201동 501호 (월평동, JDC 제주첨단 리슈빌)</dd></div>
     </dl>
 </main>
 
