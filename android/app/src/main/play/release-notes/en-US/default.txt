@@ -1,8 +1,8 @@
-Added a short walkthrough for first-time users. No Markdown knowledge needed.
+When the app cannot start, it now tells you what to do instead of showing a blank screen.
 
-• On first launch, the app points out what to tap and why
-• Opening your first document shows where the outline, search and text size live
-• Skip it any time, or replay it from [Show the tutorial again] in Settings
-• Tables and formulas now fit the screen width (1.0.8)
+• If this device's system WebView is too old to run the app, the app says so and how to fix it
+• Before, the same situation left you looking at an empty screen
+
+The first-run walkthrough (Settings → Show the tutorial again) and the table/formula fitting from the last release are still here.
 
 Report anything odd to the address in Settings.

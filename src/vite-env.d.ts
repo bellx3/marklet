@@ -103,4 +103,10 @@ interface CdvPurchaseGlobal {
 
 interface Window {
     CdvPurchase?: CdvPurchaseGlobal;
+    /**
+     * 부팅 감시(public/webview-check.js)와 주고받는 유일한 신호.
+     * main.ts 가 첫 화면을 붙인 직후 true 로 만든다 — 그 전에 오류가 나거나
+     * 20초가 지나면 감시가 안내 화면을 띄운다.
+     */
+    __markletBooted?: boolean;
 }

@@ -35,6 +35,11 @@ async function boot(): Promise<void> {
     // 3. 셸(화면들 마운트)
     shell.mount(document.querySelector<HTMLElement>('#app')!);
     document.querySelector('#boot')?.remove();
+    /*
+     * ★ 부팅 감시(public/webview-check.js)에게 "화면이 떴다"고 알린다.
+     *   이 한 줄이 없으면 20초 뒤 안전망이 멀쩡한 화면을 실패 안내로 덮는다.
+     */
+    window.__markletBooted = true;
 
     // 4. 문서 진입. 콜드 스타트로 파일이 들어왔으면 여기서 바로 연다.
     //    ★ 네이티브가 없는 브라우저에서도 화면이 뜨도록 실패를 삼킨다.
