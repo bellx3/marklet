@@ -532,3 +532,17 @@ describe('★★ 아무것도 없을 때의 시작 화면', () => {
         expect(안내().hidden, '검색 중이라고 안내까지 사라지면 화면이 다시 텅 빈다').toBe(false);
     });
 });
+
+describe('★ 안내가 가리킬 자리 (coach)', () => {
+    /*
+     * 스포트라이트 안내는 data-coach 이름으로 대상을 찾는다(coach-steps.ts).
+     * 이름을 지우거나 바꾸면 안내는 **조용히** 구멍 없는 말풍선만 띄운다 —
+     * 화면은 멀쩡해 보이고 아무도 신고하지 않는다. 그래서 여기서 못을 박는다.
+     */
+    it.each(['example', 'open-file', 'add-folder', 'search'])(
+        'data-coach="%s" 가 시작 화면에 있다',
+        (name) => {
+            expect(home.root.querySelector(`[data-coach="${name}"]`)).not.toBeNull();
+        },
+    );
+});

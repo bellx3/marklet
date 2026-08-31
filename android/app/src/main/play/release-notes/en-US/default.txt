@@ -1,8 +1,8 @@
-Tables and formulas now fit the screen. No more sideways swiping.
+Added a short walkthrough for first-time users. No Markdown knowledge needed.
 
-• Tables wrap their cells to fit. Three of the four in the sample document now fit at a glance
-• Wider tables and formulas shrink to fit, but never below a readable size
-• Tables with many columns still need some sideways scrolling after shrinking
-• Changing the text size refits tables and formulas to match
+• On first launch, the app points out what to tap and why
+• Opening your first document shows where the outline, search and text size live
+• Skip it any time, or replay it from [Show the tutorial again] in Settings
+• Tables and formulas now fit the screen width (1.0.8)
 
 Report anything odd to the address in Settings.

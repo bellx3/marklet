@@ -19,6 +19,13 @@ export interface AppSettings {
     remoteImages: boolean;
     /** ★ 지금은 아무도 안 본다. 이미 저장된 설정에 있어서 남겨 둘 뿐이다(loadSettings 주석). */
     fontStepInitialized: boolean;
+    /**
+     * 스포트라이트 안내를 이미 봤는가 (coach.ts). 화면마다 따로 센다.
+     * ★ '봤다' 는 끝까지 본 것과 건너뛴 것을 **둘 다** 포함한다. 건너뛴 사람에게
+     *   다음 실행에서 또 띄우면 그건 안내가 아니라 방해다.
+     */
+    coachedHome: boolean;
+    coachedViewer: boolean;
 }
 
 const KEY = 'settings';
@@ -30,6 +37,8 @@ const DEFAULTS: AppSettings = {
     breaks: true,
     remoteImages: false,
     fontStepInitialized: false,
+    coachedHome: false,
+    coachedViewer: false,
 };
 
 let current: AppSettings = { ...DEFAULTS };
@@ -78,6 +87,8 @@ function sanitize(raw: unknown): AppSettings {
         breaks: typeof v.breaks === 'boolean' ? v.breaks : DEFAULTS.breaks,
         remoteImages: typeof v.remoteImages === 'boolean' ? v.remoteImages : DEFAULTS.remoteImages,
         fontStepInitialized: !!v.fontStepInitialized,
+        coachedHome: !!v.coachedHome,
+        coachedViewer: !!v.coachedViewer,
     };
 }
 

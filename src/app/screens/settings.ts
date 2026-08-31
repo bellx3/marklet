@@ -32,6 +32,8 @@ export interface SettingsCallbacks {
     onBreaksChanged(): void;
     /** 원격 이미지 정책이 바뀌어도 마찬가지다 */
     onImagePolicyChanged(): void;
+    /** 첫 사용자 안내를 다시 보여 준다 (coach.ts) */
+    replayTutorial(): void;
 }
 
 export function createSettings(cb: SettingsCallbacks): SettingsScreen {
@@ -201,6 +203,13 @@ export function createSettings(cb: SettingsCallbacks): SettingsScreen {
         }
     });
 
+    /*
+     * ★ 안내 다시 보기는 '앱 정보' 가 아니라 **위쪽 설정들과 함께** 둔다.
+     *   버전·라이선스 옆에 두면 개발자용 항목처럼 읽혀서, 정작 안내가 필요한 사람이
+     *   거기까지 내려가 볼 이유를 못 찾는다.
+     */
+    const tutorialRow = navRow(t.settings.showTutorial, () => cb.replayTutorial());
+
     const licenses = navRow(t.settings.licenses, () => {
         // 별도 HTML 이라 같은 웹뷰에서 그냥 이동한다. 뒤로가기는 웹뷰 히스토리가 처리한다.
         window.location.href = 'licenses.html';
@@ -230,6 +239,7 @@ export function createSettings(cb: SettingsCallbacks): SettingsScreen {
         sizePreview,
         breaks.row,
         remote.row,
+        tutorialRow,
         tipRow,
         clearRow,
         about,

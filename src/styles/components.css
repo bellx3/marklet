@@ -1127,3 +1127,102 @@
     justify-content: flex-end;
     flex-wrap: wrap;
 }
+
+/* ───────────────────── 스포트라이트 안내 (코치마크) ───────────────────── */
+
+/*
+ * ★ 이 상자는 **탭을 받는 쪽**이다. 색은 칠하지 않는다 —
+ *   어둡게 만드는 일은 아래 .coach-hole 의 box-shadow 가 한다(coach.ts 주석).
+ *   여기에 배경색을 주면 구멍까지 같이 덮여서 하이라이트가 사라진다.
+ */
+.coach-backdrop {
+    position: fixed;
+    inset: 0;
+    /* 시트·다이얼로그(900)보다 위. 안내는 무엇 위에든 떠야 한다. */
+    z-index: 950;
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+.coach-backdrop.is-open {
+    opacity: 1;
+}
+
+/*
+ * 구멍. 자기 자리만 밝게 남기고 나머지 화면 전부를 그림자로 덮는다.
+ * ★ 포인터 이벤트를 받지 않는다 — 그림자가 덮은 자리의 탭은 위 backdrop 이 받아야 한다.
+ */
+.coach-hole {
+    position: fixed;
+    border-radius: var(--r-md);
+    box-shadow: 0 0 0 9999px var(--scrim);
+    outline: 2px solid var(--accent-fg);
+    outline-offset: -1px;
+    pointer-events: none;
+}
+
+/*
+ * 말풍선. 좌우는 화면에 맞춰 고정하고 위아래만 JS 가 정한다(coach.ts place()).
+ * ★ 폭까지 JS 로 계산하지 않는다. 글자 크기·언어에 따라 줄 수가 달라지므로
+ *   높이는 재고 폭은 CSS 에 맡기는 쪽이 어긋날 구석이 적다.
+ */
+.coach-card {
+    position: fixed;
+    left: calc(var(--sp-3) + var(--safe-left));
+    right: calc(var(--sp-3) + var(--safe-right));
+    margin: 0 auto;
+    max-width: 24rem;
+    padding: var(--sp-4);
+    border-radius: var(--r-lg);
+    background: var(--surface);
+    color: var(--md-fg);
+    box-shadow: var(--shadow-2);
+}
+
+/* 가리킬 것이 없는 단계(첫 인사)는 가운데에 띄운다. */
+.coach-card--center {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.coach-count {
+    margin: 0 0 var(--sp-1);
+    color: var(--md-fg-muted);
+    font:
+        13px/1.4 var(--md-font-body),
+        sans-serif;
+    /* 숫자만 있는 줄이라 언어를 안 탄다 */
+    font-variant-numeric: tabular-nums;
+}
+
+.coach-title {
+    margin: 0 0 var(--sp-2);
+    font:
+        600 17px/1.4 var(--md-font-body),
+        sans-serif;
+    word-break: keep-all;
+}
+
+.coach-body {
+    margin: 0 0 var(--sp-4);
+    color: var(--md-fg-muted);
+    font:
+        15px/1.6 var(--md-font-body),
+        sans-serif;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+}
+
+.coach-actions {
+    display: flex;
+    gap: var(--sp-2);
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+/*
+ * 가리킬 것이 없는 단계에는 구멍이 없다 — 그러면 화면을 덮는 어둠도 없어진다.
+ * 그때만 backdrop 이 직접 어둡게 칠한다(coach.ts place() 주석).
+ */
+.coach-backdrop--dim {
+    background: var(--scrim);
+}

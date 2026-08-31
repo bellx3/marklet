@@ -120,6 +120,37 @@ export const ko: Catalog = {
         licenses: '오픈소스 라이선스',
         privacy: '개인정보처리방침',
         tipNote: '후원 표시는 이 기기에만 저장됩니다. 앱을 지우면 사라집니다.',
+        showTutorial: '사용법 다시 보기',
+    },
+
+    coach: {
+        skip: '건너뛰기',
+        next: '다음',
+        done: '시작하기',
+        progress: (i: number, n: number) => `${i} / ${n}`,
+
+        homeExampleTitle: '마크다운이 처음이신가요',
+        homeExampleBody:
+            '.md 파일은 제목·목록·표를 기호로 적어 둔 글자 파일입니다. 예제 문서를 열면 그 기호가 무엇으로 바뀌는지 바로 보실 수 있습니다.',
+        homeOpenTitle: '내 파일 열기',
+        homeOpenBody:
+            '기기에 있는 .md 파일을 골라 엽니다. 메신저나 메일로 받은 파일도 여기서 찾습니다.',
+        homeFolderTitle: '폴더를 등록해 두기',
+        homeFolderBody:
+            '폴더를 한 번 등록해 두면 그 안의 .md 가 목록에 계속 뜹니다. PC 에서 나중에 넣은 파일도 저절로 나타납니다.',
+        homeSearchTitle: '이름으로 찾기',
+        homeSearchBody: '문서가 쌓이면 여기서 이름으로 찾습니다. ㅁㅋ 처럼 초성만 쳐도 찾아집니다.',
+
+        viewerIntroTitle: '문서는 이렇게 보입니다',
+        viewerIntroBody:
+            '원문의 # 이나 | 같은 기호가 제목과 표로 그려집니다. 원문 그대로 보시려면 연필을 누르세요.',
+        viewerTocTitle: '긴 문서 건너뛰기',
+        viewerTocBody: '여기를 누르면 제목 목록이 나옵니다. 원하는 절로 바로 갑니다.',
+        viewerFindTitle: '문서 안에서 찾기',
+        viewerFindBody: '낱말을 넣으면 문서에서 그 말이 나오는 자리를 하나씩 짚어 줍니다.',
+        viewerMoreTitle: '글자 크기와 테마',
+        viewerMoreBody:
+            '여기 [보기 설정] 에서 글자 크기와 테마를 바꿉니다. 공유도 이 안에 있습니다.',
     },
 
     tip: {

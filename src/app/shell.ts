@@ -21,6 +21,8 @@ import { parseDocument } from '../markdown/frontmatter';
 import { htmlToPlainText } from '../markdown/to-plain-text';
 import { Toast } from '../utils/toast';
 import { alertDialog, confirmDialog, choiceDialog } from '../utils/dialog';
+import { runCoach, isCoachOpen, closeCoach } from './coach';
+import { homeSteps, viewerSteps } from './coach-steps';
 import { iconButton } from './icons';
 import { t, getLang } from '../i18n';
 
@@ -86,6 +88,7 @@ export function mount(root: HTMLElement): void {
 
     settings = createSettings({
         onBack: () => closeSettings(),
+        replayTutorial: () => void replayTutorial(),
         openTip: () => openTip(),
         openDiagnostics: () => openDiagnostics(),
         onBreaksChanged: () => void viewer.rerender(),
@@ -114,8 +117,81 @@ function register(name: ScreenName, el: HTMLElement): void {
 }
 
 function showScreen(name: ScreenName): void {
+    /*
+     * ★ 화면이 바뀌면 떠 있던 안내를 걷는다. 안 걷으면 시작 화면을 가리키던 구멍이
+     *   문서 위에 그대로 남는다 — 밖에서 .md 가 들어오는 순간이 딱 그 경우다.
+     *   '봤다' 로 세지는 않는다(coach.ts closeCoach 주석).
+     */
+    if (isCoachOpen()) closeCoach();
+
     for (const [key, el] of screens) el.hidden = key !== name;
     current = name;
+    scheduleCoach(name);
+}
+
+// ────────────────────────────────────────────────────────────
+// 첫 사용자 안내 (coach.ts)
+// ────────────────────────────────────────────────────────────
+
+/**
+ * 화면이 뜨자마자 덮지 않는다.
+ *
+ * ★ 부팅 직후의 showScreen('home') 은 **곧 뷰어로 바뀔 수 있다** — 콜드 스타트로
+ *   .md 인텐트가 들어온 경우다. 바로 띄우면 시작 화면을 가리키는 안내를 띄운 다음
+ *   그 화면이 사라진다. 조금 기다렸다가 그때도 그 화면이면 띄운다.
+ */
+const COACH_DELAY_MS = 600;
+let coachTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleCoach(name: ScreenName): void {
+    if (name !== 'home' && name !== 'viewer') return;
+    /*
+     * ★★ 밖에서 들어온 문서 위에는 띄우지 않는다.
+     *   카톡에서 .md 를 눌러 들어온 사람은 **읽으러 온 것**이지 앱을 배우러 온 게 아니다.
+     *   그 화면을 안내로 덮으면 첫인상이 '읽고 싶은데 못 읽게 하는 앱' 이 된다.
+     *   게다가 그 상태의 뒤로가기는 원래 앱을 닫아 카톡으로 돌아가는 자리인데,
+     *   안내가 그 한 번을 먹는다(9-1절). 시작 화면에서 만날 때 안내한다.
+     */
+    if (name === 'viewer' && viewerFrom === 'external') return;
+    if (coachTimer !== null) clearTimeout(coachTimer);
+    coachTimer = setTimeout(() => {
+        coachTimer = null;
+        const s = getSettings();
+        if (name === 'home' ? s.coachedHome : s.coachedViewer) return;
+        void runCoachFor(name);
+    }, COACH_DELAY_MS);
+}
+
+async function runCoachFor(name: 'home' | 'viewer'): Promise<void> {
+    // 그 사이에 화면이 바뀌었거나 이미 떠 있으면 그만둔다.
+    if (current !== name || isCoachOpen()) return;
+
+    const how = await runCoach(name === 'home' ? homeSteps() : viewerSteps());
+    // 중간에 걷힌 것은 본 것이 아니다. 아무것도 저장하지 않는다.
+    if (how === 'interrupted') return;
+
+    /*
+     * ★ [건너뛰기] 는 '이 안내가 싫다' 가 아니라 **'안내가 싫다'** 로 읽는다.
+     *   시작 화면에서 건너뛴 사람에게 문서를 열자마자 또 띄우면, 그 사람은
+     *   같은 것을 두 번 거절해야 한다.
+     */
+    await updateSettings(
+        how === 'skipped'
+            ? { coachedHome: true, coachedViewer: true }
+            : name === 'home'
+              ? { coachedHome: true }
+              : { coachedViewer: true },
+    );
+}
+
+/** 설정의 [사용법 다시 보기]. 표시를 지우고 시작 화면 안내를 지금 띄운다. */
+async function replayTutorial(): Promise<void> {
+    await updateSettings({ coachedHome: false, coachedViewer: false });
+    closeSettings();
+    // ★ 설정에서 돌아온 화면이 뷰어일 수도 있다. 그때는 뷰어 안내가 맞다.
+    if (coachTimer !== null) clearTimeout(coachTimer);
+    coachTimer = null;
+    await runCoachFor(current === 'viewer' ? 'viewer' : 'home');
 }
 
 // ────────────────────────────────────────────────────────────

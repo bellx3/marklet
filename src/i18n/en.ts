@@ -122,6 +122,44 @@ export const en = {
         licenses: 'Open-source licenses',
         privacy: 'Privacy policy',
         tipNote: 'Supporter status is stored on this device only. It is lost if you uninstall.',
+        showTutorial: 'Show the tutorial again',
+    },
+
+    /*
+     * 스포트라이트 안내 (coach.ts).
+     *
+     * ★★ 여기 문장은 **마크다운을 한 번도 안 써 본 사람**에게 하는 말이다.
+     *   테스터 피드백이 그것이었다. 'frontmatter', 'render' 같은 말을 쓰면
+     *   안내가 아니라 또 하나의 장벽이 된다. 무엇을 눌러 무엇이 되는지만 적는다.
+     */
+    coach: {
+        skip: 'Skip',
+        next: 'Next',
+        done: 'Got it',
+        progress: (i: number, n: number) => `${i} / ${n}`,
+
+        homeExampleTitle: 'New to Markdown?',
+        homeExampleBody:
+            'A .md file is a plain text file where symbols stand for headings, lists and tables. Open the example to see what those symbols turn into.',
+        homeOpenTitle: 'Open your own file',
+        homeOpenBody:
+            'Pick any .md file on this device. Files you received by message or email work too.',
+        homeFolderTitle: 'Keep a folder handy',
+        homeFolderBody:
+            'Add a folder once and its .md files stay listed here. Files you add later from a PC show up on their own.',
+        homeSearchTitle: 'Find by name',
+        homeSearchBody: 'Once documents pile up, search them by file name here.',
+
+        viewerIntroTitle: 'This is your document',
+        viewerIntroBody:
+            'Symbols like # and | are drawn as headings and tables. To see the original text, tap the pencil.',
+        viewerTocTitle: 'Jump around long documents',
+        viewerTocBody: 'Tap here for the list of headings and go straight to a section.',
+        viewerFindTitle: 'Search inside the document',
+        viewerFindBody: 'Type a word and step through every place it appears.',
+        viewerMoreTitle: 'Text size and theme',
+        viewerMoreBody:
+            'Open [View settings] here to change text size and theme. Sharing lives here too.',
     },
 
     tip: {

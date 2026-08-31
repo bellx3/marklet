@@ -662,3 +662,10 @@ describe('★★ 파일이 아닌 문서에서는 [편집] 을 보여 주지 않
         expect(editBtn().hidden).toBe(false);
     });
 });
+
+describe('★ 안내가 가리킬 자리 (coach)', () => {
+    // 이름이 사라지면 안내가 조용히 반쪽이 된다 — home.test.ts 의 같은 시험과 짝이다.
+    it.each(['toc', 'find', 'more'])('data-coach="%s" 가 상단 바에 있다', (name) => {
+        expect(screen.root.querySelector(`[data-coach="${name}"]`)).not.toBeNull();
+    });
+});

@@ -105,6 +105,11 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
     moreBtn.setAttribute('aria-haspopup', 'menu');
     moreBtn.setAttribute('aria-expanded', 'false');
 
+    // 스포트라이트 안내가 이 이름으로 찾는다(coach-steps.ts). 옮기더라도 이름은 지킨다.
+    tocBtn.dataset.coach = 'toc';
+    searchBtn.dataset.coach = 'find';
+    moreBtn.dataset.coach = 'more';
+
     bar.append(back, title, tocBtn, searchBtn, editBtn, moreBtn);
 
     /*

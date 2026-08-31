@@ -50,6 +50,8 @@ export function createHome(cb: HomeCallbacks): HomeScreen {
      */
     search.placeholder = t.home.searchPlaceholder;
     search.setAttribute('aria-label', t.home.searchLabel);
+    // 스포트라이트 안내가 이 이름으로 찾는다(coach-steps.ts). 옮기더라도 이름은 지킨다.
+    search.dataset.coach = 'search';
     search.autocomplete = 'off';
     search.autocapitalize = 'off';
     search.spellcheck = false;
@@ -69,11 +71,14 @@ export function createHome(cb: HomeCallbacks): HomeScreen {
      */
     const actions = document.createElement('div');
     actions.className = 'home-actions';
-    actions.append(
-        actionBtn('fileOpen', t.home.openFile, () => void cb.pickFile(), true),
-        actionBtn('folderPlus', t.home.addFolder, () => void cb.addFolder()),
-        actionBtn('book', t.home.example, () => void cb.openExample()),
-    );
+    const openBtn = actionBtn('fileOpen', t.home.openFile, () => void cb.pickFile(), true);
+    const folderBtn = actionBtn('folderPlus', t.home.addFolder, () => void cb.addFolder());
+    const exampleBtn = actionBtn('book', t.home.example, () => void cb.openExample());
+    // 안내가 가리킬 자리들(위 search 주석과 같다).
+    openBtn.dataset.coach = 'open-file';
+    folderBtn.dataset.coach = 'add-folder';
+    exampleBtn.dataset.coach = 'example';
+    actions.append(openBtn, folderBtn, exampleBtn);
 
     const recentsSection = section(t.home.recents);
     const foldersSection = section(t.home.myFolders);

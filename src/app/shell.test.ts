@@ -150,6 +150,8 @@ vi.mock('../utils/dialog', () => ({
 
 import { mount, entryHandlers, suggestName } from './shell';
 import { __resetRouterForTest, __pressBackForTest, hasLayer } from './router';
+import { closeCoach, isCoachOpen } from './coach';
+import { getSettings, updateSettings } from '../services/settings';
 import { t } from '../i18n';
 import type { MdDocument } from '../plugins/md-file';
 
@@ -184,7 +186,7 @@ function visibleScreen(root: HTMLElement): string {
 
 let root: HTMLElement;
 
-beforeEach(() => {
+beforeEach(async () => {
     vi.useFakeTimers();
     nativeStore.clear();
     fsStore.clear();
@@ -220,12 +222,22 @@ beforeEach(() => {
     mdFile.pickFile.mockResolvedValue({ cancelled: true });
     mdFile.createFile.mockResolvedValue({ cancelled: true });
 
+    /*
+     * ★ 첫 사용자 안내는 **본 것으로 해 두고** 시작한다(coach.ts). 안 그러면 거의 모든
+     *   테스트에서 화면이 뜬 지 0.6초 뒤에 안내가 떠서 뒤로가기를 가로챈다 —
+     *   여기서 보려는 것은 안내가 아니라 화면 전환이다. 안내 자체는 아래에 따로 있다.
+     */
+    await updateSettings({ coachedHome: true, coachedViewer: true });
+
     root = document.createElement('div');
     document.body.appendChild(root);
     mount(root);
 });
 
-afterEach(() => {
+afterEach(async () => {
+    // 안내는 모듈 안에 '지금 떠 있는 것' 하나를 들고 있다. 다음 테스트로 새지 않게 걷는다.
+    closeCoach();
+    await vi.advanceTimersByTimeAsync(300);
     vi.useRealTimers();
 });
 
@@ -752,5 +764,105 @@ describe('★★ 너무 큰 글자 공유 안내', () => {
             alerts.join(' '),
             '없는 단추를 쓰라고 안내하면 사용자는 자기가 못 찾는 줄 안다',
         ).not.toContain(t.viewer.shareFile);
+    });
+});
+
+describe('셸 — 첫 사용자 안내 (coach)', () => {
+    /** 안내를 아직 안 본 상태로 되돌리고 화면을 다시 만든다. */
+    async function 처음켠다(): Promise<void> {
+        await updateSettings({ coachedHome: false, coachedViewer: false });
+        root = document.createElement('div');
+        document.body.appendChild(root);
+        mount(root);
+        await settle();
+    }
+
+    function 안내카드(): HTMLElement | null {
+        return document.querySelector('.coach-card');
+    }
+    function 안내버튼(label: string): HTMLButtonElement | undefined {
+        return [...document.querySelectorAll<HTMLButtonElement>('.coach-actions button')].find(
+            (b) => (b.textContent ?? '').trim() === label,
+        );
+    }
+
+    it('처음 켜면 시작 화면 안내가 뜬다', async () => {
+        await 처음켠다();
+
+        expect(isCoachOpen()).toBe(true);
+        expect(안내카드()?.textContent).toContain(t.coach.homeExampleTitle);
+    });
+
+    it('끝까지 보면 다시 뜨지 않는다', async () => {
+        await 처음켠다();
+
+        // [다음]×3 → [시작하기]
+        for (let i = 0; i < 3; i++) 안내버튼(t.coach.next)!.click();
+        안내버튼(t.coach.done)!.click();
+        await settle();
+
+        expect(getSettings().coachedHome).toBe(true);
+        // ★ 뷰어 안내는 아직 안 봤다. 여기서 같이 꺼 버리면 문서 화면은 영영 안내가 없다.
+        expect(getSettings().coachedViewer).toBe(false);
+    });
+
+    it('★ 건너뛰면 문서 화면 안내까지 끈다 — 같은 것을 두 번 거절하게 두지 않는다', async () => {
+        await 처음켠다();
+
+        안내버튼(t.coach.skip)!.click();
+        await settle();
+
+        expect(getSettings().coachedHome).toBe(true);
+        expect(getSettings().coachedViewer).toBe(true);
+    });
+
+    it('문서를 앱 안에서 열면 뷰어 안내가 뜬다', async () => {
+        await 처음켠다();
+        안내버튼(t.coach.skip)!.click();
+        await settle();
+        // 건너뛰기가 뷰어 안내까지 껐으므로, 뷰어만 다시 안 본 것으로 되돌린다.
+        await updateSettings({ coachedViewer: false });
+
+        /*
+         * ★ 앱 안에서 여는 길로 간다 — 파일 선택기로 연 문서다.
+         *   공유받은 글·인텐트(openSharedText / openDocument)는 **밖에서 들어온 것**이라
+         *   일부러 안내를 띄우지 않는다(아래 시험이 그 규칙을 따로 본다).
+         */
+        mdFile.pickFile.mockResolvedValue(doc());
+        [...root.querySelectorAll('button')]
+            .find((b) => (b.textContent ?? '').includes(t.home.openFile))!
+            .click();
+        await settle();
+
+        expect(visibleScreen(root)).toContain('screen-viewer');
+        expect(안내카드()?.textContent).toContain(t.coach.viewerIntroTitle);
+    });
+
+    it('★★ 밖에서 들어온 문서 위에는 뜨지 않는다 — 읽으러 온 사람을 막지 않는다', async () => {
+        await 처음켠다();
+        안내버튼(t.coach.skip)!.click();
+        await settle();
+        await updateSettings({ coachedViewer: false });
+
+        await entryHandlers.openDocument(doc());
+        await settle();
+
+        expect(isCoachOpen()).toBe(false);
+        // 그러니 뒤로가기는 안내가 아니라 앱 종료(9-1절)로 간다.
+        await __pressBackForTest();
+        await settle();
+        expect(exitApp).toHaveBeenCalled();
+    });
+
+    it('★ 화면이 바뀌면 걷히되 본 것으로 세지 않는다', async () => {
+        await 처음켠다();
+        expect(isCoachOpen()).toBe(true);
+
+        // 안내를 읽던 중에 카톡에서 문서가 들어온다.
+        await entryHandlers.openDocument(doc());
+        await settle();
+
+        expect(isCoachOpen()).toBe(false);
+        expect(getSettings().coachedHome, '읽은 적이 없으니 다음에 또 띄워야 한다').toBe(false);
     });
 });

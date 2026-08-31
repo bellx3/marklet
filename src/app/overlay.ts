@@ -30,7 +30,7 @@ const CLOSE_DELAY_MS = 200;
  */
 const returnTo = new WeakMap<HTMLElement, HTMLElement | null>();
 
-const BACKDROP = '.dialog-backdrop, .sheet-backdrop';
+const BACKDROP = '.dialog-backdrop, .sheet-backdrop, .coach-backdrop';
 
 /** 지금 초점 자리를 보고, 닫힐 오버레이 안이면 그 오버레이가 돌려주려던 곳을 쓴다. */
 function resolveReturnTarget(): HTMLElement | null {

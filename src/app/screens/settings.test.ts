@@ -74,6 +74,7 @@ const cb = {
     openDiagnostics: vi.fn(),
     onBreaksChanged: vi.fn(),
     onImagePolicyChanged: vi.fn(),
+    replayTutorial: vi.fn(),
 };
 
 let screen: SettingsScreen;
