@@ -9,6 +9,7 @@ import {
 import { looksLikeMath, ensureMath } from '../../markdown/math';
 import { looksLikeCode, ensureHighlight } from '../../markdown/highlight';
 import { looksLikeMermaid, upgradeMermaidBlocks } from '../../markdown/mermaid';
+import { bindFitToWidth } from '../../markdown/fit-width';
 import { bindDocumentLinks } from './viewer';
 import { bindDiagramZoom, closeDiagramViewer } from './diagram-viewer';
 import { createTocSheet, type TocSheet } from './toc-sheet';
@@ -266,6 +267,8 @@ export function createViewerScreen(cb: ViewerCallbacks): ViewerScreen {
      */
     bindDocumentLinks(target, getHandleWithBusy);
     bindDiagramZoom(target);
+    // 넓은 수식·표를 화면 폭에 맞춘다. 위임 관찰이라 나중에 붙는 청크에도 걸린다.
+    bindFitToWidth(target);
 
     let doc: MdDocument | null = null;
     let content = '';

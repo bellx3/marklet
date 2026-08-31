@@ -170,10 +170,16 @@
     margin: 0 0 1.1em;
     -webkit-overflow-scrolling: touch;
 }
+/*
+ * 표는 **먼저 화면 폭에 맞춘다.** 예전에는 width:max-content 라 셀 내용이 한 줄로
+ * 펴져서, 화면에 충분히 들어가는 표까지 가로 스크롤이 생겼다. 이제 셀을 접어서
+ * 맞추고, 접어도 안 되는 표만 .table-scroll 이 받는다(그마저도 fit-width.ts 가
+ * 글자를 줄여 대개 상자 안에 넣는다).
+ */
 .md-body table {
     border-collapse: collapse;
-    width: max-content;
-    min-width: 100%;
+    width: 100%;
+    table-layout: auto;
     font-size: 0.94em;
 }
 .md-body th,
@@ -181,6 +187,8 @@
     border: 1px solid var(--md-border);
     padding: 7px 11px;
     text-align: left;
+    /* 긴 URL·식별자 한 개가 표 전체를 화면 밖으로 밀지 않게 한다 */
+    overflow-wrap: break-word;
 }
 .md-body th {
     background: var(--md-code-bg-inline);

@@ -1,12 +1,8 @@
-Fixed three paths where writing could disappear.
+Tables and formulas now fit the screen. No more sideways swiping.
 
-• Recent documents and folder lists could go empty
-• Unsaved writing could vanish on the next launch
-• A save left the stored copy holding old text
-• Missing files and folders now say what happened
-• This app alone set to English no longer shows Korean
-• Settings no longer overflow at large font sizes
-• Back with the menu open no longer shuts the document
-• Settings shows the correct version number
+• Tables wrap their cells to fit. Three of the four in the sample document now fit at a glance
+• Wider tables and formulas shrink to fit, but never below a readable size
+• Tables with many columns still need some sideways scrolling after shrinking
+• Changing the text size refits tables and formulas to match
 
 Report anything odd to the address in Settings.
