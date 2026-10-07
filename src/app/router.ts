@@ -115,6 +115,14 @@ export function initRouter(): void {
         });
 }
 
+/**
+ * 뒤로가기 한 번. 데스크톱의 Esc 가 이것이다(src/desktop/main.ts).
+ * ★ 새 갈래를 만들지 않고 handleBack 을 그대로 부른다 — 위 주석의 이유와 같다.
+ */
+export function pressBack(): Promise<string | null> {
+    return handleBack();
+}
+
 /** 테스트 전용 */
 export function __resetRouterForTest(): void {
     stack.length = 0;

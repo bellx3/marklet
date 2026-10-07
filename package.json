@@ -2,6 +2,7 @@
     "name": "marklet",
     "version": "1.0.10",
     "type": "module",
+    "main": "desktop/main.cjs",
     "private": true,
     "description": "안드로이드에서 마크다운 문서를 열어 읽고 가볍게 고치는 뷰어",
     "scripts": {
@@ -28,7 +29,10 @@
         "play:products": "node scripts/play-products.cjs",
         "play:listing": "node scripts/play-listing.cjs",
         "play:screenshots": "node scripts/play-screenshots.cjs",
-        "test:java": "node scripts/test-java.cjs"
+        "test:java": "node scripts/test-java.cjs",
+        "desktop:build": "vite build -c vite.desktop.config.ts",
+        "desktop:dev": "npm run desktop:build && electron .",
+        "desktop:dist": "npm run desktop:build && electron-builder --win --x64"
     },
     "dependencies": {
         "@capacitor/android": "8.5.0",
@@ -60,6 +64,8 @@
         "@types/node": "^25.0.3",
         "@typescript-eslint/eslint-plugin": "^8.51.0",
         "@typescript-eslint/parser": "^8.51.0",
+        "electron": "^44.6.0",
+        "electron-builder": "^26.15.3",
         "eslint": "^9.39.2",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-prettier": "^5.5.4",
@@ -69,5 +75,57 @@
         "typescript": "^5.9.3",
         "vite": "^7.3.0",
         "vitest": "^4.0.16"
+    },
+    "author": "Alrimi Studio",
+    "build": {
+        "appId": "com.marklet.md.desktop",
+        "productName": "Marklet",
+        "copyright": "Alrimi Studio",
+        "directories": {
+            "output": "release-desktop"
+        },
+        "files": [
+            "desktop/**/*",
+            "dist-desktop/**/*",
+            "package.json",
+            "!node_modules"
+        ],
+        "asar": true,
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "icon": "desktop/icon.png",
+            "artifactName": "Marklet-Setup-${version}.${ext}"
+        },
+        "nsis": {
+            "oneClick": true,
+            "perMachine": false,
+            "deleteAppDataOnUninstall": false,
+            "shortcutName": "Marklet",
+            "include": "desktop/installer.nsh"
+        },
+        "fileAssociations": [
+            {
+                "ext": [
+                    "md",
+                    "markdown",
+                    "mdown",
+                    "mkd"
+                ],
+                "name": "Marklet.Markdown",
+                "description": "Markdown document",
+                "role": "Viewer"
+            }
+        ],
+        "electronLanguages": [
+            "ko",
+            "en-US"
+        ]
     }
 }

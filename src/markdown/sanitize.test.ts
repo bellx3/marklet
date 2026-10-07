@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { sanitize, sanitizeMermaidSvg, isSafeUrl } from './sanitize';
+import { describe, it, expect, afterEach } from 'vitest';
+import { sanitize, sanitizeMermaidSvg, isSafeUrl, allowRelativeUrls } from './sanitize';
 
 /**
  * 11-2절 #1 · #2.
@@ -240,5 +240,61 @@ describe('★★ 실제 공격 벡터 — 남이 만든 문서를 여는 앱이�
         expect(out).toContain('노드');
         expect(out).toContain('marker-end');
         expect(out).toContain('viewBox');
+    });
+});
+
+describe('상대 주소 (데스크톱 전용 옵트인)', () => {
+    afterEach(() => allowRelativeUrls(false));
+
+    const rel = ['img/a.png', 'other.md', './a.md', '../a.md', 'a.md#절', '#앵커', 'a?x=1'];
+    const evil = [
+        'javascript:alert(1)',
+        'JavaScript:alert(1)',
+        'java	script:alert(1)',
+        ' javascript:alert(1)',
+        'data:text/html,<script>1</script>',
+        'vbscript:x',
+        'file:///C:/Windows/win.ini',
+        'C:\Windows\win.ini',
+    ];
+
+    it('★ 기본은 꺼져 있다 — 모바일 동작이 바뀌지 않는다', () => {
+        for (const u of ['img/a.png', 'other.md']) expect(isSafeUrl(u)).toBe(false);
+    });
+
+    it('켜면 스킴 없는 주소가 통과한다', () => {
+        allowRelativeUrls(true);
+        for (const u of rel) expect(isSafeUrl(u), u).toBe(true);
+    });
+
+    it('★ 켜도 위험한 스킴·경로는 막는다', () => {
+        allowRelativeUrls(true);
+        for (const u of evil) expect(isSafeUrl(u), u).toBe(false);
+    });
+
+    it('이 옵트인이 프로토콜 상대(//host)를 새로 열어 주지는 않는다', () => {
+        // ★ '//host' 는 **기존 SAFE_URL 이 이미 통과시킨다**(`\.{0,2}\/` 가 첫 '/' 에 맞는다).
+        //   옵트인이 한 일이 아니다 — 그래서 켜기 전후가 같아야 한다. 이 시험은 그 사실만 못 박는다.
+        const before = isSafeUrl('//evil.example/x.png');
+        allowRelativeUrls(true);
+        expect(isSafeUrl('//evil.example/x.png')).toBe(before);
+    });
+
+    it('살균기도 같은 기준이다 — 그림 src 와 링크 href 가 살아남고 javascript: 는 지워진다', () => {
+        allowRelativeUrls(true);
+        const host = document.createElement('div');
+        host.innerHTML = sanitize(
+            '<p><img src="img/a.png"><a href="other.md">x</a><a href="javascript:alert(1)">y</a></p>',
+        );
+        expect(host.querySelector('img')?.getAttribute('src')).toBe('img/a.png');
+        const links = host.querySelectorAll('a');
+        expect(links[0].getAttribute('href')).toBe('other.md');
+        expect(links[1].hasAttribute('href')).toBe(false);
+    });
+
+    it('끄면 상대 주소가 다시 지워진다', () => {
+        const host = document.createElement('div');
+        host.innerHTML = sanitize('<img src="img/a.png">');
+        expect(host.querySelector('img')?.hasAttribute('src')).toBe(false);
     });
 });

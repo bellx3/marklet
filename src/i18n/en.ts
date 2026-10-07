@@ -99,6 +99,11 @@ export const en = {
             'Treat one Enter as a line break, so notes written in a memo app do not collapse into one paragraph.',
     },
 
+    /** 데스크톱(Electron) 화면 전용. 모바일에서는 쓰이지 않는다. */
+    desktop: {
+        emptyHint: 'Drop a Markdown file here\nor press Ctrl+O to open one',
+    },
+
     settings: {
         title: 'Settings',
         /** ★ 글자 크기 미리보기. 한국어는 한글 판구름(pangram)을 쓴다. */

@@ -9,8 +9,31 @@ import DOMPurify from 'dompurify';
  */
 const SAFE_URL = /^(?:https?:|mailto:|tel:|#|\.{0,2}\/)/i;
 
+/**
+ * 스킴이 없는 상대 주소(`img/a.png`, `other.md`).
+ *
+ * ★ 스킴이 없다 = 첫 `/` `?` `#` 앞에 `:` 가 없다. `javascript:` · `data:` · `C:\` 는
+ *   전부 그 앞에 `:` 가 있어서 걸린다. `java	script:` 처럼 사이에 공백을 끼운 것도
+ *   `[^:/?#]*` 가 공백까지 먹고 `:` 에서 멈추므로 통과하지 못한다.
+ * ★ `//host` (프로토콜 상대)는 뺀다. 출처를 바꾸는 주소다.
+ */
+const RELATIVE_URL = /^(?!\/\/)[^:/?#]*(?:[/?#]|$)/;
+
+/**
+ * 상대 주소를 허용할지. **기본은 끈다 — 모바일은 이 값을 켜지 않는다.**
+ *
+ * 모바일에는 문서 옆에 파일이 없다(SAF 로 연 문서 하나뿐). 상대 링크·그림은 가리킬 곳이
+ * 없으므로 막아 둔 것이 지금까지 맞았다. 데스크톱은 같은 폴더의 그림·다른 .md 가 흔해서 켠다
+ * (src/desktop/main.ts). 켜더라도 http(s) 밖의 스킴은 여전히 허용 목록 밖이다.
+ */
+let relativeUrls = false;
+export function allowRelativeUrls(on: boolean): void {
+    relativeUrls = on;
+}
+
 export function isSafeUrl(url: string): boolean {
-    return SAFE_URL.test(url.trim());
+    const u = url.trim();
+    return SAFE_URL.test(u) || (relativeUrls && RELATIVE_URL.test(u));
 }
 
 /**
@@ -115,8 +138,15 @@ export const PURIFY_CONFIG: import('dompurify').Config = {
     ],
 };
 
+/** 상대 주소를 허용하는 판. 허용 목록 하나만 넓히고 나머지는 PURIFY_CONFIG 그대로다. */
+const PURIFY_CONFIG_RELATIVE: import('dompurify').Config = {
+    ...PURIFY_CONFIG,
+    ALLOWED_URI_REGEXP: new RegExp(`${SAFE_URL.source}|${RELATIVE_URL.source}`, 'i'),
+};
+
 export function sanitize(html: string): string {
-    return DOMPurify.sanitize(html, PURIFY_CONFIG) as unknown as string;
+    const cfg = relativeUrls ? PURIFY_CONFIG_RELATIVE : PURIFY_CONFIG;
+    return DOMPurify.sanitize(html, cfg) as unknown as string;
 }
 
 /**

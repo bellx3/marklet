@@ -31,3 +31,7 @@ npm-debug.log*
 
 # 검증하면서 찍은 화면·스크래치 파일
 .tmp-*
+
+# Desktop (Electron)
+dist-desktop/
+release-desktop/

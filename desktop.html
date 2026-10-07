@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- ★ 데스크톱(Electron) 전용 진입점. 모바일은 index.html 이다. setLanguage() 가 lang 을 덮어쓴다. -->
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!--
+          모바일(index.html)과 같은 3차 방어선. 차이는 img-src 의 marklet-local: 하나뿐이다 —
+          문서가 상대 경로로 가리킨 그림을 main.cjs 의 그 스킴으로 내준다(그림 확장자만).
+        -->
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'self';
+                     script-src 'self';
+                     style-src 'self' 'unsafe-inline';
+                     img-src 'self' data: https: marklet-local:;
+                     font-src 'self' data:;
+                     connect-src 'self';
+                     object-src 'none';
+                     base-uri 'none';
+                     form-action 'none'"
+        />
+        <title>Marklet</title>
+    </head>
+    <body>
+        <div id="app"></div>
+        <div id="overlay-root"></div>
+        <div id="toast-root" role="status" aria-live="polite" aria-atomic="true"></div>
+        <script type="module" src="/src/desktop/main.ts"></script>
+    </body>
+</html>

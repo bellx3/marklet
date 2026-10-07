@@ -1,0 +1,37 @@
+/**
+ * desktop/preload.cjs 가 contextBridge 로 내민 것의 타입.
+ * ★ preload 를 고치면 여기를 같이 고쳐라. 이름이 어긋나면 컴파일은 되고 런타임에 조용히 죽는다.
+ */
+export interface DesktopDoc {
+    path: string;
+    name: string;
+    /** 문서가 있는 폴더(절대 경로). 상대 경로 그림의 기준이다. */
+    dir: string;
+    size: number;
+    content: string;
+    encoding: 'UTF-8' | 'EUC-KR';
+    /** 같은 파일이 디스크에서 바뀌어 다시 읽은 것이다. 읽던 자리를 지킨다. */
+    reload: boolean;
+}
+
+export type DesktopCommand =
+    | { name: 'toc' | 'find' | 'source' | 'print' }
+    | { name: 'settings'; value: { theme: 'system' | 'light' | 'dark'; remoteImages: boolean } };
+
+export interface MarkletBridge {
+    ready(): void;
+    onDocument(cb: (doc: DesktopDoc) => void): void;
+    onCommand(cb: (cmd: DesktopCommand) => void): void;
+    openPath(file: File): void;
+    openLink(href: string): void;
+    zoom(dir: -1 | 0 | 1): void;
+    setTheme(theme: 'system' | 'light' | 'dark'): void;
+    /** 우클릭 메뉴와 같은 메뉴를 마우스 자리에 띄운다 */
+    showMenu(): void;
+}
+
+declare global {
+    interface Window {
+        marklet?: MarkletBridge;
+    }
+}

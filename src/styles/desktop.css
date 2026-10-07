@@ -1,0 +1,148 @@
+/*
+ * 데스크톱(Electron) 전용 — src/desktop/main.ts 만 불러온다. 모바일 번들에는 들어가지 않는다.
+ *
+ * 목표는 '사진 뷰어'다. 화면에는 문서밖에 없다. 상단 바도 버튼도 없고,
+ * 필요한 것은 메뉴(Alt) · 우클릭 · 단축키로 닿는다.
+ */
+
+:root {
+    /* 화면이 넓다. 모바일의 38rem 은 데스크톱에서 너무 좁게 읽힌다. 한 줄은 여전히 읽기 좋은 길이로. */
+    --md-measure: 46rem;
+    --md-pad-x: 32px;
+}
+
+.desktop .md-body {
+    padding-top: 40px;
+    padding-bottom: 120px;
+}
+
+/* 열린 문서가 없을 때 — 창을 직접 연 경우 */
+.desktop-empty {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0 var(--sp-5);
+    color: var(--md-fg-muted);
+    font:
+        15px/1.7 var(--md-font-body),
+        sans-serif;
+    text-align: center;
+    white-space: pre-line;
+    word-break: keep-all;
+    /* 끌어다 놓기가 이 위로도 잡혀야 한다 */
+    pointer-events: none;
+}
+
+/* 데스크톱 스크롤바는 가늘게 — 큰 막대가 문서 옆에 붙어 있으면 사진 뷰어 느낌이 사라진다 */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--md-border);
+    border-radius: 5px;
+    border: 2px solid var(--md-bg);
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--md-quote-bar);
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* 목차 시트 — 바닥에서 올라오는 모바일 모양 대신 가운데에 놓는다 */
+#overlay-root .sheet-backdrop {
+    align-items: center;
+}
+#overlay-root .sheet {
+    max-width: 30rem;
+    max-height: 70%;
+    border-radius: var(--r-lg);
+    padding-bottom: 0;
+    transform: translateY(8px);
+}
+#overlay-root .sheet-backdrop.is-open .sheet {
+    transform: translateY(0);
+}
+
+/* 검색 바는 문서 위에 겹쳐 뜨는 한 줄 */
+.desktop .search-bar {
+    max-width: var(--md-measure);
+    margin: 0 auto;
+}
+
+@media print {
+    .search-bar,
+    .sheet-backdrop,
+    .dialog-backdrop,
+    #toast-root,
+    .desktop-empty {
+        display: none !important;
+    }
+    html,
+    body {
+        background: #fff;
+    }
+    .desktop .md-body {
+        max-width: none;
+        padding: 0;
+    }
+    /* 쪽 끝에서 표 · 그림 · 코드가 반으로 잘리지 않게 */
+    .md-body pre,
+    .md-body table,
+    .md-body img,
+    .md-body blockquote {
+        break-inside: avoid;
+    }
+}
+
+/*
+ * 떠오르는 컨트롤(src/desktop/controls.ts). 평소에는 보이지도, 눌리지도, 초점을 받지도 않는다.
+ * ★ opacity 만 0 으로 두면 Tab 이 보이지 않는 버튼에 걸린다. visibility 로 함께 숨기되,
+ *   사라질 때만 전환이 끝난 뒤에 바뀌도록(delay) 해서 서서히 꺼지게 한다.
+ */
+.desktop-controls {
+    position: fixed;
+    top: 14px;
+    /* 스크롤바(10px) 안쪽에 놓는다 */
+    right: 24px;
+    z-index: 20;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--r-full);
+    border: 1px solid var(--md-border);
+    background: color-mix(in srgb, var(--md-bg) 86%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-1);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition:
+        opacity 160ms ease,
+        transform 160ms ease,
+        visibility 0s linear 160ms;
+}
+.desktop-controls.is-shown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition-delay: 0s;
+}
+/* 데스크톱은 마우스라 48px 터치 영역이 필요 없다 */
+.desktop-ctl {
+    width: 34px;
+    height: 34px;
+}
+.desktop-ctl:hover {
+    background: var(--md-code-bg-inline);
+}
+
+@media print {
+    .desktop-controls {
+        display: none !important;
+    }
+}
