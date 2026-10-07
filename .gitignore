@@ -38,7 +38,6 @@ $RECYCLE.BIN/
 # IDE, Editors & Agent workspace
 .vscode/
 .idea/
-.claude/
 .gemini/
 *.suo
 *.ntvs*
@@ -58,11 +57,31 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Internal design docs & agent workspace — 공개 저장소에 싣지 않는다 (설계서 · 조사 · 출시 절차)
+.docs/
+.claude/
+
+# Code-signing certificates — 서명을 도입하면 가장 먼저 사고가 나는 파일들
+*.pfx
+*.p7b
+*.cer
+*.spc
+
+# Installers and binaries — 설치 파일은 저장소가 아니라 GitHub Releases 에 올린다
+*.exe
+*.msi
+
+# Removed Play Store / private release assets (재유입 방지)
+store/
+release/
+
 # Temporary scratch files
-.docs/_temp.md
+scripts/tmp-*
 .tmp-*
 .temp-*
 *.tmp
+*.bak
+*.orig
 
 # Archived Android local artifacts
 archive/android/.gradle/
