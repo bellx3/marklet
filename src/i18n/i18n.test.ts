@@ -208,7 +208,7 @@ describe('★★ 모르는 언어가 와도 카탈로그가 살아 있다', () =
 describe('문구의 숫자가 코드와 맞는가', () => {
     // ★ import.meta.url 은 vite 서버 URL 이라 file: 스킴이 아니다. 저장소 루트 기준으로 읽는다.
     const java = readFileSync(
-        'android/app/src/main/java/com/marklet/md/mdfile/MdFilePlugin.java',
+        'archive/android/app/src/main/java/com/marklet/md/mdfile/MdFilePlugin.java',
         'utf8',
     );
 

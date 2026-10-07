@@ -1,37 +1,75 @@
+# Dependencies
 node_modules/
-ios/
 
-# Capacitor
-.capacitor/
-
-# 로컬 환경 설정
+# Environment and sensitive files
 .env
 .env.local
+.env.*.local
+*.keystore
+*.jks
+*.p12
+*.key
+*.pem
+keystore.properties
+local.properties
+play-service-account.json
 
-# IDE
-.vscode/
-.idea/
+# Desktop build outputs (Electron / electron-builder)
+dist-desktop/
+release-desktop/
+win-unpacked/
+*.blockmap
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Build outputs
-www/
+# General build outputs
 dist/
 build/
 out/
+www/
+*.apk
+*.aab
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDE, Editors & Agent workspace
+.vscode/
+.idea/
+.claude/
+.gemini/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Tests, Linters & Cache
+coverage/
+.eslintcache
+tsconfig.tsbuildinfo
+.vitest/
 
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# 자격증명이 섞이기 쉬운 임시 메모
+# Temporary scratch files
 .docs/_temp.md
-
-# 검증하면서 찍은 화면·스크래치 파일
 .tmp-*
+.temp-*
+*.tmp
 
-# Desktop (Electron)
-dist-desktop/
-release-desktop/
+# Archived Android local artifacts
+archive/android/.gradle/
+archive/android/**/build/
+archive/android/capacitor-cordova-android-plugins/
+archive/android/local.properties
+archive/android/keystore.properties
+archive/android/play-service-account.json
+archive/android/*.keystore
+archive/.capacitor/
