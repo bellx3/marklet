@@ -36,10 +36,13 @@ function rule(css: string, selector: string): string {
 
 describe('CSS import 순서', () => {
     it('utilities.css 가 마지막 CSS import 다', () => {
-        const src = read('./main.ts');
-        const imports = [...src.matchAll(/^import\s+'(\.\/styles\/[^']+)';$/gm)].map((m) => m[1]);
+        // 데스크톱 진입점(옛 모바일 src/main.ts 는 archive/ 로 옮겼다). 같은 규칙이 그대로 적용된다.
+        const src = read('./desktop/main.ts');
+        const imports = [...src.matchAll(/^import\s+'(\.\.\/styles\/[^']+)';\r?$/gm)].map(
+            (m) => m[1],
+        );
         expect(imports.length).toBeGreaterThan(1);
-        expect(imports[imports.length - 1]).toBe('./styles/utilities.css');
+        expect(imports[imports.length - 1]).toBe('../styles/utilities.css');
     });
 
     it('utilities.css 외의 CSS 는 [hidden] 을 재정의하지 않는다', () => {

@@ -184,9 +184,14 @@ marklet/
 │   └── styles/               # 테마 및 컴포넌트 스타일시트
 ├── docs/                     # 프로젝트 문서 및 에셋
 │   └── images/               # README 쇼케이스 이미지
-└── archive/                  # 이전 플랫폼 아카이브
-    ├── android/              # 이전 Capacitor 안드로이드 네이티브 소스
-    └── scripts/              # 안드로이드 전용 빌드/배포 스크립트
+├── scripts/                  # capture-desktop(README 이미지 생성), check-contrast
+├── desktop.html              # 렌더러 진입 HTML
+├── vite.config.ts            # 렌더러 번들 설정 (→ dist-desktop/)
+└── archive/                  # 보류한 모바일(Android) 쪽 — 자세한 구성은 archive/README.md
+    ├── android/              # Capacitor 안드로이드 네이티브 소스
+    ├── web/                  # 모바일 진입 HTML · vite 설정
+    ├── src/                  # 모바일 전용 화면·서비스와 시험
+    └── scripts/              # 안드로이드 빌드/배포·실측 스크립트
 ```
 
 ### 보안 아키텍처

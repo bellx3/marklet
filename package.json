@@ -25,7 +25,7 @@
         "dev": "npm run desktop:dev",
         "build": "npm run desktop:build",
         "dist": "npm run desktop:dist",
-        "desktop:build": "vite build -c vite.desktop.config.ts",
+        "desktop:build": "vite build",
         "desktop:dev": "npm run desktop:build && electron .",
         "desktop:dist": "npm run desktop:build && electron-builder --win --x64",
         "lint": "eslint src --ext .ts",
