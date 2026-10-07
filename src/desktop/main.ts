@@ -20,13 +20,16 @@ import { looksLikeMath, ensureMath } from '../markdown/math';
 import { looksLikeCode, ensureHighlight } from '../markdown/highlight';
 import { looksLikeMermaid, upgradeMermaidBlocks } from '../markdown/mermaid';
 import { bindFitToWidth } from '../markdown/fit-width';
-import { bindDocumentLinks } from '../app/screens/viewer';
+import { bindDocumentLinks, jumpToAnchor } from '../app/screens/viewer';
 import { bindDiagramZoom } from '../app/screens/diagram-viewer';
 import { createTocSheet } from '../app/screens/toc-sheet';
 import { createSearchBar } from '../app/screens/search-bar';
 import { pressBack } from '../app/router';
+import { Toast } from '../utils/toast';
 import { localImageUrl } from './local-image';
 import { createControls } from './controls';
+import { createTocDock } from './toc-dock';
+import { isPlainTextName, normalizeNewlines } from './doc-kind';
 import { t } from '../i18n';
 
 /**
@@ -35,6 +38,11 @@ import { t } from '../i18n';
  * 모바일 viewer-screen.ts 에서 **화면 틀(상단 바 · 메뉴 · 시트)은 버리고** 그리는 부분만 가져왔다.
  * 파싱·렌더·수식·코드·다이어그램·표 맞춤은 같은 모듈이다. 그래서 모바일에서 고친 것이
  * 여기서도 그대로 고쳐진다.
+ *
+ * 글은 세 곳에 있다.
+ *   saved  — 파일에 있는 그대로(마지막으로 읽거나 쓴 것)
+ *   draft  — 지금 화면의 글. 편집하면 saved 와 달라지고, 그 차이가 '저장하지 않은 편집'이다
+ *   편집기 — 편집 중에만 draft 를 들고 있다가 나갈 때 돌려준다
  */
 
 /** 4MB 를 넘으면 서식 없이 원문만. Chromium 의 scrollHeight 상한(2^25px) 때문이다 — 모바일과 같다. */
@@ -62,9 +70,21 @@ async function boot(): Promise<void> {
     target.className = 'md-target';
     body.append(frontmatterSlot, target);
 
+    const editor = document.createElement('textarea');
+    editor.className = 'desktop-editor';
+    editor.hidden = true;
+    editor.spellcheck = false;
+    editor.setAttribute('aria-label', t.viewer.edit);
+
     let handle: RenderHandle | null = null;
     let current: DesktopDoc | null = null;
     let showSource = false;
+    let editing = false;
+    /** 파일에 있는 그대로(LF). 마지막으로 읽거나 쓴 것이다. */
+    let saved = '';
+    /** 지금 화면의 글(LF). saved 와 다르면 저장하지 않은 편집이다. */
+    let draft = '';
+    let reportedDirty = false;
     /** 렌더가 await 를 지나는 동안 다른 문서가 들어오면 앞 것은 물러난다 */
     let seq = 0;
 
@@ -76,6 +96,7 @@ async function boot(): Promise<void> {
      * 검색 바나 목차가 열려 있을 때는 그 위를 덮지 않는다(search 바가 우상단까지 차지한다).
      */
     const controls = createControls({
+        onEdit: () => command({ name: 'edit' }),
         onToc: () => command({ name: 'toc' }),
         onFind: () => command({ name: 'find' }),
         // 지금 어두우면 밝게, 아니면 어둡게. 메뉴의 라디오와 같은 저장소(메인)를 쓴다.
@@ -84,7 +105,16 @@ async function boot(): Promise<void> {
         onMore: () => bridge?.showMenu(),
         suppressed: () => search.isOpen || !!document.querySelector('.sheet-backdrop.is-open'),
     });
-    app.append(search.root, empty, body, controls.root);
+    /*
+     * 목차 도크. 제목이 있는 문서에서 목차를 열면 왼쪽에 붙어 문서를 옆으로 민다.
+     * 제목이 없는 문서는 아래 command('toc') 가 기존 안내 모달(toc 시트)을 그대로 쓴다.
+     */
+    const dock = createTocDock({
+        host: app,
+        container: target,
+        onJump: (id) => void jumpToAnchor(id, target, handle),
+    });
+    app.append(dock.root, search.root, empty, body, editor, controls.root);
 
     bindDocumentLinks(target, () => handle);
     bindDiagramZoom(target);
@@ -121,22 +151,27 @@ async function boot(): Promise<void> {
         }
     }).observe(target, { childList: true, subtree: true });
 
-    async function show(doc: DesktopDoc): Promise<void> {
+    /** 저장하지 않은 편집이 생기거나 사라질 때만 메인에 알린다(제목의 ● 와 닫을 때의 확인). */
+    function reportDirty(): void {
+        const dirty = draft !== saved;
+        if (dirty === reportedDirty) return;
+        reportedDirty = dirty;
+        bridge?.setDirty(dirty);
+    }
+
+    /** 지금 draft 를 화면에 그린다. 읽던 자리를 지키려면 keepScroll. */
+    async function render(keepScroll: boolean): Promise<void> {
+        if (!current) return;
         const mine = ++seq;
         handle?.cancel();
         search.close();
-        const y = doc.reload ? window.scrollY : 0;
-
-        current = doc;
-        controls.setActive(true);
-        empty.hidden = true;
-        body.hidden = false;
+        const y = keepScroll ? window.scrollY : 0;
         frontmatterSlot.replaceChildren();
 
-        if (showSource || doc.size > PLAIN_LIMIT) {
-            handle = renderPlainProgressive(doc.content, target);
+        if (showSource || draft.length > PLAIN_LIMIT) {
+            handle = renderPlainProgressive(draft, target);
         } else {
-            const { frontmatter, body: markdown } = parseDocument(doc.content);
+            const { frontmatter, body: markdown } = parseDocument(draft);
             const md = createMarkdownIt({ breaks: getSettings().breaks });
             // 문서에 실제로 있을 때만 받는다. 나란히 기다린다(모바일과 같은 이유).
             await Promise.all([
@@ -158,13 +193,102 @@ async function boot(): Promise<void> {
             });
         }
 
-        if (doc.reload) {
+        // 제목 목록을 도크에 넘긴다. 서식 없이 보는 중이면 비어 있어 도크는 닫힌다.
+        dock.setHeadings(handle.headings);
+
+        if (keepScroll) {
             // 읽던 자리로 돌아간다. 청크가 아직 다 안 붙었으면 그 자리가 없으므로 다 붙인 뒤에.
             await handle.renderRest();
             if (mine === seq) window.scrollTo(0, y);
         } else {
             window.scrollTo(0, 0);
         }
+    }
+
+    /** 메인이 문서를 보냈다(열었거나, 다른 곳에서 바뀌어 다시 읽었다). */
+    async function show(doc: DesktopDoc): Promise<void> {
+        const text = normalizeNewlines(doc.content);
+        const sameFile = doc.reload && current?.path === doc.path;
+        current = doc;
+        saved = text;
+        draft = text;
+        reportedDirty = false;
+        controls.setActive(true);
+        empty.hidden = true;
+
+        if (!sameFile) {
+            // 새 문서. .txt 는 마크다운이 아니므로 글자 그대로 보여 주는 쪽이 기본이다.
+            showSource = isPlainTextName(doc.name);
+            if (editing) {
+                // ★ setEditing(false) 를 부르지 않는다 — 그건 편집기의 글을 draft 로 되돌려 주는데,
+                //   그 글은 이전 문서의 것이다. 방금 받은 새 문서를 덮어쓴다.
+                editing = false;
+                controls.setEditing(false);
+                editor.hidden = true;
+                dock.suspend(false);
+            }
+        }
+
+        if (editing) {
+            // 편집 중에 디스크가 바뀌어 다시 읽었다(메인은 저장하지 않은 편집이 없을 때만 보낸다).
+            editor.value = draft;
+            return;
+        }
+        body.hidden = false;
+        await render(sameFile);
+    }
+
+    /**
+     * 편집 모드 ↔ 보기 모드.
+     * 나갈 때 편집한 글(저장 전이어도)이 그대로 미리보기로 그려진다 — 저장은 따로 한다.
+     */
+    function setEditing(on: boolean, rerender = true): void {
+        if (!current || on === editing) return;
+        editing = on;
+        controls.setEditing(on);
+        controls.hide();
+        if (on) {
+            search.close();
+            dock.suspend(true);
+            editor.value = draft;
+            body.hidden = true;
+            editor.hidden = false;
+            editor.focus();
+            editor.setSelectionRange(0, 0);
+        } else {
+            draft = normalizeNewlines(editor.value);
+            editor.hidden = true;
+            body.hidden = false;
+            dock.suspend(false);
+            reportDirty();
+            if (rerender) void render(false);
+        }
+    }
+
+    editor.addEventListener('input', () => {
+        draft = normalizeNewlines(editor.value);
+        reportDirty();
+    });
+    // Tab 은 포커스를 옮기지 않고 들여쓴다. execCommand 로 넣어야 Ctrl+Z 가 한 번에 되돌린다.
+    editor.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab' && !e.shiftKey && !e.isComposing) {
+            e.preventDefault();
+            document.execCommand('insertText', false, '\t');
+        }
+    });
+
+    async function save(): Promise<void> {
+        if (!current || !bridge) return;
+        const snapshot = editing ? normalizeNewlines(editor.value) : draft;
+        draft = snapshot;
+        // 고친 게 없으면 쓰지 않는다. 안 쓰면 파일의 수정 시각이 그대로라 다른 도구가 헛돌지 않는다.
+        if (snapshot === saved) return;
+        const r = await bridge.save(snapshot);
+        if (!r.ok) return;
+        // 저장하는 동안 더 쳤을 수 있다. 보낸 그 글을 '저장된 것'으로 삼고 차이는 그대로 둔다.
+        saved = snapshot;
+        reportDirty();
+        Toast.success(t.shell.saved);
     }
 
     async function printDoc(): Promise<void> {
@@ -185,19 +309,28 @@ async function boot(): Promise<void> {
 
     function command(cmd: DesktopCommand): void {
         switch (cmd.name) {
+            case 'edit':
+                if (current) setEditing(!editing);
+                break;
+            case 'save':
+                void save();
+                break;
             case 'toc':
-                if (current) toc.open(handle?.headings ?? []);
+                if (!current || editing) break;
+                // 제목이 있으면 왼쪽 도크, 없으면 '제목이 없습니다' 안내 모달.
+                if ((handle?.headings.length ?? 0) > 0) dock.toggle();
+                else toc.open([]);
                 break;
             case 'find':
-                if (current) void search.open();
+                if (current && !editing) void search.open();
                 break;
             case 'source':
-                if (!current) break;
+                if (!current || editing) break;
                 showSource = !showSource;
-                void show({ ...current, reload: true });
+                void render(true);
                 break;
             case 'print':
-                if (current) void printDoc();
+                if (current && !editing) void printDoc();
                 break;
             case 'settings': {
                 const prevRemote = getSettings().remoteImages;
@@ -206,8 +339,8 @@ async function boot(): Promise<void> {
                     remoteImages: cmd.value.remoteImages,
                 }).then(() => {
                     // 원격 이미지 정책은 렌더 단계에서 적용되므로 바뀌면 다시 그려야 한다.
-                    if (current && prevRemote !== cmd.value.remoteImages) {
-                        void show({ ...current, reload: true });
+                    if (current && !editing && prevRemote !== cmd.value.remoteImages) {
+                        void render(true);
                     }
                 });
                 break;
@@ -223,6 +356,26 @@ async function boot(): Promise<void> {
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !e.isComposing) void pressBack();
     });
+
+    /*
+     * Tab 은 문서 화면에서 아무것도 순회하지 않는다.
+     *
+     * ★ 사진 뷰어에서 Tab 을 눌러도 버튼이 돌지 않는다. 여기서는 Tab 이 컨트롤 버튼과 문서 안의
+     *   링크·표 영역(스크롤용 tabindex)을 차례로 돌며 초점 테두리를 그리고 컨트롤을 띄웠다.
+     *   읽는 데 필요 없는 동작이다. 기능은 단축키·Alt 메뉴·우클릭으로 닿는다.
+     * 자기 안에서 Tab 이 필요한 것만 남긴다: 편집기(들여쓰기는 따로 처리), 검색 바, 목차 모달, 대화상자.
+     */
+    window.addEventListener(
+        'keydown',
+        (e) => {
+            if (e.key !== 'Tab') return;
+            const el = e.target as Element | null;
+            if (el?.closest('.desktop-editor, .search-bar, .sheet-backdrop, .dialog-backdrop'))
+                return;
+            e.preventDefault();
+        },
+        true,
+    );
 
     // 파일을 창에 끌어다 놓으면 연다.
     window.addEventListener('dragover', (e) => e.preventDefault());

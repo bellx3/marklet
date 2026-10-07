@@ -14,6 +14,7 @@ import { t } from '../i18n';
  */
 
 export interface ControlsOptions {
+    onEdit(): void;
     onToc(): void;
     onFind(): void;
     onTheme(): void;
@@ -26,6 +27,8 @@ export interface Controls {
     root: HTMLElement;
     /** 문서가 있어야 의미가 있다. 없으면 어떤 입력에도 나타나지 않는다. */
     setActive(on: boolean): void;
+    /** 편집 중에는 목차·찾기가 가리킬 문서 화면이 없다. 끄고, 편집 버튼은 눌린 모양으로 둔다. */
+    setEditing(on: boolean): void;
     hide(): void;
     readonly visible: boolean;
 }
@@ -66,7 +69,7 @@ export function createControls(opts: ControlsOptions): Controls {
      *   누를 수 있게 남겨 둔다.
      */
     const make = (
-        name: 'list' | 'search' | 'moon' | 'more',
+        name: 'pencil' | 'list' | 'search' | 'moon' | 'more',
         tip: string,
         fn: () => void,
         closeAfter: boolean,
@@ -74,6 +77,8 @@ export function createControls(opts: ControlsOptions): Controls {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'icon-btn desktop-ctl';
+        // Tab 순회에 끼지 않는다. 읽는 화면에서 Tab 이 보이지 않는 버튼을 돌며 컨트롤을 띄우면 안 된다.
+        b.tabIndex = -1;
         b.title = tip;
         b.setAttribute('aria-label', tip);
         b.appendChild(icon(name, 18));
@@ -85,9 +90,14 @@ export function createControls(opts: ControlsOptions): Controls {
         return b;
     };
 
+    const edit = make('pencil', `${t.viewer.edit} (Ctrl+E)`, opts.onEdit, true);
+    edit.setAttribute('aria-pressed', 'false');
+    const toc = make('list', `${t.viewer.toc} (Ctrl+T)`, opts.onToc, true);
+    const find = make('search', `${t.viewer.find} (Ctrl+F)`, opts.onFind, true);
     root.append(
-        make('list', `${t.viewer.toc} (Ctrl+T)`, opts.onToc, true),
-        make('search', `${t.viewer.find} (Ctrl+F)`, opts.onFind, true),
+        edit,
+        toc,
+        find,
         make('moon', t.view.theme, opts.onTheme, false),
         make('more', t.viewer.more, opts.onMore, true),
     );
@@ -184,6 +194,12 @@ export function createControls(opts: ControlsOptions): Controls {
         setActive(on) {
             active = on;
             if (!on) hide();
+        },
+        setEditing(on) {
+            edit.setAttribute('aria-pressed', String(on));
+            edit.classList.toggle('is-on', on);
+            toc.disabled = on;
+            find.disabled = on;
         },
         hide,
         get visible() {

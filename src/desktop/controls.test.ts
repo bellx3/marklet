@@ -11,7 +11,7 @@ import { createControls, IDLE_MS, type Controls } from './controls';
 
 let ctl: Controls;
 let suppressed = false;
-const calls = { toc: 0, find: 0, theme: 0, more: 0 };
+const calls = { edit: 0, toc: 0, find: 0, theme: 0, more: 0 };
 
 function move(x: number, y: number): void {
     window.dispatchEvent(new MouseEvent('mousemove', { screenX: x, screenY: y }));
@@ -23,10 +23,11 @@ function tap(target: Element, detail = 1): void {
 beforeEach(() => {
     vi.useFakeTimers();
     suppressed = false;
-    Object.assign(calls, { toc: 0, find: 0, theme: 0, more: 0 });
+    Object.assign(calls, { edit: 0, toc: 0, find: 0, theme: 0, more: 0 });
     document.body.innerHTML =
         '<main id="m"><p id="p">본문</p><a id="a" href="#x">링크</a><div class="search-bar" id="sb">검색</div></main>';
     ctl = createControls({
+        onEdit: () => calls.edit++,
         onToc: () => calls.toc++,
         onFind: () => calls.find++,
         onTheme: () => calls.theme++,
@@ -182,9 +183,9 @@ describe('닫기 · 버튼', () => {
         expect(ctl.visible).toBe(false);
     });
 
-    it('버튼 네 개가 각자의 동작을 부르고, 눌러도 탭 토글로 새지 않는다', () => {
+    it('버튼 다섯 개가 각자의 동작을 부르고, 눌러도 탭 토글로 새지 않는다', () => {
         const btns = [...ctl.root.querySelectorAll<HTMLButtonElement>('button')];
-        expect(btns).toHaveLength(4);
+        expect(btns).toHaveLength(5);
         let x = 100;
         for (const b of btns) {
             // ★ 매번 확실히 멀리 움직인다. 이전 자리와 3px 안이면 '안 움직인 것'으로 무시된다.
@@ -193,13 +194,13 @@ describe('닫기 · 버튼', () => {
             b.click();
             vi.advanceTimersByTime(300);
         }
-        expect(calls).toEqual({ toc: 1, find: 1, theme: 1, more: 1 });
+        expect(calls).toEqual({ edit: 1, toc: 1, find: 1, theme: 1, more: 1 });
     });
 
     it('★ 목차·찾기·메뉴를 누르면 컨트롤이 물러난다 — 검색 바 닫기 버튼 위에 겹치면 안 된다', () => {
-        const [toc, find, , more] = ctl.root.querySelectorAll<HTMLButtonElement>('button');
+        const [edit, toc, find, , more] = ctl.root.querySelectorAll<HTMLButtonElement>('button');
         let x = 300;
-        for (const b of [toc, find, more]) {
+        for (const b of [edit, toc, find, more]) {
             x += 50;
             move(x, x);
             expect(ctl.visible).toBe(true);
@@ -210,18 +211,36 @@ describe('닫기 · 버튼', () => {
 
     it('테마는 누른 뒤에도 남는다 — 결과를 보며 다시 누를 수 있다', () => {
         move(300, 300);
-        ctl.root.querySelectorAll<HTMLButtonElement>('button')[2].click();
+        ctl.root.querySelectorAll<HTMLButtonElement>('button')[3].click();
         expect(ctl.visible).toBe(true);
+    });
+
+    it('★ 편집 중에는 목차·찾기가 꺼지고 편집 버튼이 눌린 모양이 된다', () => {
+        const [edit, toc, find] = ctl.root.querySelectorAll<HTMLButtonElement>('button');
+        expect(edit.getAttribute('aria-pressed')).toBe('false');
+
+        ctl.setEditing(true);
+        expect(edit.getAttribute('aria-pressed')).toBe('true');
+        expect(toc.disabled && find.disabled).toBe(true);
+
+        ctl.setEditing(false);
+        expect(edit.getAttribute('aria-pressed')).toBe('false');
+        expect(toc.disabled || find.disabled).toBe(false);
     });
 
     it('★ 단축키를 툴팁으로 가르친다 — 발견 가능성이 이 컨트롤의 존재 이유다', () => {
         const tips = [...ctl.root.querySelectorAll('button')].map((b) => b.title);
         expect(tips.some((t) => t.includes('Ctrl+T'))).toBe(true);
         expect(tips.some((t) => t.includes('Ctrl+F'))).toBe(true);
+        expect(tips.some((t) => t.includes('Ctrl+E'))).toBe(true);
         // 접근성 이름도 같은 글이다
         for (const b of ctl.root.querySelectorAll('button')) {
             expect(b.getAttribute('aria-label')).toBe(b.title);
         }
+    });
+
+    it('★ 버튼은 Tab 순회에 끼지 않는다 — 읽는 화면에서 Tab 이 컨트롤을 돌면 안 된다', () => {
+        for (const b of ctl.root.querySelectorAll('button')) expect(b.tabIndex).toBe(-1);
     });
 
     it('키보드로 초점이 들어오면 보인다 (안 보이는 버튼에 초점이 가면 안 된다)', () => {

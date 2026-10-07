@@ -146,3 +146,160 @@
         display: none !important;
     }
 }
+
+/*
+ * 편집기 — 같은 열(column)에 글자만 있는 화면. 미리보기 없이 쓰는 데 집중한다.
+ * ★ 창 전체를 textarea 가 차지하고 자기 스크롤바를 쓴다. 문서처럼 창이 스크롤하게 두면
+ *   글을 칠 때마다 캐럿을 따라 창을 굴려 줄 방법이 없다(textarea 는 자기 안에서만 캐럿을 따라간다).
+ */
+.desktop-editor {
+    position: fixed;
+    inset: 0;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    /* 가운데 열은 본문과 같은 폭. 창이 좁으면 가장자리 여백만 남긴다. */
+    padding: 40px max(var(--md-pad-x), calc((100vw - var(--md-measure)) / 2)) 96px;
+    margin: 0;
+    border: 0;
+    outline: none;
+    resize: none;
+    background: var(--md-bg);
+    color: var(--md-fg);
+    font-family: var(--md-font-code);
+    font-size: calc(var(--md-font-size) * 0.94);
+    line-height: 1.75;
+    tab-size: 4;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.desktop-ctl.is-on {
+    background: var(--md-code-bg-inline);
+}
+.desktop-ctl:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+/*
+ * .txt(서식 없이 글자 그대로). 모바일의 .md-plain 은 4MB 넘는 문서용이라 상자·break-all 이 붙어 있다.
+ * ★ 데스크톱의 .txt 는 '문서' 자체이므로 상자를 벗기고, 한글이 낱말 중간에서 잘리지 않게 한다.
+ */
+.desktop .md-target > .md-plain {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    font-size: calc(var(--md-font-size) * 0.94);
+    line-height: 1.75;
+}
+
+@media print {
+    .desktop-editor {
+        display: none !important;
+    }
+}
+
+/*
+ * 목차 도크 — 왼쪽에 붙는 목차(src/desktop/toc-dock.ts).
+ * 열리면 #app 에 has-toc 가 붙고, 문서 영역이 도크 폭만큼 오른쪽으로 물러난다.
+ * ★ 도크를 문서 위에 겹쳐 띄우지 않고 문서를 **밀어낸다**. 겹치면 읽던 글의 왼쪽이 가려진다.
+ */
+:root {
+    --toc-dock-w: 17.5rem;
+}
+
+.toc-dock {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 15;
+    box-sizing: border-box;
+    width: var(--toc-dock-w);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--md-border);
+    background: var(--md-bg);
+}
+
+.toc-dock-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 10px 8px 18px;
+    color: var(--md-fg-muted);
+    font:
+        600 12px/1.4 var(--md-font-body),
+        sans-serif;
+    letter-spacing: 0.04em;
+}
+
+.toc-dock-list {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 4px 8px 24px;
+}
+
+.toc-dock-item {
+    display: block;
+    width: 100%;
+    margin: 1px 0;
+    padding: 6px 10px 6px calc(10px + (var(--lv, 1) - 1) * 14px);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    color: var(--md-fg);
+    font:
+        14px/1.45 var(--md-font-body),
+        sans-serif;
+    text-align: left;
+    cursor: pointer;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+}
+.toc-dock-item[data-level='1'] {
+    --lv: 1;
+    font-weight: 600;
+}
+.toc-dock-item[data-level='2'] {
+    --lv: 2;
+}
+.toc-dock-item[data-level='3'] {
+    --lv: 3;
+    color: var(--md-fg-muted);
+}
+.toc-dock-item[data-level='4'],
+.toc-dock-item[data-level='5'],
+.toc-dock-item[data-level='6'] {
+    --lv: 4;
+    color: var(--md-fg-muted);
+}
+.toc-dock-item:hover {
+    background: var(--md-code-bg-inline);
+}
+/* 지금 읽는 절 */
+.toc-dock-item.is-active {
+    background: var(--md-code-bg-inline);
+    color: var(--md-link);
+    font-weight: 600;
+}
+
+#app.has-toc {
+    padding-left: var(--toc-dock-w);
+}
+/* 검색 바는 문서 열을 따라간다. 도크 폭만큼 밀린 #app 안에서 가운데 정렬된다. */
+
+@media print {
+    .toc-dock {
+        display: none !important;
+    }
+    #app.has-toc {
+        padding-left: 0;
+    }
+}

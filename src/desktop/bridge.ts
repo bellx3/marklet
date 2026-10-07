@@ -15,7 +15,7 @@ export interface DesktopDoc {
 }
 
 export type DesktopCommand =
-    | { name: 'toc' | 'find' | 'source' | 'print' }
+    | { name: 'toc' | 'find' | 'source' | 'print' | 'edit' | 'save' }
     | { name: 'settings'; value: { theme: 'system' | 'light' | 'dark'; remoteImages: boolean } };
 
 export interface MarkletBridge {
@@ -28,6 +28,9 @@ export interface MarkletBridge {
     setTheme(theme: 'system' | 'light' | 'dark'): void;
     /** 우클릭 메뉴와 같은 메뉴를 마우스 자리에 띄운다 */
     showMenu(): void;
+    setDirty(dirty: boolean): void;
+    /** 메인이 열 때의 인코딩 · 줄바꿈 그대로 파일에 쓴다. 충돌 · 인코딩 확인 대화상자도 메인이 띄운다. */
+    save(content: string): Promise<{ ok: boolean }>;
 }
 
 declare global {

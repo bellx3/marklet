@@ -17,6 +17,7 @@
   WriteRegStr HKCU "Software\Classes\Applications\Marklet.exe\SupportedTypes" ".markdown" ""
   WriteRegStr HKCU "Software\Classes\Applications\Marklet.exe\SupportedTypes" ".mdown" ""
   WriteRegStr HKCU "Software\Classes\Applications\Marklet.exe\SupportedTypes" ".mkd" ""
+  WriteRegStr HKCU "Software\Classes\Applications\Marklet.exe\SupportedTypes" ".txt" ""
 
   WriteRegStr HKCU "Software\Marklet\Capabilities" "ApplicationName" "Marklet"
   WriteRegStr HKCU "Software\Marklet\Capabilities" "ApplicationDescription" "Markdown viewer"
@@ -24,6 +25,14 @@
   WriteRegStr HKCU "Software\Marklet\Capabilities\FileAssociations" ".markdown" "Marklet.Markdown"
   WriteRegStr HKCU "Software\Marklet\Capabilities\FileAssociations" ".mdown" "Marklet.Markdown"
   WriteRegStr HKCU "Software\Marklet\Capabilities\FileAssociations" ".mkd" "Marklet.Markdown"
+  ; .txt 는 '열기 후보'로만 올린다. 기본 연결(.txt 의 기본값)은 건드리지 않는다 —
+  ; 메모장이 정해 둔 사용자의 선택을 우리가 덮어쓰면 안 된다.
+  WriteRegStr HKCU "Software\Marklet\Capabilities\FileAssociations" ".txt" "Marklet.Text"
+  WriteRegStr HKCU "Software\Classes\Marklet.Text" "" "Text document"
+  WriteRegStr HKCU "Software\Classes\Marklet.Text\DefaultIcon" "" "$INSTDIR\Marklet.exe,0"
+  WriteRegStr HKCU "Software\Classes\Marklet.Text\shell\open\command" "" '"$INSTDIR\Marklet.exe" "%1"'
+  WriteRegStr HKCU "Software\Classes\.txt\OpenWithProgids" "Marklet.Text" ""
+
   WriteRegStr HKCU "Software\RegisteredApplications" "Marklet" "Software\Marklet\Capabilities"
 
   ; 탐색기에 연결이 바뀌었음을 알린다(SHCNE_ASSOCCHANGED).
@@ -33,6 +42,8 @@
 !macro customUnInstall
   DeleteRegKey HKCU "Software\Classes\Applications\Marklet.exe"
   DeleteRegKey HKCU "Software\Marklet"
+  DeleteRegKey HKCU "Software\Classes\Marklet.Text"
+  DeleteRegValue HKCU "Software\Classes\.txt\OpenWithProgids" "Marklet.Text"
   DeleteRegValue HKCU "Software\RegisteredApplications" "Marklet"
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 !macroend

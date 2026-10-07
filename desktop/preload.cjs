@@ -20,4 +20,7 @@ contextBridge.exposeInMainWorld('marklet', {
     zoom: (dir) => ipcRenderer.send('zoom', dir),
     setTheme: (theme) => ipcRenderer.send('set-theme', String(theme)),
     showMenu: () => ipcRenderer.send('show-menu'),
+    /** 저장하지 않은 편집이 있는지 — 창 제목의 ● 와 닫을 때의 확인이 이걸 따른다 */
+    setDirty: (dirty) => ipcRenderer.send('dirty', dirty === true),
+    save: (content) => ipcRenderer.invoke('save', String(content)),
 });

@@ -37,6 +37,19 @@ const STRINGS = {
         about: 'Marklet 정보',
         copy: '복사',
         selectAll: '모두 선택',
+        save: '저장',
+        edit: '편집',
+        dlgSaveTitle: '변경 내용을 저장할까요?',
+        dlgSave: '저장',
+        dlgDontSave: '저장 안 함',
+        dlgCancel: '취소',
+        dlgConflictTitle: '파일이 다른 곳에서 바뀌었습니다',
+        dlgConflictBody: '지금 저장하면 그 변경을 덮어씁니다.',
+        dlgOverwrite: '덮어쓰기',
+        dlgEncodingTitle: '이 인코딩으로 저장할 수 없는 글자가 있습니다',
+        dlgEncodingBody:
+            'UTF-8 로 저장하면 모든 글자를 보존합니다. 다른 프로그램에서 이 파일을 열 때 한글이 깨질 수 있습니다.',
+        dlgSaveUtf8: 'UTF-8 로 저장',
     },
     en: {
         file: 'File',
@@ -66,6 +79,19 @@ const STRINGS = {
         about: 'About Marklet',
         copy: 'Copy',
         selectAll: 'Select all',
+        save: 'Save',
+        edit: 'Edit',
+        dlgSaveTitle: 'Save changes?',
+        dlgSave: 'Save',
+        dlgDontSave: "Don't save",
+        dlgCancel: 'Cancel',
+        dlgConflictTitle: 'The file was changed elsewhere',
+        dlgConflictBody: 'Saving now will overwrite that change.',
+        dlgOverwrite: 'Overwrite',
+        dlgEncodingTitle: 'Some characters cannot be saved in this encoding',
+        dlgEncodingBody:
+            'Saving as UTF-8 keeps every character. Other programs may show garbled text for this file.',
+        dlgSaveUtf8: 'Save as UTF-8',
     },
 };
 
@@ -105,6 +131,12 @@ function buildMenuTemplate(ctx) {
             submenu: [
                 { label: t.open, accelerator: 'CmdOrCtrl+O', click: () => a.open() },
                 { label: t.recent, submenu: recent },
+                {
+                    label: t.save,
+                    accelerator: 'CmdOrCtrl+S',
+                    enabled: hasDoc,
+                    click: () => a.command('save'),
+                },
                 { type: 'separator' },
                 { label: t.reveal, enabled: hasDoc, click: () => a.reveal() },
                 { label: t.copyPath, enabled: hasDoc, click: () => a.copyPath() },
@@ -121,6 +153,13 @@ function buildMenuTemplate(ctx) {
         {
             label: t.view,
             submenu: [
+                {
+                    label: t.edit,
+                    accelerator: 'CmdOrCtrl+E',
+                    enabled: hasDoc,
+                    click: () => a.command('edit'),
+                },
+                { type: 'separator' },
                 {
                     label: t.toc,
                     accelerator: 'CmdOrCtrl+T',
@@ -191,6 +230,7 @@ function buildContextTemplate(ctx) {
     if (hasSelection) out.push({ label: t.copy, role: 'copy' });
     out.push({ label: t.selectAll, role: 'selectAll', enabled: hasDoc });
     out.push({ type: 'separator' });
+    out.push({ label: t.edit, enabled: hasDoc, click: () => a.command('edit') });
     out.push({ label: t.toc, enabled: hasDoc, click: () => a.command('toc') });
     out.push({ label: t.find, enabled: hasDoc, click: () => a.command('find') });
     out.push({ label: t.source, enabled: hasDoc, click: () => a.command('source') });

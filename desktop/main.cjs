@@ -23,7 +23,15 @@ const {
 const path = require('node:path');
 const fs = require('node:fs');
 const { buildMenuTemplate, buildContextTemplate, pickStrings } = require('./menu.cjs');
-const { decodeText, DOC_EXTENSIONS, IMAGE_EXTENSIONS, hasExt } = require('./text.cjs');
+const {
+    decodeText,
+    encodeText,
+    detectEol,
+    applyEol,
+    DOC_EXTENSIONS,
+    IMAGE_EXTENSIONS,
+    hasExt,
+} = require('./text.cjs');
 
 const APP_SCHEME = 'marklet';
 const IMAGE_SCHEME = 'marklet-local';
@@ -121,7 +129,24 @@ function createWindow() {
 
     let markReady;
     const ready = new Promise((r) => (markReady = r));
-    const info = { win, path: null, dir: null, ready, markReady, watcher: null };
+    const info = {
+        win,
+        path: null,
+        dir: null,
+        ready,
+        markReady,
+        watcher: null,
+        // ── 편집 · 저장 (파일을 읽을 때의 모양을 기억해 그대로 되돌려 쓴다)
+        encoding: 'UTF-8',
+        bom: false,
+        eol: '\n',
+        /** 마지막으로 읽거나 쓴 시점의 파일 수정 시각. 다른 곳에서 바뀌었는지 가린다. */
+        mtime: null,
+        dirty: false,
+        /** 저장이 끝나면 이어서 할 일(닫기 · 다른 문서 열기) */
+        afterSave: null,
+        forceClose: false,
+    };
     // ★ id 는 지금 잡아 둔다. 'closed' 가 불릴 때 win.webContents 는 이미 파괴돼 있어서
     //   거기서 읽으면 "Object has been destroyed" 로 메인 프로세스가 죽는다(2026-10-07 설치본에서 실제로 났다).
     const wcId = win.webContents.id;
@@ -151,7 +176,16 @@ function createWindow() {
     });
 
     win.on('focus', refreshMenu);
-    win.on('close', () => {
+    win.on('close', (e) => {
+        // ★ 저장하지 않은 편집이 있으면 창을 닫지 않고 먼저 묻는다. 안 묻으면 쓰던 글이 소리 없이 사라진다.
+        if (info.dirty && !info.forceClose) {
+            e.preventDefault();
+            void askSaveThen(win, () => {
+                info.forceClose = true;
+                win.close();
+            });
+            return;
+        }
         if (!win.isMaximized() && !win.isFullScreen()) {
             state.bounds = win.getBounds();
             saveState();
@@ -209,17 +243,28 @@ async function openFile(filePath, win, opts = {}) {
     const info = infoOf(target);
     await info.ready;
 
+    // ★ 편집 중인 창에 다른 파일을 열면 쓰던 글이 사라진다. 먼저 묻는다(자동 갱신은 이 길로 오지 않는다).
+    if (info.dirty && !opts.reload && info.path !== abs && !opts.force) {
+        await askSaveThen(target, () => void openFile(abs, target, { force: true }));
+        return null;
+    }
+
     try {
         const stat = await fs.promises.stat(abs);
         if (stat.size > MAX_BYTES) {
             dialog.showErrorBox('Marklet', `${path.basename(abs)}: file is too large.`);
             return null;
         }
-        const { text, encoding } = decodeText(await fs.promises.readFile(abs));
+        const { text, encoding, bom } = decodeText(await fs.promises.readFile(abs));
         const changedFile = info.path !== abs;
         info.path = abs;
         info.dir = path.dirname(abs);
-        target.setTitle(path.basename(abs));
+        info.encoding = encoding;
+        info.bom = bom;
+        info.eol = detectEol(text);
+        info.mtime = stat.mtimeMs;
+        info.dirty = false;
+        updateTitle(info);
         target.webContents.send('document', {
             path: abs,
             name: path.basename(abs),
@@ -239,6 +284,105 @@ async function openFile(filePath, win, opts = {}) {
     }
 }
 
+/** 창 제목 = 파일 이름. 저장하지 않은 편집이 있으면 앞에 ● 를 붙인다. */
+function updateTitle(info) {
+    if (info.win.isDestroyed() || !info.path) return;
+    info.win.setTitle(`${info.dirty ? '● ' : ''}${path.basename(info.path)}`);
+}
+
+/**
+ * 저장하지 않은 편집이 있을 때 묻는다 — 저장 · 저장 안 함 · 취소.
+ * 저장을 고르면 렌더러에 저장을 시키고, **끝난 뒤에** proceed 를 부른다(saveDocument 의 afterSave).
+ * 저장이 실패하거나 사용자가 취소하면 proceed 는 불리지 않고 창은 그대로 남는다.
+ */
+async function askSaveThen(win, proceed) {
+    const info = infoOf(win);
+    if (!info) return;
+    const r = await dialog.showMessageBox(win, {
+        type: 'warning',
+        buttons: [t.dlgSave, t.dlgDontSave, t.dlgCancel],
+        defaultId: 0,
+        cancelId: 2,
+        message: t.dlgSaveTitle,
+        detail: info.path ? path.basename(info.path) : '',
+    });
+    if (r.response === 0) {
+        info.afterSave = proceed;
+        win.webContents.send('command', { name: 'save' });
+    } else if (r.response === 1) {
+        info.dirty = false;
+        updateTitle(info);
+        proceed();
+    }
+}
+
+/**
+ * 파일에 쓴다.
+ *
+ * ★ 열 때의 인코딩 · BOM · 줄바꿈 그대로 되돌려 쓴다. 한 글자도 안 고쳤는데 파일이 통째로 달라지면 안 된다.
+ * ★ 임시 파일에 쓰고 이름을 바꿔 덮어쓴다. 쓰다가 멈춰도 원본은 온전하다.
+ * ★ 열 때 이후 다른 곳에서 파일이 바뀌었으면 덮어쓰기 전에 묻는다.
+ */
+async function saveDocument(info, content) {
+    const win = info.win;
+    const abs = info.path;
+    if (!abs) return { ok: false };
+
+    try {
+        const st = await fs.promises.stat(abs);
+        if (info.mtime !== null && st.mtimeMs !== info.mtime) {
+            const r = await dialog.showMessageBox(win, {
+                type: 'warning',
+                buttons: [t.dlgOverwrite, t.dlgCancel],
+                defaultId: 1,
+                cancelId: 1,
+                message: t.dlgConflictTitle,
+                detail: `${path.basename(abs)}\n${t.dlgConflictBody}`,
+            });
+            if (r.response !== 0) return { ok: false };
+        }
+    } catch {
+        // 파일이 사라졌으면 새로 만든다.
+    }
+
+    const text = applyEol(content, info.eol);
+    let buf = encodeText(text, info.encoding, info.bom);
+    if (!buf) {
+        // 이 인코딩(EUC-KR)으로 표현 못 하는 글자가 들어왔다(이모지 등). 몰래 깨뜨리지 않고 묻는다.
+        const r = await dialog.showMessageBox(win, {
+            type: 'warning',
+            buttons: [t.dlgSaveUtf8, t.dlgCancel],
+            defaultId: 1,
+            cancelId: 1,
+            message: t.dlgEncodingTitle,
+            detail: t.dlgEncodingBody,
+        });
+        if (r.response !== 0) return { ok: false };
+        info.encoding = 'UTF-8';
+        info.bom = false;
+        buf = encodeText(text, 'UTF-8', false);
+    }
+
+    const tmp = `${abs}.marklet-tmp`;
+    try {
+        await fs.promises.writeFile(tmp, buf);
+        await fs.promises.rename(tmp, abs);
+    } catch (err) {
+        await fs.promises.unlink(tmp).catch(() => {});
+        dialog.showErrorBox('Marklet', `${path.basename(abs)}\n\n${err.message}`);
+        return { ok: false };
+    }
+
+    // 우리가 쓴 것이 감시에 다시 걸려 '다른 곳에서 바뀜' 으로 오인되지 않게 시각을 기억한다.
+    info.mtime = (await fs.promises.stat(abs)).mtimeMs;
+    info.dirty = false;
+    updateTitle(info);
+    const after = info.afterSave;
+    info.afterSave = null;
+    after?.();
+    return { ok: true };
+}
+
 /**
  * 다른 편집기에서 저장하면 따라 바뀐다.
  * ★ 파일이 아니라 **폴더**를 지켜본다. 많은 편집기가 임시 파일에 쓰고 이름을 바꿔 저장하므로
@@ -253,9 +397,18 @@ function watch(win, abs) {
         info.watcher = fs.watch(path.dirname(abs), { persistent: false }, (_ev, changed) => {
             if (changed !== name) return;
             clearTimeout(timer);
-            timer = setTimeout(() => {
-                if (!win.isDestroyed() && info.path === abs)
-                    void openFile(abs, win, { reload: true });
+            timer = setTimeout(async () => {
+                if (win.isDestroyed() || info.path !== abs) return;
+                // ★ 편집 중이면 갱신하지 않는다. 쓰던 글 위에 디스크 내용을 덮어씌우면 안 된다.
+                //   저장할 때 saveDocument 가 '다른 곳에서 바뀜' 을 물어본다.
+                if (info.dirty) return;
+                try {
+                    // 우리가 방금 쓴 것이면 무시한다.
+                    if ((await fs.promises.stat(abs)).mtimeMs === info.mtime) return;
+                } catch {
+                    return;
+                }
+                void openFile(abs, win, { reload: true });
             }, 150);
         });
         info.watcher.on('error', () => {});
@@ -394,6 +547,20 @@ ipcMain.on('open-path', (e, p) => {
     if (!trusted(e) || typeof p !== 'string') return;
     const info = windows.get(e.sender.id);
     void openFile(p, info?.win);
+});
+
+ipcMain.on('dirty', (e, dirty) => {
+    if (!trusted(e)) return;
+    const info = windows.get(e.sender.id);
+    if (!info) return;
+    info.dirty = dirty === true;
+    updateTitle(info);
+});
+
+ipcMain.handle('save', async (e, content) => {
+    if (!trusted(e) || typeof content !== 'string') return { ok: false };
+    const info = windows.get(e.sender.id);
+    return info ? saveDocument(info, content) : { ok: false };
 });
 
 ipcMain.on('set-theme', (e, theme) => {
