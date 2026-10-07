@@ -303,3 +303,132 @@
         padding-left: 0;
     }
 }
+
+/*
+ * 드롭다운 메뉴 · 툴팁 — 윈도우 기본 모양과 구별되게 우리가 그린다(src/desktop/popup-menu.ts, controls.ts).
+ * 같은 말(둥근 모서리 · 흐린 유리 · 반전색 강조)을 두 곳이 쓰도록 한 덩어리에 둔다.
+ */
+.mk-menu {
+    position: fixed;
+    z-index: 40;
+    min-width: 232px;
+    padding: 6px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--md-border);
+    background: color-mix(in srgb, var(--md-bg) 92%, transparent);
+    backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-2);
+    font:
+        13.5px/1.2 var(--md-font-body),
+        sans-serif;
+    color: var(--md-fg);
+    animation: mk-pop 120ms ease-out;
+    outline: none;
+}
+@keyframes mk-pop {
+    from {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.98);
+    }
+}
+.mk-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 28px;
+    width: 100%;
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: default;
+}
+.mk-menu-item kbd {
+    font: 12px/1 var(--md-font-body), sans-serif;
+    color: var(--md-fg-muted);
+    letter-spacing: 0.02em;
+}
+/* 강조는 반전색 — 윈도우 기본의 옅은 회색 선택과 한눈에 갈린다 */
+.mk-menu-item:hover:not(:disabled),
+.mk-menu-item:focus-visible,
+.mk-menu-item:focus:not(:disabled) {
+    outline: none;
+    background: var(--accent);
+    color: var(--accent-fg);
+}
+.mk-menu-item:hover:not(:disabled) kbd,
+.mk-menu-item:focus:not(:disabled) kbd {
+    color: inherit;
+    opacity: 0.7;
+}
+.mk-menu-item:disabled {
+    opacity: 0.38;
+}
+.mk-menu-sep {
+    height: 1px;
+    margin: 5px 8px;
+    background: var(--md-border);
+}
+
+/* 컨트롤 툴팁 — 기본 title 대신. 반전색 알약 + 단축키 칩 */
+.desktop-ctl {
+    position: relative;
+}
+.desktop-tip {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 50%;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--accent-fg);
+    font:
+        12.5px/1 var(--md-font-body),
+        sans-serif;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -3px);
+    transition:
+        opacity 120ms ease,
+        transform 120ms ease;
+    box-shadow: var(--shadow-1);
+}
+.desktop-tip kbd {
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--accent-fg) 18%, transparent);
+    font: inherit;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+}
+/* 맨 오른쪽 버튼은 화면 밖으로 나가지 않게 오른쪽 끝을 맞춘다 */
+.desktop-ctl:last-child .desktop-tip {
+    left: auto;
+    right: 0;
+    transform: translate(0, -3px);
+}
+/* 마우스를 잠깐 올려 둘 때만 — 지나가는 마우스에 깜빡이지 않게 지연 */
+.desktop-ctl:hover .desktop-tip,
+.desktop-ctl:focus-visible .desktop-tip {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 350ms;
+}
+.desktop-ctl:last-child:hover .desktop-tip,
+.desktop-ctl:last-child:focus-visible .desktop-tip {
+    transform: translate(0, 0);
+}
+
+@media print {
+    .mk-menu {
+        display: none !important;
+    }
+}

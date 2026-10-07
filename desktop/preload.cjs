@@ -19,8 +19,10 @@ contextBridge.exposeInMainWorld('marklet', {
     openLink: (href) => ipcRenderer.send('open-link', String(href)),
     zoom: (dir) => ipcRenderer.send('zoom', dir),
     setTheme: (theme) => ipcRenderer.send('set-theme', String(theme)),
-    showMenu: () => ipcRenderer.send('show-menu'),
+    run: (name) => ipcRenderer.send('run', String(name)),
     /** 저장하지 않은 편집이 있는지 — 창 제목의 ● 와 닫을 때의 확인이 이걸 따른다 */
     setDirty: (dirty) => ipcRenderer.send('dirty', dirty === true),
+    /** 'preview' = 미리보기 창, 'pdf' = 저장 대화상자. 렌더러는 PDF 바이트를 만지지 않는다. */
+    print: (mode) => ipcRenderer.invoke('print', mode === 'pdf' ? 'pdf' : 'preview'),
     save: (content) => ipcRenderer.invoke('save', String(content)),
 });

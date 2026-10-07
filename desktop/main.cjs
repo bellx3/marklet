@@ -22,6 +22,8 @@ const {
 } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
+const { pathToFileURL } = require('node:url');
 const { buildMenuTemplate, buildContextTemplate, pickStrings } = require('./menu.cjs');
 const {
     decodeText,
@@ -563,14 +565,98 @@ ipcMain.handle('save', async (e, content) => {
     return info ? saveDocument(info, content) : { ok: false };
 });
 
+// ── 인쇄 · PDF ──────────────────────────────────────────────────────────
+// window.print() 는 미리보기가 없고 'PDF 로 저장'도 폴더 · 파일명을 비워 둔다.
+// 그래서 PDF 를 메인이 직접 만들어 (1) 미리보기 창(내장 PDF 뷰어: 쪽 넘기기 · 인쇄 · 저장)에 띄우거나
+// (2) 문서 이름을 채운 저장 대화상자로 내보낸다.
+
+function pdfNameOf(info) {
+    return path.basename(info.path, path.extname(info.path)) + '.pdf';
+}
+
+function openPdfPreview(info, data) {
+    const name = pdfNameOf(info);
+    // 임시 폴더 안에 '문서이름.pdf' 로 둔다. 뷰어 제목과 저장 기본 이름이 그대로 따라온다.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'marklet-print-'));
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, data);
+    const preview = new BrowserWindow({
+        width: 900,
+        height: 1000,
+        parent: info.win,
+        title: name,
+        autoHideMenuBar: true,
+        icon: path.join(__dirname, 'icon.png'),
+        webPreferences: {
+            sandbox: true,
+            contextIsolation: true,
+            nodeIntegration: false,
+            plugins: true,
+        },
+    });
+    preview.removeMenu();
+    const wc = preview.webContents;
+    const saveInto = info.dir;
+    const onDownload = (_e, item, source) => {
+        if (source !== wc) return;
+        item.setSaveDialogOptions({
+            defaultPath: path.join(saveInto, name),
+            filters: [{ name: 'PDF', extensions: ['pdf'] }],
+        });
+    };
+    wc.session.on('will-download', onDownload);
+    // 미리보기 안에서 다른 곳으로 가지 못하게 한다.
+    wc.on('will-navigate', (e) => e.preventDefault());
+    wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+    preview.on('closed', () => {
+        try {
+            wc.session.removeListener('will-download', onDownload);
+        } catch {
+            /* 세션이 이미 정리됨 */
+        }
+        fs.rm(dir, { recursive: true, force: true }, () => {});
+    });
+    void preview.loadURL(pathToFileURL(file).href);
+}
+
+ipcMain.handle('print', async (e, mode) => {
+    if (!trusted(e)) return { ok: false };
+    const info = windows.get(e.sender.id);
+    if (!info?.path) return { ok: false };
+    try {
+        const data = await e.sender.printToPDF({
+            printBackground: true,
+            generateDocumentOutline: true,
+            generateTaggedPDF: true,
+            pageSize: 'A4',
+            margins: { marginType: 'default' },
+        });
+        if (mode === 'pdf') {
+            const r = await dialog.showSaveDialog(info.win, {
+                defaultPath: path.join(info.dir, pdfNameOf(info)),
+                filters: [{ name: 'PDF', extensions: ['pdf'] }],
+            });
+            if (r.canceled || !r.filePath) return { ok: false };
+            fs.writeFileSync(r.filePath, data);
+            return { ok: true };
+        }
+        openPdfPreview(info, data);
+        return { ok: true };
+    } catch (err) {
+        dialog.showErrorBox('Marklet', String(err?.message ?? err));
+        return { ok: false };
+    }
+});
+
 ipcMain.on('set-theme', (e, theme) => {
     if (!trusted(e) || !['system', 'light', 'dark'].includes(theme)) return;
     actions(windows.get(e.sender.id)?.win ?? null).setTheme(theme);
 });
 
-ipcMain.on('show-menu', (e) => {
-    if (!trusted(e)) return;
-    popupContextMenu(windows.get(e.sender.id)?.win, false);
+// 렌더러의 메뉴가 메인의 일을 시킬 때. 이름은 화이트리스트로만 받는다.
+ipcMain.on('run', (e, name) => {
+    if (!trusted(e) || name !== 'open') return;
+    actions(windows.get(e.sender.id)?.win ?? null).open();
 });
 
 ipcMain.on('zoom', (e, dir) => {

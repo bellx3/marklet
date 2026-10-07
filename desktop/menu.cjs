@@ -18,6 +18,7 @@ const STRINGS = {
         reveal: '파일 위치 열기',
         copyPath: '경로 복사',
         print: '인쇄…',
+        exportPdf: 'PDF로 내보내기…',
         close: '닫기',
         view: '보기',
         toc: '목차',
@@ -60,6 +61,7 @@ const STRINGS = {
         reveal: 'Show in folder',
         copyPath: 'Copy path',
         print: 'Print…',
+        exportPdf: 'Export as PDF…',
         close: 'Close',
         view: 'View',
         toc: 'Outline',
@@ -146,6 +148,12 @@ function buildMenuTemplate(ctx) {
                     accelerator: 'CmdOrCtrl+P',
                     enabled: hasDoc,
                     click: () => a.command('print'),
+                },
+                {
+                    label: t.exportPdf,
+                    accelerator: 'CmdOrCtrl+Shift+P',
+                    enabled: hasDoc,
+                    click: () => a.command('pdf'),
                 },
                 { label: t.close, accelerator: 'CmdOrCtrl+W', click: () => a.closeWindow() },
             ],
@@ -237,6 +245,7 @@ function buildContextTemplate(ctx) {
     out.push({ type: 'separator' });
     out.push({ label: t.open, click: () => a.open() });
     out.push({ label: t.print, enabled: hasDoc, click: () => a.command('print') });
+    out.push({ label: t.exportPdf, enabled: hasDoc, click: () => a.command('pdf') });
     return out;
 }
 

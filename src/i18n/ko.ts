@@ -101,6 +101,12 @@ export const ko: Catalog = {
     },
 
     desktop: {
+        menuCopy: '복사',
+        menuSelectAll: '모두 선택',
+        menuSource: '원문 보기',
+        menuOpen: '열기…',
+        menuPrint: '인쇄…',
+        menuPdf: 'PDF로 내보내기…',
         emptyHint: '마크다운 파일을 여기로 끌어다 놓거나\nCtrl+O 로 여세요',
     },
 

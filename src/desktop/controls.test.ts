@@ -229,14 +229,18 @@ describe('닫기 · 버튼', () => {
     });
 
     it('★ 단축키를 툴팁으로 가르친다 — 발견 가능성이 이 컨트롤의 존재 이유다', () => {
-        const tips = [...ctl.root.querySelectorAll('button')].map((b) => b.title);
+        const tips = [...ctl.root.querySelectorAll('button')].map(
+            (b) => b.getAttribute('aria-label') ?? '',
+        );
         expect(tips.some((t) => t.includes('Ctrl+T'))).toBe(true);
         expect(tips.some((t) => t.includes('Ctrl+F'))).toBe(true);
         expect(tips.some((t) => t.includes('Ctrl+E'))).toBe(true);
-        // 접근성 이름도 같은 글이다
+        // 보이는 툴팁은 기본 title 이 아니라 우리 것이다(윈도우 기본 모양과 구별)
         for (const b of ctl.root.querySelectorAll('button')) {
-            expect(b.getAttribute('aria-label')).toBe(b.title);
+            expect(b.hasAttribute('title')).toBe(false);
+            expect(b.querySelector('.desktop-tip')).not.toBeNull();
         }
+        expect(ctl.root.querySelector('.desktop-tip kbd')?.textContent).toBe('Ctrl+E');
     });
 
     it('★ 버튼은 Tab 순회에 끼지 않는다 — 읽는 화면에서 Tab 이 컨트롤을 돌면 안 된다', () => {

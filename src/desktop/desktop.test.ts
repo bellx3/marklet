@@ -130,6 +130,7 @@ describe('메뉴 — 꼭 필요한 것만', () => {
         find(all, '찾기').click!({});
         find(all, '원문 보기 / 서식 보기').click!({});
         find(all, '인쇄…').click!({});
+        find(all, 'PDF로 내보내기…').click!({});
         find(all, '원래 크기').click!({});
         find(all, '기본 앱으로 설정…').click!({});
         expect(actions.open).toHaveBeenCalledTimes(1);
@@ -140,6 +141,7 @@ describe('메뉴 — 꼭 필요한 것만', () => {
             'find',
             'source',
             'print',
+            'pdf',
             'save',
             'edit',
         ]);

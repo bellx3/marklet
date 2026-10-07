@@ -62,7 +62,6 @@ export function createControls(opts: ControlsOptions): Controls {
     root.setAttribute('role', 'toolbar');
     root.setAttribute('aria-label', t.viewer.more);
 
-    // 이름 + 단축키. title 이 마우스를 올렸을 때의 툴팁이고, aria-label 은 같은 글을 읽어 준다.
     /**
      * @param closeAfter 누른 뒤 컨트롤을 거둔다. 목차·찾기는 **그 자리를 덮는 것**(시트·검색 바)을 열기
      *   때문에 컨트롤이 남아 있으면 검색 바의 닫기 버튼 위에 겹친다. 테마는 결과를 바로 보며 계속
@@ -70,7 +69,8 @@ export function createControls(opts: ControlsOptions): Controls {
      */
     const make = (
         name: 'pencil' | 'list' | 'search' | 'moon' | 'more',
-        tip: string,
+        label: string,
+        key: string,
         fn: () => void,
         closeAfter: boolean,
     ) => {
@@ -79,9 +79,22 @@ export function createControls(opts: ControlsOptions): Controls {
         b.className = 'icon-btn desktop-ctl';
         // Tab 순회에 끼지 않는다. 읽는 화면에서 Tab 이 보이지 않는 버튼을 돌며 컨트롤을 띄우면 안 된다.
         b.tabIndex = -1;
-        b.title = tip;
-        b.setAttribute('aria-label', tip);
+        // 이름 + 단축키. 읽어 주는 이름(aria-label)은 같은 글이다.
+        // 눈에 보이는 툴팁은 윈도우 기본 title 이 아니라 우리 것(.desktop-tip)이다 — 앱 기능임이 보이게.
+        b.setAttribute('aria-label', key ? `${label} (${key})` : label);
         b.appendChild(icon(name, 18));
+        const tip = document.createElement('span');
+        tip.className = 'desktop-tip';
+        tip.setAttribute('aria-hidden', 'true');
+        const text = document.createElement('span');
+        text.textContent = label;
+        tip.appendChild(text);
+        if (key) {
+            const kbd = document.createElement('kbd');
+            kbd.textContent = key;
+            tip.appendChild(kbd);
+        }
+        b.appendChild(tip);
         b.addEventListener('click', (e) => {
             e.stopPropagation();
             fn();
@@ -90,16 +103,16 @@ export function createControls(opts: ControlsOptions): Controls {
         return b;
     };
 
-    const edit = make('pencil', `${t.viewer.edit} (Ctrl+E)`, opts.onEdit, true);
+    const edit = make('pencil', t.viewer.edit, 'Ctrl+E', opts.onEdit, true);
     edit.setAttribute('aria-pressed', 'false');
-    const toc = make('list', `${t.viewer.toc} (Ctrl+T)`, opts.onToc, true);
-    const find = make('search', `${t.viewer.find} (Ctrl+F)`, opts.onFind, true);
+    const toc = make('list', t.viewer.toc, 'Ctrl+T', opts.onToc, true);
+    const find = make('search', t.viewer.find, 'Ctrl+F', opts.onFind, true);
     root.append(
         edit,
         toc,
         find,
-        make('moon', t.view.theme, opts.onTheme, false),
-        make('more', t.viewer.more, opts.onMore, true),
+        make('moon', t.view.theme, '', opts.onTheme, false),
+        make('more', t.viewer.more, '', opts.onMore, true),
     );
 
     let active = false;

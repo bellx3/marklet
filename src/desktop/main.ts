@@ -28,6 +28,7 @@ import { pressBack } from '../app/router';
 import { Toast } from '../utils/toast';
 import { localImageUrl } from './local-image';
 import { createControls } from './controls';
+import { createPopupMenu, type MenuEntry } from './popup-menu';
 import { createTocDock } from './toc-dock';
 import { isPlainTextName, normalizeNewlines } from './doc-kind';
 import { t } from '../i18n';
@@ -95,6 +96,73 @@ async function boot(): Promise<void> {
      * 떠오르는 컨트롤. 명령은 메뉴·단축키와 **같은 command()** 로 간다 — 길이 둘이면 어긋난다.
      * 검색 바나 목차가 열려 있을 때는 그 위를 덮지 않는다(search 바가 우상단까지 차지한다).
      */
+    const popup = createPopupMenu();
+    /** 케밥 버튼과 우클릭이 같은 메뉴를 쓴다. 단축키를 항목 옆에 적어 둔다(메뉴 = 단축키 사전). */
+    const menuEntries = (hasSelection: boolean): MenuEntry[] => {
+        const doc = !!current;
+        const reading = doc && !editing;
+        const run = (name: 'edit' | 'toc' | 'find' | 'source' | 'print' | 'pdf') => () =>
+            command({ name });
+        const entries: MenuEntry[] = [];
+        if (hasSelection) {
+            entries.push({
+                label: t.desktop.menuCopy,
+                shortcut: 'Ctrl+C',
+                onSelect: () => void document.execCommand('copy'),
+            });
+        }
+        entries.push(
+            {
+                label: t.desktop.menuSelectAll,
+                shortcut: 'Ctrl+A',
+                disabled: !reading,
+                onSelect: () => void document.execCommand('selectAll'),
+            },
+            'separator',
+            { label: t.viewer.edit, shortcut: 'Ctrl+E', disabled: !doc, onSelect: run('edit') },
+            { label: t.viewer.toc, shortcut: 'Ctrl+T', disabled: !reading, onSelect: run('toc') },
+            { label: t.viewer.find, shortcut: 'Ctrl+F', disabled: !reading, onSelect: run('find') },
+            {
+                label: t.desktop.menuSource,
+                shortcut: 'Ctrl+U',
+                disabled: !reading,
+                onSelect: run('source'),
+            },
+            'separator',
+            { label: t.desktop.menuOpen, shortcut: 'Ctrl+O', onSelect: () => bridge?.run('open') },
+            {
+                label: t.desktop.menuPrint,
+                shortcut: 'Ctrl+P',
+                disabled: !reading,
+                onSelect: run('print'),
+            },
+            {
+                label: t.desktop.menuPdf,
+                shortcut: 'Ctrl+Shift+P',
+                disabled: !reading,
+                onSelect: run('pdf'),
+            },
+        );
+        return entries;
+    };
+    function toggleMenu(): void {
+        if (popup.isOpen) {
+            popup.close();
+            return;
+        }
+        const kebab = controls.root.querySelector<HTMLElement>('.desktop-ctl:last-child');
+        if (kebab) popup.open(menuEntries(false), { below: kebab });
+    }
+    // 글을 치는 곳(편집기 · 입력칸)은 네이티브 우클릭을 그대로 둔다 — 붙여넣기 · 맞춤법이 거기 있다.
+    window.addEventListener('contextmenu', (e) => {
+        if ((e.target as Element | null)?.closest('textarea, input')) return;
+        e.preventDefault();
+        popup.open(menuEntries(!(document.getSelection()?.isCollapsed ?? true)), {
+            x: e.clientX,
+            y: e.clientY,
+        });
+    });
+
     const controls = createControls({
         onEdit: () => command({ name: 'edit' }),
         onToc: () => command({ name: 'toc' }),
@@ -102,7 +170,7 @@ async function boot(): Promise<void> {
         // 지금 어두우면 밝게, 아니면 어둡게. 메뉴의 라디오와 같은 저장소(메인)를 쓴다.
         onTheme: () =>
             bridge?.setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'),
-        onMore: () => bridge?.showMenu(),
+        onMore: () => toggleMenu(),
         suppressed: () => search.isOpen || !!document.querySelector('.sheet-backdrop.is-open'),
     });
     /*
@@ -291,20 +359,18 @@ async function boot(): Promise<void> {
         Toast.success(t.shell.saved);
     }
 
-    async function printDoc(): Promise<void> {
+    async function printDoc(mode: 'preview' | 'pdf'): Promise<void> {
         // 인쇄는 문서 전체여야 한다. 안 붙은 청크는 쪽에 안 나온다.
         await handle?.renderRest();
         // 어두운 테마로 인쇄하면 잉크를 쏟는다. 인쇄하는 동안만 밝게.
         const prev = document.documentElement.dataset.theme;
         document.documentElement.dataset.theme = 'light';
-        window.addEventListener(
-            'afterprint',
-            () => {
-                if (prev) document.documentElement.dataset.theme = prev;
-            },
-            { once: true },
-        );
-        window.print();
+        try {
+            await bridge?.print(mode);
+        } finally {
+            if (prev) document.documentElement.dataset.theme = prev;
+            else delete document.documentElement.dataset.theme;
+        }
     }
 
     function command(cmd: DesktopCommand): void {
@@ -330,7 +396,10 @@ async function boot(): Promise<void> {
                 void render(true);
                 break;
             case 'print':
-                if (current && !editing) void printDoc();
+                if (current && !editing) void printDoc('preview');
+                break;
+            case 'pdf':
+                if (current && !editing) void printDoc('pdf');
                 break;
             case 'settings': {
                 const prevRemote = getSettings().remoteImages;

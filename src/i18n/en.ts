@@ -101,6 +101,12 @@ export const en = {
 
     /** 데스크톱(Electron) 화면 전용. 모바일에서는 쓰이지 않는다. */
     desktop: {
+        menuCopy: 'Copy',
+        menuSelectAll: 'Select all',
+        menuSource: 'Show source',
+        menuOpen: 'Open…',
+        menuPrint: 'Print…',
+        menuPdf: 'Export as PDF…',
         emptyHint: 'Drop a Markdown file here\nor press Ctrl+O to open one',
     },
 
