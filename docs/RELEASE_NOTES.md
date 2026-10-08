@@ -38,7 +38,7 @@ SHA-256: `…`   (sha256sum Marklet-Setup.exe)
 **알려진 것**
 - 내장 뷰어의 메뉴는 열릴 때 부드럽게 떠오르는 움직임이 없다(WebView2 로 그린 문서의 메뉴에는 있다).
 
-**설치**: `Marklet-Setup.exe` — 관리자 권한 불필요. 1.1.0 위에 덮어 설치한다(1.0.12 이하에서 옮겨 올 때는 아래 1.1.0 의 "옮겨 올 때"를 먼저 본다). WebView2 런타임이 없는 PC 에서는 설치 프로그램이 Microsoft 에서 받아 먼저 설치한다.
+**설치**: `Marklet-Setup.exe` — 관리자 권한 불필요. 1.1.0 위에 덮어 설치한다(1.0.12 이하에서 옮겨 올 때는 [1.1.0 릴리즈](https://github.com/bellx3/marklet/releases/tag/desktop-v1.1.0)의 "옮겨 올 때"를 먼저 본다). WebView2 런타임이 없는 PC 에서는 설치 프로그램이 Microsoft 에서 받아 먼저 설치한다.
 SHA-256: `6c1e565949eed19532b86d157cf5d3868cd8c031b12eb77b70652a02843bc40c`
 
 ---
