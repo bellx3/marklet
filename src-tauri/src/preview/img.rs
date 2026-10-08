@@ -260,4 +260,26 @@ mod tests {
         assert!(resolve_local(dir, "//host/a.png").is_none());
         assert!(resolve_local(dir, "/a.png").is_none());
     }
+
+    #[test]
+    fn a_document_on_a_share_finds_its_images_on_that_share_only() {
+        let dir = Path::new("\\\\srv\\share\\docs");
+        assert_eq!(
+            resolve_local(dir, "img/a.png").unwrap(),
+            Path::new("\\\\srv\\share\\docs\\img\\a.png")
+        );
+        assert_eq!(
+            resolve_local(dir, "../assets/그림 1.png").unwrap(),
+            Path::new("\\\\srv\\share\\assets\\그림 1.png")
+        );
+        // 공유 밖으로는 못 나간다
+        assert_eq!(
+            resolve_local(dir, "../../../../a.png").unwrap(),
+            Path::new("\\\\srv\\share\\a.png")
+        );
+        assert!(resolve_local(dir, "//evil/share/a.png").is_none());
+        assert!(resolve_local(dir, "\\\\evil\\share\\a.png").is_none());
+        assert!(resolve_local(dir, "%5C%5Cevil%5Cshare%5Ca.png").is_none());
+        assert!(resolve_local(dir, "img/a.exe").is_none());
+    }
 }

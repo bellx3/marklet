@@ -1,6 +1,6 @@
 [package]
 name = "marklet"
-version = "1.1.0"
+version = "1.1.1"
 description = "Windows에서 마크다운 문서를 열어 읽고 가볍게 고치는 뷰어"
 authors = ["Alrimi Studio"]
 edition = "2021"

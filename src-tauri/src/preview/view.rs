@@ -149,6 +149,8 @@ pub struct View {
     pub ctl_shown: bool,
     pub ctl_pinned: bool,
     pub ctl_hover_since: Option<Instant>,
+    /// 열려 있는 우클릭 · 더 보기 메뉴(창 안에 그린다 — menu.rs)
+    pub popup: Option<super::menu::Popup>,
 
     pub images: HashMap<std::path::PathBuf, ImgSlot>,
     /// 그리다가 필요하다고 본 그림(읽기 시작하지 않은 것) — 창이 가져가 읽는다
@@ -189,6 +191,7 @@ impl View {
             ctl_shown: false,
             ctl_pinned: false,
             ctl_hover_since: None,
+            popup: None,
             images: HashMap::new(),
             want_images: Vec::new(),
         };

@@ -214,6 +214,10 @@ impl View {
                 self.paint_controls(rt);
             }
             self.paint_scrollbar(rt);
+            // 메뉴는 모든 것 위에
+            if self.popup.is_some() {
+                self.paint_popup(rt);
+            }
             let _ = rt.EndDraw(None, None);
         }
     }
@@ -704,7 +708,10 @@ impl View {
                 );
             }
         }
-        // 툴팁
+        // 툴팁. 메뉴가 열려 있는 동안은 뜨지 않는다 — 메뉴가 같은 자리를 덮고, 가장자리로 삐져나온다.
+        if self.popup.is_some() {
+            return;
+        }
         let (Some(Ui::Ctl(i)), Some(since)) = (self.ui_hover, self.ctl_hover_since) else {
             return;
         };
@@ -864,6 +871,150 @@ impl View {
             }
             self.icon(rt, kind, cx, cy, if off { Col::QuoteBar } else { Col::Fg });
         }
+    }
+
+    /// 글 한 줄을 붓의 불투명도를 바꿔 그린다(흐린 항목 · 강조된 항목의 단축키). 그린 뒤 불투명도를 되돌린다.
+    unsafe fn text_at(
+        &self,
+        rt: &ID2D1RenderTarget,
+        l: &IDWriteTextLayout,
+        x: f32,
+        y: f32,
+        col: Col,
+        opacity: f32,
+    ) {
+        let br = self.brush(col);
+        br.SetOpacity(opacity);
+        rt.DrawTextLayout(Vector2 { X: x, Y: y }, l, &br, D2D1_DRAW_TEXT_OPTIONS_NONE);
+        br.SetOpacity(1.0);
+    }
+
+    /// 우클릭 · 더 보기 메뉴. 웹 창의 `.mk-menu` 와 같은 모양이다: 둥근 상자 · 반전색 강조 · 오른쪽에 흐린 단축키 · 구분선 · 부드러운 그림자.
+    /// (웹은 바탕이 92% 불투명 + 흐림이다. 여기는 불투명하게 칠한다 — 흐림 없이 비치면 아래 글이 지저분하게 보인다.)
+    unsafe fn paint_popup(&self, rt: &ID2D1RenderTarget) {
+        use super::menu::{Entry, ITEM_H, ITEM_RADIUS, RADIUS, SEP_H, SEP_INSET, SIDE};
+        let Some(p) = &self.popup else { return };
+        let hair = self.hair();
+        let [l, t, r, b] = p.geo.rect;
+        self.paint_shadow(rt, p.geo.rect);
+        rt.FillRoundedRectangle(
+            &D2D1_ROUNDED_RECT {
+                rect: rect(l, t, r, b),
+                radiusX: RADIUS,
+                radiusY: RADIUS,
+            },
+            &self.brushes.b[Col::Bg as usize],
+        );
+        rt.DrawRoundedRectangle(
+            &D2D1_ROUNDED_RECT {
+                rect: rect(
+                    l + hair / 2.0,
+                    t + hair / 2.0,
+                    r - hair / 2.0,
+                    b - hair / 2.0,
+                ),
+                radiusX: RADIUS - hair / 2.0,
+                radiusY: RADIUS - hair / 2.0,
+            },
+            &self.brushes.b[Col::Border as usize],
+            hair,
+            None,
+        );
+        for (i, e) in p.entries.iter().enumerate() {
+            let row = p.geo.rows[i];
+            match e {
+                Entry::Sep => {
+                    // 줄 높이(11)의 위에서 5 만큼 내려온 곳에 1px
+                    let y = row[1] + (SEP_H - 1.0) / 2.0;
+                    rt.FillRectangle(
+                        &rect(row[0] + SEP_INSET, y, row[2] - SEP_INSET, y + hair),
+                        &self.brushes.b[Col::Border as usize],
+                    );
+                }
+                Entry::Item(it) => {
+                    let hot = p.hot == Some(i) && it.enabled;
+                    if hot {
+                        rt.FillRoundedRectangle(
+                            &D2D1_ROUNDED_RECT {
+                                rect: rect(row[0], row[1], row[2], row[3]),
+                                radiusX: ITEM_RADIUS,
+                                radiusY: ITEM_RADIUS,
+                            },
+                            &self.brushes.b[Col::Accent as usize],
+                        );
+                    }
+                    // 강조된 항목은 반전색(--accent-fg), 단축키는 그 위에서 70%. 흐린 항목은 통째로 38%.
+                    let dim = if it.enabled { 1.0 } else { 0.38 };
+                    let (fg, key_fg, key_op) = if hot {
+                        (Col::AccentFg, Col::AccentFg, 0.7)
+                    } else {
+                        (Col::Fg, Col::Muted, 1.0)
+                    };
+                    if let Some(lay) = &p.labels[i] {
+                        let lh = p.label_size[i].1;
+                        self.text_at(
+                            rt,
+                            lay,
+                            row[0] + SIDE,
+                            row[1] + (ITEM_H - lh) / 2.0,
+                            fg,
+                            dim,
+                        );
+                    }
+                    if let Some(lay) = &p.keys[i] {
+                        let (kw, kh) = p.key_size[i];
+                        self.text_at(
+                            rt,
+                            lay,
+                            row[2] - SIDE - kw,
+                            row[1] + (ITEM_H - kh) / 2.0,
+                            key_fg,
+                            key_op * dim,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// 상자 둘레의 그림자(`--shadow-2`: 0 8px 28px). 이 렌더 타깃에는 번짐 효과가 없어서 겹친 둥근 사각형으로 어림한다 —
+    /// 바깥에서 안쪽으로 층을 쌓되 층마다 알파를 골라, 쌓인 농도가 가우스(σ = 번짐 / 2)의 꼬리를 따르게 한다.
+    unsafe fn paint_shadow(&self, rt: &ID2D1RenderTarget, bx: [f32; 4]) {
+        use super::menu::{phi, RADIUS, SHADOW_BLUR, SHADOW_DY};
+        const STEPS: usize = 12;
+        let sigma = SHADOW_BLUR / 2.0;
+        // 붓 자체의 알파가 테마의 그림자 농도다(밝은 0.16 · 어두운 0.55). 층마다 불투명도로 줄여 쓴다.
+        let base = self.pal(Col::Shadow).a;
+        let brush = self.brush(Col::Shadow);
+        let step = 4.0 * sigma / STEPS as f32;
+        let mut acc = 0.0f32;
+        for k in 0..STEPS {
+            // 이 층이 상자 가장자리에서 벌어진 만큼(+ 가 바깥). 가장 바깥은 +2σ, 가장 안쪽은 -2σ 근처.
+            let d = 2.0 * sigma - k as f32 * step;
+            let target = base * (1.0 - phi((d - step / 2.0) / sigma));
+            let a = ((target - acc) / (1.0 - acc)).clamp(0.0, 1.0);
+            acc += a * (1.0 - acc);
+            let rc = rect(
+                bx[0] - d,
+                bx[1] + SHADOW_DY - d,
+                bx[2] + d,
+                bx[3] + SHADOW_DY + d,
+            );
+            if a <= 0.0 || rc.right <= rc.left || rc.bottom <= rc.top {
+                continue;
+            }
+            brush.SetOpacity(a / base);
+            let rad = (RADIUS + d).max(0.0);
+            rt.FillRoundedRectangle(
+                &D2D1_ROUNDED_RECT {
+                    rect: rc,
+                    radiusX: rad,
+                    radiusY: rad,
+                },
+                &brush,
+            );
+        }
+        brush.SetOpacity(1.0);
     }
 
     /// 테마를 바꾼다: 붓의 색을 새 팔레트로 고친다(글에 걸린 붓도 같은 것이라 같이 바뀐다).

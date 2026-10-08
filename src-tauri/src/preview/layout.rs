@@ -50,8 +50,12 @@ pub enum Col {
     HitOutline,
     Thumb,
     ThumbHover,
+    // 메뉴(base.css 의 --accent · --accent-fg, 그림자 색)
+    Accent,
+    AccentFg,
+    Shadow,
 }
-pub const COLS: usize = 23;
+pub const COLS: usize = 26;
 
 fn hex(c: u32) -> Rgba {
     [
@@ -95,6 +99,9 @@ pub fn palette(dark: bool) -> [Rgba; COLS] {
             hex(0xffd75e),
             hex(0x2c3037),
             hex(0x3a404a),
+            hex(0xe6e9ee),
+            hex(0x16181c),
+            rgba(0x000000, 0.55),
         ]
     } else {
         [
@@ -121,6 +128,9 @@ pub fn palette(dark: bool) -> [Rgba; COLS] {
             hex(0xb8860b),
             hex(0xe3e4e0),
             hex(0xc9cbc5),
+            hex(0x1f2229),
+            hex(0xfbfbf9),
+            rgba(0x000000, 0.16),
         ]
     }
 }

@@ -9,7 +9,7 @@
 //! 창마다 하나씩 있다. 첫 문서의 것은 프로세스가 켜지자마자(Tauri 보다 먼저) 띄우고(`start_initial`),
 //! 앱이 떠 있는 동안 여는 문서의 것은 문서를 열 때 띄운다(`open`).
 //!
-//! 구성: md(마크다운 → 블록) · layout(블록 → 그릴 것) · hl(코드 색) · img(그림) · view(상태) · select · find · paint · window(Win32)
+//! 구성: md(마크다운 → 블록) · layout(블록 → 그릴 것) · hl(코드 색) · img(그림) · view(상태) · select · find · menu(우클릭 · ⋮ 메뉴) · paint · window(Win32)
 
 #[cfg(windows)]
 pub mod bar;
@@ -20,6 +20,8 @@ pub mod hl;
 pub mod img;
 pub mod layout;
 pub mod md;
+#[cfg(windows)]
+pub mod menu;
 #[cfg(windows)]
 pub mod paint;
 #[cfg(windows)]

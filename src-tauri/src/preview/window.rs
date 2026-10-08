@@ -48,6 +48,7 @@ use super::bar::{Bar, MenuState};
 use super::darkbar;
 use super::layout::{palette, Brushes, Ctx, Gfx, COLS};
 use super::md::{self, Doc};
+use super::menu::{self, Act, At, Popup};
 use super::view::{Pos, Selection, Ui, View, DOCK_W};
 use crate::state::Bounds;
 use crate::strings::Strings;
@@ -339,6 +340,10 @@ struct State {
     alt_alone: bool,
     /// 마지막으로 컨트롤을 띄운 마우스 자리(조금 움직인 것은 움직임으로 치지 않는다)
     ctl_last: (i32, i32),
+    /// 메뉴를 열기 전에 초점이 있던 자식 창(찾기 칸). 메뉴를 닫으면 돌려준다.
+    menu_prev_focus: HWND,
+    /// 더 보기(⋮)로 연 메뉴: 컨트롤을 메뉴가 닫힐 때까지 붙들어 두었다. 값은 그전에 컨트롤이 고정돼 있었는가.
+    menu_ctl: Option<bool>,
     /// 마지막으로 알려 준 읽는 자리(진짜 창이 이어받는다)
     scroll_out: Arc<AtomicU32>,
     slot: Arc<AtomicIsize>,
@@ -451,6 +456,8 @@ impl State {
         if w == 0 || h == 0 {
             return;
         }
+        // 열린 메뉴는 크기가 바뀌면 닫힌다(자리가 창 안으로 눌려 정해진 것이라 어긋난다)
+        self.close_menu();
         unsafe {
             let _ = self.rt.Resize(&D2D_SIZE_U {
                 width: w,
@@ -471,6 +478,7 @@ impl State {
         if (self.view.zoom - zoom).abs() < 1e-4 {
             return;
         }
+        self.close_menu();
         // 보던 블록은 relayout 이 지켜 준다
         self.view.zoom = zoom;
         self.view.relayout();
@@ -514,6 +522,7 @@ impl State {
         plain: bool,
         keep_scroll: bool,
     ) {
+        self.close_menu();
         let keep = if keep_scroll { self.view.scroll } else { 0.0 };
         let dock = self.view.dock_open;
         self.view.src = src.clone();
@@ -583,6 +592,7 @@ impl State {
                     self.mode = Mode::Preview;
                     self.handle.set_mode(Mode::Preview);
                     self.on_close = Some(on_close);
+                    self.close_menu();
                     self.close_find();
                 }
                 Cmd::Settings { remote_images } => {
@@ -1025,6 +1035,10 @@ impl State {
 
     fn on_mouse_move(&mut self, x: i32, y: i32) {
         self.mouse = (x, y);
+        // 메뉴가 열려 있으면 메뉴가 먼저 받는다(컨트롤 · 툴팁 · 커서는 그동안 가만히 둔다)
+        if self.menu_move(x, y) {
+            return;
+        }
         let (fx, fy) = (x as f32, y as f32);
         let s = self.view.scale();
         match self.drag {
@@ -1198,6 +1212,8 @@ impl State {
     }
 
     fn on_wheel(&mut self, delta: i32, x: i32, y: i32, horizontal: bool) {
+        // 열린 메뉴는 휠을 굴리면 닫힌다(굴림은 문서가 그대로 받는다 — 웹 메뉴와 같다)
+        self.close_menu();
         let ctrl = key_down(VK_CONTROL);
         let shift = key_down(VK_SHIFT);
         let (fx, fy) = (x as f32, y as f32);
@@ -1468,18 +1484,18 @@ impl State {
                 self.action(next);
             }
             _ => {
-                // 더 보기: 단추 아래에 우클릭과 같은 메뉴
+                // 더 보기: 단추 아래에 우클릭과 같은 메뉴. 컨트롤은 메뉴가 닫힐 때까지 붙들어 둔다(웹 창과 같다).
                 let (_, btns) = self.view.ctl_rects();
-                let s = self.view.scale();
-                let mut p = POINT {
-                    x: (btns[4][2] * s) as i32,
-                    y: (btns[4][3] * s) as i32,
-                };
-                unsafe {
-                    let _ = windows::Win32::Graphics::Gdi::ClientToScreen(self.hwnd, &mut p);
+                let b = btns[4];
+                if self.menu_ctl.is_none() {
+                    self.menu_ctl = Some(self.view.ctl_pinned);
                 }
-                self.hide_controls();
-                self.context_menu(p.x, p.y);
+                self.view.ctl_pinned = true;
+                self.show_controls(false);
+                self.open_menu(At::Below {
+                    right: b[2],
+                    bottom: b[3],
+                });
             }
         }
     }
@@ -1597,77 +1613,191 @@ impl State {
         }
     }
 
-    // ── 우클릭 메뉴 ────────────────────────────────────────────────────────
+    // ── 우클릭 · 더 보기(⋮) 메뉴 ───────────────────────────────────────────
+    //
+    // 윈도우 기본 팝업 메뉴(TrackPopupMenu)가 아니라 창 안에 직접 그린다 — 모양은 menu.rs · paint.rs. 열려 있는 동안 마우스 · 키보드를 먼저 받는다.
+    // 메뉴 막대(Alt)는 그대로 기본 메뉴다.
 
-    fn context_menu(&mut self, sx: i32, sy: i32) {
+    fn open_menu(&mut self, at: At) {
+        if !self.is_viewer() {
+            return;
+        }
         let tr = self
             .hooks
             .as_ref()
             .map(|h| h.strings())
             .unwrap_or(self.strings);
-        let viewer = self.is_viewer();
-        if !viewer {
+        let has_toc = self.view.dock_open || self.view.has_headings();
+        let entries = menu::entries(tr, self.view.has_selection(), has_toc);
+        let win = (self.view.view_w(), self.view.view_h());
+        self.view.popup = Some(Popup::new(&self.view.gfx, entries, at, win));
+        unsafe {
+            // 방향키 · Enter · Esc 를 이 창이 받아야 한다. 찾기 칸에 초점이 있었다면 닫을 때 돌려준다.
+            let f = GetFocus();
+            self.menu_prev_focus = if f != self.hwnd { f } else { HWND::default() };
+            let _ = SetFocus(Some(self.hwnd));
+        }
+        self.cursor = Cursor::Arrow;
+        self.invalidate();
+    }
+
+    /// 메뉴를 닫는다. 닫았으면 true. restore_focus: 찾기 칸에 초점을 돌려줄지(창이 초점을 잃어서 닫는 때는 돌려주지 않는다).
+    fn close_menu_with(&mut self, restore_focus: bool) -> bool {
+        if self.view.popup.take().is_none() {
+            return false;
+        }
+        // ⋮ 로 열어 붙들어 둔 컨트롤은 같이 걷는다(원래 고정돼 있었다면 그대로 둔다)
+        if let Some(was_pinned) = self.menu_ctl.take() {
+            if !was_pinned {
+                self.hide_controls();
+            }
+        }
+        let prev = std::mem::take(&mut self.menu_prev_focus);
+        if restore_focus && !prev.is_invalid() && prev == self.edit && self.view.find_open {
+            unsafe {
+                let _ = SetFocus(Some(prev));
+            }
+        }
+        self.invalidate();
+        true
+    }
+
+    fn close_menu(&mut self) -> bool {
+        self.close_menu_with(true)
+    }
+
+    /// 메뉴가 고른 일을 한다(메뉴는 이미 닫혀 있다)
+    fn run_act(&mut self, act: Act) {
+        match act {
+            Act::Copy => self.copy_selection(),
+            Act::SelectAll => {
+                self.view.select_all();
+                self.invalidate();
+            }
+            Act::Edit => self.upgrade(Some("edit")),
+            Act::Toc => self.toggle_dock(),
+            Act::Find => self.open_find(),
+            Act::Source => {
+                let on = !self.view.plain_view;
+                self.view.set_plain_view(on);
+                self.after_scroll();
+            }
+            Act::Open => self.action("open"),
+            Act::Print => self.upgrade(Some("print")),
+            Act::Pdf => self.upgrade(Some("pdf")),
+        }
+    }
+
+    /// 우클릭을 뗐다 — 그 자리에 메뉴를 연다(이미 열려 있으면 새 자리에 다시 연다. 메뉴 위의 우클릭은 아무것도 안 한다).
+    fn on_right_up(&mut self, x: i32, y: i32) {
+        if !self.is_viewer() {
             return;
         }
-        let has_sel = self.view.has_selection();
-        unsafe {
-            let Ok(menu) = CreatePopupMenu() else { return };
-            let add = |id: u32, text: &str, key: &str, on: bool| {
-                let label = if key.is_empty() {
-                    text.to_string()
-                } else {
-                    format!("{text}\t{key}")
-                };
-                let w: Vec<u16> = label.encode_utf16().chain(std::iter::once(0)).collect();
-                let flags = MF_STRING | if on { MF_ENABLED } else { MF_GRAYED };
-                let _ = AppendMenuW(menu, flags, id as usize, PCWSTR(w.as_ptr()));
-            };
-            let sep = || {
-                let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
-            };
-            if has_sel {
-                add(1, tr.copy, "Ctrl+C", true);
-            }
-            add(2, tr.select_all, "Ctrl+A", true);
-            sep();
-            add(3, tr.edit, "Ctrl+E", true);
-            add(4, tr.toc, "Ctrl+T", true);
-            add(5, tr.find, "Ctrl+F", true);
-            add(6, tr.source, "Ctrl+U", true);
-            sep();
-            add(7, tr.open, "Ctrl+O", true);
-            add(8, tr.print, "Ctrl+P", true);
-            add(9, tr.export_pdf, "Ctrl+Shift+P", true);
-            let cmd = TrackPopupMenu(
-                menu,
-                TPM_RETURNCMD | TPM_RIGHTBUTTON,
-                sx,
-                sy,
-                None,
-                self.hwnd,
-                None,
-            );
-            let _ = DestroyMenu(menu);
-            match cmd.0 {
-                1 => self.copy_selection(),
-                2 => {
-                    self.view.select_all();
-                    self.invalidate();
-                }
-                3 => self.upgrade(Some("edit")),
-                4 => self.toggle_dock(),
-                5 => self.open_find(),
-                6 => {
-                    let on = !self.view.plain_view;
-                    self.view.set_plain_view(on);
-                    self.after_scroll();
-                }
-                7 => self.action("open"),
-                8 => self.upgrade(Some("print")),
-                9 => self.upgrade(Some("pdf")),
-                _ => {}
+        let s = self.view.scale();
+        let (fx, fy) = (x as f32 / s, y as f32 / s);
+        if let Some(p) = &self.view.popup {
+            if p.geo.contains(fx, fy) {
+                return;
             }
         }
+        self.open_menu(At::Point(fx, fy));
+    }
+
+    /// 메뉴가 열려 있으면 마우스 움직임을 받는다(받았으면 true). 항목 위로 가면 그 항목이 강조된다 — 웹 메뉴처럼 벗어나도 마지막 강조는 남는다.
+    fn menu_move(&mut self, x: i32, y: i32) -> bool {
+        let s = self.view.scale();
+        let Some(p) = self.view.popup.as_mut() else {
+            return false;
+        };
+        let (fx, fy) = (x as f32 / s, y as f32 / s);
+        if let Some(i) = p.item_at(fx, fy) {
+            if p.act_at(i).is_some() && p.hot != Some(i) {
+                p.hot = Some(i);
+                self.invalidate();
+            }
+        }
+        self.cursor = Cursor::Arrow;
+        true
+    }
+
+    /// 메뉴가 열려 있으면 마우스 누름을 받는다(받았으면 true). 메뉴 밖을 누르면 닫기만 하고, 그 누름은 문서로 새지 않는다.
+    fn menu_down(&mut self, x: i32, y: i32) -> bool {
+        let s = self.view.scale();
+        let Some(p) = self.view.popup.as_mut() else {
+            return false;
+        };
+        let (fx, fy) = (x as f32 / s, y as f32 / s);
+        if p.geo.contains(fx, fy) {
+            p.pressed = p.item_at(fx, fy).filter(|&i| p.act_at(i).is_some());
+            if p.pressed.is_some() {
+                p.hot = p.pressed;
+            }
+            self.invalidate();
+        } else {
+            self.close_menu();
+        }
+        true
+    }
+
+    /// 메뉴가 열려 있으면 마우스 뗌을 받는다(받았으면 true). 누른 항목 위에서 뗐을 때 실행한다.
+    fn menu_up(&mut self, x: i32, y: i32) -> bool {
+        let s = self.view.scale();
+        let Some(p) = self.view.popup.as_mut() else {
+            return false;
+        };
+        let (fx, fy) = (x as f32 / s, y as f32 / s);
+        let pressed = p.pressed.take();
+        let act = match (pressed, p.item_at(fx, fy)) {
+            (Some(a), Some(b)) if a == b => p.act_at(a),
+            _ => None,
+        };
+        if let Some(act) = act {
+            self.close_menu();
+            self.run_act(act);
+        }
+        true
+    }
+
+    /// 메뉴가 열려 있으면 키를 받는다(받았으면 true). ↑ ↓ Home End 로 옮기고 Enter · Space 로 고르고 Esc · Tab 으로 닫는다.
+    /// 그 밖의 키는 메뉴를 닫고 평소대로 처리한다(Ctrl+F 가 메뉴를 닫고 찾기를 연다). Shift · Ctrl · Alt 만 누른 것은 건드리지 않는다.
+    fn menu_key(&mut self, vk: VIRTUAL_KEY) -> bool {
+        let Some(p) = self.view.popup.as_mut() else {
+            return false;
+        };
+        match vk {
+            VK_ESCAPE | VK_TAB => {
+                self.close_menu();
+            }
+            VK_DOWN => {
+                p.hot = menu::step(&p.entries, p.hot, 1);
+                self.invalidate();
+            }
+            VK_UP => {
+                p.hot = menu::step(&p.entries, p.hot, -1);
+                self.invalidate();
+            }
+            VK_HOME => {
+                p.hot = menu::first_enabled(&p.entries);
+                self.invalidate();
+            }
+            VK_END => {
+                p.hot = menu::last_enabled(&p.entries);
+                self.invalidate();
+            }
+            VK_RETURN | VK_SPACE => {
+                let act = p.hot.and_then(|i| p.act_at(i));
+                if let Some(act) = act {
+                    self.close_menu();
+                    self.run_act(act);
+                }
+            }
+            VK_SHIFT | VK_CONTROL | VK_MENU | VK_LWIN | VK_RWIN | VK_CAPITAL => return false,
+            _ => {
+                self.close_menu();
+                return false;
+            }
+        }
+        true
     }
 
     /// 창 모양(논리 px). 최대화 · 전체 화면 · 최소화이면 None.
@@ -1866,6 +1996,7 @@ unsafe fn wndproc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT
                     r.bottom - r.top,
                     SWP_NOZORDER | SWP_NOACTIVATE,
                 );
+                st.close_menu();
                 st.view.dpi = dpi / 96.0;
                 st.view.relayout();
                 st.kick_layout();
@@ -1915,7 +2046,7 @@ unsafe fn wndproc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT
         }
         WM_LBUTTONDOWN | WM_LBUTTONDBLCLK => {
             if let Some(st) = st {
-                if st.is_viewer() {
+                if st.is_viewer() && !st.menu_down(lo(lp), hi(lp)) {
                     st.on_button_down(lo(lp), hi(lp));
                 }
             }
@@ -1923,20 +2054,24 @@ unsafe fn wndproc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT
         }
         WM_LBUTTONUP => {
             if let Some(st) = st {
-                st.on_button_up(lo(lp), hi(lp));
+                if !st.menu_up(lo(lp), hi(lp)) {
+                    st.on_button_up(lo(lp), hi(lp));
+                }
             }
             LRESULT(0)
         }
         WM_RBUTTONUP => {
             if let Some(st) = st {
-                let mut p = POINT {
-                    x: lo(lp),
-                    y: hi(lp),
-                };
-                let _ = windows::Win32::Graphics::Gdi::ClientToScreen(hwnd, &mut p);
-                st.context_menu(p.x, p.y);
+                st.on_right_up(lo(lp), hi(lp));
             }
             LRESULT(0)
+        }
+        // 창이 초점을 잃으면(다른 창 · 찾기 칸을 눌렀다) 열린 메뉴는 닫힌다. 초점을 돌려주지 않는다 — 이미 다른 곳이 가졌다.
+        WM_KILLFOCUS => {
+            if let Some(st) = st {
+                st.close_menu_with(false);
+            }
+            DefWindowProcW(hwnd, msg, wp, lp)
         }
         WM_MOUSEWHEEL | WM_MOUSEHWHEEL => {
             if let Some(st) = st {
@@ -1954,6 +2089,10 @@ unsafe fn wndproc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT
         WM_KEYDOWN | WM_SYSKEYDOWN => {
             if let Some(st) = st {
                 let vk = VIRTUAL_KEY(wp.0 as u16);
+                // 메뉴가 열려 있으면 메뉴가 먼저 받는다(방향키 · Enter · Esc …)
+                if st.menu_key(vk) {
+                    return LRESULT(0);
+                }
                 if vk == VK_MENU {
                     // Alt 단독: 떼는 순간 메뉴 막대를 보이거나 숨긴다(다른 키가 끼면 취소). 눌러 두어 반복되는 것은 한 번으로 친다.
                     if (lp.0 & (1 << 30)) == 0 {
@@ -2498,6 +2637,8 @@ unsafe fn run(mut p: Params, handle: Handle) {
         bar_visible: false,
         alt_alone: false,
         ctl_last: (-1, -1),
+        menu_prev_focus: HWND::default(),
+        menu_ctl: None,
         scroll_out: handle.scroll.clone(),
         slot: handle.hwnd.clone(),
         close_requested: handle.close_requested.clone(),

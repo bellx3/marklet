@@ -10,6 +10,8 @@
 
 use std::path::{Component, Path, PathBuf};
 
+use crate::text::{has_ext, IMAGE_EXTENSIONS};
+
 /// 스킴(`http:` · `file:` · `C:` …)으로 시작하는가.
 fn has_scheme(s: &str) -> bool {
     let mut chars = s.chars();
@@ -48,11 +50,15 @@ fn percent_decode_strict(s: &str) -> Option<String> {
 }
 
 /// UNC 의 서버·공유 부분(대소문자 무시). UNC 가 아니면 None.
+/// `\\?\UNC\server\share` 는 `\\server\share` 와 같은 값이 된다(같은 공유를 두 꼴로 쓰는 것을 가른다).
 pub fn unc_root(p: &Path) -> Option<String> {
     match p.components().next() {
         Some(Component::Prefix(pre)) => {
             let s = pre.as_os_str().to_string_lossy().to_lowercase();
-            // `\\server\share` 또는 `\\?\UNC\server\share`
+            if let Some(rest) = s.strip_prefix("\\\\?\\unc\\") {
+                return Some(format!("\\\\{rest}"));
+            }
+            // `\\server\share`. (`\\?\C:` · `\\.\dev` 같은 접두사도 여기서 `\\` 로 시작하는 것으로 잡힌다 — 공유처럼 다룬다.)
             if s.starts_with("\\\\") {
                 Some(s)
             } else {
@@ -61,6 +67,36 @@ pub fn unc_root(p: &Path) -> Option<String> {
         }
         _ => None,
     }
+}
+
+/// 그림 주소(`marklet-local://f/<경로>`)가 가리키는 파일 — 내줘도 되면 경로, 아니면 None.
+/// 메인의 스킴 핸들러가 부른다.
+///
+/// @param decoded   주소의 경로 부분을 퍼센트 해제한 것. 렌더러(local-image.ts)가 `C:/a/b.png` · `//서버/공유/a/b.png` 꼴로 보낸다.
+/// @param open_docs 지금 열려 있는 문서들의 경로. **네트워크 경로일 때만** 부른다(잠금을 흔한 경우에서 뺀다).
+///
+///  · 그림 확장자만, 절대 경로만(상대 경로는 프로세스의 작업 폴더 기준으로 읽히게 된다), `..` 조각이 든 경로는 거절한다(렌더러가 접어서 보낸다).
+///  · ★ 네트워크 경로(UNC)는 열려 있는 문서 중 하나가 **같은 서버·공유**에 있을 때만 — 그 밖의 서버를 건드리면 열기만 해도 SMB 인증이 나간다.
+pub fn image_request_path(
+    decoded: &str,
+    open_docs: impl FnOnce() -> Vec<PathBuf>,
+) -> Option<PathBuf> {
+    let path = PathBuf::from(decoded.replace('/', "\\"));
+    if !has_ext(&path, &IMAGE_EXTENSIONS) || !path.is_absolute() {
+        return None;
+    }
+    if path.components().any(|c| matches!(c, Component::ParentDir)) {
+        return None;
+    }
+    if let Some(root) = unc_root(&path) {
+        let same_share = open_docs()
+            .iter()
+            .any(|doc| doc.parent().and_then(unc_root).as_deref() == Some(root.as_str()));
+        if !same_share {
+            return None;
+        }
+    }
+    Some(path)
 }
 
 /// @param doc_dir 지금 문서가 있는 폴더(절대 경로)
@@ -222,5 +258,111 @@ mod tests {
         );
         assert_eq!(open(share, "//evil.example/share/a.md"), None);
         assert_eq!(open(share, "\\\\evil.example\\share\\a.md"), None);
+    }
+
+    #[test]
+    fn both_spellings_of_a_share_are_the_same_root() {
+        let want = Some("\\\\srv\\share".to_string());
+        assert_eq!(unc_root(Path::new("\\\\srv\\share\\a")), want);
+        assert_eq!(unc_root(Path::new("\\\\SRV\\Share\\a")), want);
+        assert_eq!(unc_root(Path::new("\\\\?\\UNC\\Srv\\SHARE\\a")), want);
+        assert_eq!(unc_root(Path::new("C:\\a")), None);
+        assert_eq!(unc_root(Path::new("a\\b")), None);
+    }
+
+    /// 열린 문서 `docs` 가 있을 때 이 그림 요청(퍼센트를 푼 경로)을 내주는가 — 내주면 읽을 경로.
+    fn image(decoded: &str, docs: &[&str]) -> Option<String> {
+        let docs: Vec<PathBuf> = docs.iter().map(PathBuf::from).collect();
+        image_request_path(decoded, || docs).map(|p| p.to_string_lossy().into_owned())
+    }
+
+    #[test]
+    fn image_requests_on_a_local_drive_never_consult_the_open_documents() {
+        let only = |d: &str| {
+            image_request_path(d, || panic!("로컬 드라이브 요청은 열린 문서를 보지 않는다"))
+                .map(|p| p.to_string_lossy().into_owned())
+        };
+        assert_eq!(
+            only("C:/docs/img/a.png").as_deref(),
+            Some("C:\\docs\\img\\a.png")
+        );
+        assert_eq!(
+            only("D:/문서/그림/내 사진.PNG").as_deref(),
+            Some("D:\\문서\\그림\\내 사진.PNG")
+        );
+    }
+
+    #[test]
+    fn image_requests_are_absolute_images_without_parent_segments() {
+        for d in [
+            "C:/docs/a.txt",
+            "C:/docs/a.html",
+            "C:/docs/a",
+            "C:/docs/a.png:zone",
+            "C:/docs/../a.png",
+            "C:/docs/img/../../a.png",
+            // 절대 경로가 아니면 프로세스의 작업 폴더 기준으로 읽힌다
+            "a.png",
+            "docs/a.png",
+            "/a.png",
+            "C:a.png",
+            "",
+        ] {
+            assert_eq!(image(d, &[]), None, "{d}");
+        }
+    }
+
+    #[test]
+    fn image_requests_on_a_share_need_an_open_document_on_that_share() {
+        let doc = "\\\\srv\\share\\docs\\a.md";
+        assert_eq!(
+            image("//srv/share/docs/img/a.png", &[doc]).as_deref(),
+            Some("\\\\srv\\share\\docs\\img\\a.png")
+        );
+        // 문서 폴더 밖이어도 같은 공유 안이면 된다(`../assets/a.png`)
+        assert_eq!(
+            image("//srv/share/assets/a.png", &[doc]).as_deref(),
+            Some("\\\\srv\\share\\assets\\a.png")
+        );
+        // 서버 · 공유 이름은 대소문자를 가리지 않는다
+        assert_eq!(
+            image("//SRV/Share/docs/a.png", &[doc]).as_deref(),
+            Some("\\\\SRV\\Share\\docs\\a.png")
+        );
+        // 긴 경로 꼴로 열린 문서도 같은 공유다
+        assert_eq!(
+            image(
+                "//srv/share/docs/a.png",
+                &["\\\\?\\UNC\\srv\\share\\docs\\a.md"]
+            )
+            .as_deref(),
+            Some("\\\\srv\\share\\docs\\a.png")
+        );
+        // 여러 문서 중 하나만 맞아도 된다
+        assert!(image("//srv/share/a.png", &["C:\\x\\a.md", doc]).is_some());
+    }
+
+    #[test]
+    fn image_requests_on_another_share_or_server_are_refused() {
+        let doc = "\\\\srv\\share\\docs\\a.md";
+        for d in [
+            "//srv/other/a.png",
+            "//evil/share/a.png",
+            "//srv.evil/share/a.png",
+            "//127.0.0.1/share/a.png",
+            // 긴 경로 · 장치 경로
+            "//?/C:/Windows/a.png",
+            "//?/UNC/evil/share/a.png",
+            "//./pipe/a.png",
+            // 서버만 · 공유만 있고 파일이 없는 것
+            "//srv/share",
+        ] {
+            assert_eq!(image(d, &[doc]), None, "{d}");
+        }
+        // 열린 문서가 없거나, 공유 문서가 아니면 어느 공유도 내주지 않는다
+        assert_eq!(image("//srv/share/a.png", &[]), None);
+        assert_eq!(image("//srv/share/a.png", &["C:\\docs\\a.md"]), None);
+        // `..` 로 공유 안에서 위로 가는 것도 거절한다(렌더러는 접어서 보낸다)
+        assert_eq!(image("//srv/share/docs/../a.png", &[doc]), None);
     }
 }

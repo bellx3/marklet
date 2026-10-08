@@ -30,7 +30,6 @@ use tauri::{Manager, UriSchemeContext};
 
 use crate::app::{create_window, docs_from_argv, open_file, shared, Shared};
 use crate::state::{data_dir_override, state_file, Settings};
-use crate::text::{has_ext, IMAGE_EXTENSIONS};
 
 fn mime_of(p: &Path) -> &'static str {
     match p
@@ -78,30 +77,16 @@ fn image_protocol(
     let Ok(decoded) = percent_encoding::percent_decode_str(enc).decode_utf8() else {
         return not_found();
     };
-    let path = PathBuf::from(decoded.replace('/', "\\"));
-    if !has_ext(&path, &IMAGE_EXTENSIONS) {
+    let app = ctx.app_handle();
+    // 열린 문서의 경로는 네트워크 경로일 때만 묻는다(links.rs 가 그때만 부른다).
+    let open_docs = || {
+        let sh = shared(app);
+        let docs = sh.docs.lock().unwrap();
+        docs.values().filter_map(|d| d.path.clone()).collect()
+    };
+    let Some(path) = links::image_request_path(&decoded, open_docs) else {
         return forbidden();
-    }
-    if path
-        .components()
-        .any(|c| matches!(c, std::path::Component::ParentDir))
-    {
-        return forbidden();
-    }
-    if let Some(root) = links::unc_root(&path) {
-        let app = ctx.app_handle();
-        let allowed = shared(app).docs.lock().unwrap().values().any(|d| {
-            d.path
-                .as_deref()
-                .and_then(|p| p.parent())
-                .and_then(links::unc_root)
-                .as_deref()
-                == Some(root.as_str())
-        });
-        if !allowed {
-            return forbidden();
-        }
-    }
+    };
     match std::fs::read(&path) {
         Ok(data) => reply(200, mime_of(&path), data),
         Err(_) => not_found(),
