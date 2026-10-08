@@ -12,10 +12,15 @@ export interface DesktopDoc {
     encoding: 'UTF-8' | 'EUC-KR';
     /** 같은 파일이 디스크에서 바뀌어 다시 읽은 것이다. 읽던 자리를 지킨다. */
     reload: boolean;
+    /**
+     * 이 문서의 첫 화면이 올라오면 메인에 알려야 한다(Tauri 판: 네이티브 미리보기를 걷고 창을 보이는 신호).
+     * 숨겨 둔 창을 달구려고 그려 보는 표본 문서에는 없다. 메인이 정한다 — 렌더러가 '처음 받은 문서' 로 짐작하지 않는다.
+     */
+    announce?: boolean;
 }
 
 export type DesktopCommand =
-    | { name: 'toc' | 'find' | 'source' | 'print' | 'pdf' | 'edit' | 'save' }
+    | { name: 'toc' | 'find' | 'source' | 'print' | 'pdf' | 'edit' | 'save' | 'reset' }
     | { name: 'settings'; value: { theme: 'system' | 'light' | 'dark'; remoteImages: boolean } };
 
 export interface MarkletBridge {

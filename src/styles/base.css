@@ -166,26 +166,6 @@ body {
     min-height: 100%;
 }
 
-/* 부팅 전 잠깐 보이는 화면. 스플래시가 내려간 뒤 첫 프레임을 덮는다. */
-.boot-screen {
-    position: fixed;
-    inset: 0;
-    background: var(--md-bg);
-}
-
-/* 스크린 리더 전용 */
-.sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
-
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

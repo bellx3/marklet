@@ -1,0 +1,5 @@
+# Rust 빌드 산출물 — 수 GB 가 된다. 절대 추적하지 않는다.
+/target/
+/gen/
+# 렌더러 번들(vite.tauri.config.ts 가 만든다)
+/frontend/

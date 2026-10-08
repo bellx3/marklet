@@ -1,10 +1,9 @@
-import { Browser } from '@capacitor/browser';
 import type { RenderHandle } from '../../markdown/render-pipeline';
 
 /**
  * 문서 영역의 링크 클릭을 가로챈다.
  * - '#앵커'  → 문서 안 점프. 아직 렌더되지 않은 청크에 있으면 전부 렌더한 뒤 이동한다.
- * - 그 외    → 시스템 브라우저 (capacitor.config.json 에 allowNavigation 을 두지 않은 이유)
+ * - 그 외    → 기본 브라우저 (window.open 을 앱이 가로채 시스템에 넘긴다 — tauri-bridge.ts)
  *
  * ★ 링크를 그냥 두면 앱 안 웹뷰에서 임의의 웹페이지가 열린다.
  *   마크다운은 사용자가 어디서 받아왔는지 알 수 없는 입력이다.
@@ -24,11 +23,7 @@ export function bindDocumentLinks(container: HTMLElement, handle: () => RenderHa
             return;
         }
         if (/^(https?|mailto|tel):/i.test(href)) {
-            void Browser.open({ url: href }).catch((err) => {
-                // 브라우저(npm run dev)에는 네이티브가 없다. 그때는 새 탭으로 연다.
-                console.warn('Browser.open 실패, window.open 으로 폴백:', err);
-                window.open(href, '_blank', 'noopener,noreferrer');
-            });
+            window.open(href, '_blank', 'noopener,noreferrer');
         }
         // 그 외 스킴은 sanitize 단계에서 이미 걸러졌다. 여기 오면 무시한다.
     });

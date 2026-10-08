@@ -1,4 +1,3 @@
-import { Preferences } from '@capacitor/preferences';
 import { setLanguage, type LangSetting } from '../i18n';
 
 export const FONT_STEPS = [14, 15, 16, 17, 18, 20, 22, 24] as const;
@@ -17,18 +16,10 @@ export interface AppSettings {
     breaks: boolean;
     /** 원격 이미지 불러오기 (6-4절). 기본 꺼짐 — 사생활 */
     remoteImages: boolean;
-    /** ★ 지금은 아무도 안 본다. 이미 저장된 설정에 있어서 남겨 둘 뿐이다(loadSettings 주석). */
-    fontStepInitialized: boolean;
-    /**
-     * 스포트라이트 안내를 이미 봤는가 (coach.ts). 화면마다 따로 센다.
-     * ★ '봤다' 는 끝까지 본 것과 건너뛴 것을 **둘 다** 포함한다. 건너뛴 사람에게
-     *   다음 실행에서 또 띄우면 그건 안내가 아니라 방해다.
-     */
-    coachedHome: boolean;
-    coachedViewer: boolean;
 }
 
-const KEY = 'settings';
+/** localStorage 키. 이 앱의 웹뷰 저장소는 앱 전용이라 다른 곳과 섞이지 않지만, 접두를 붙여 둔다. */
+const KEY = 'marklet.settings';
 
 const DEFAULTS: AppSettings = {
     theme: 'system',
@@ -36,21 +27,12 @@ const DEFAULTS: AppSettings = {
     fontStep: DEFAULT_FONT_STEP,
     breaks: true,
     remoteImages: false,
-    fontStepInitialized: false,
-    coachedHome: false,
-    coachedViewer: false,
 };
 
 let current: AppSettings = { ...DEFAULTS };
-const listeners = new Set<(s: AppSettings) => void>();
 
 export function getSettings(): Readonly<AppSettings> {
     return current;
-}
-
-export function onSettingsChange(fn: (s: AppSettings) => void): () => void {
-    listeners.add(fn);
-    return () => listeners.delete(fn);
 }
 
 export function clampStep(i: number): number {
@@ -86,43 +68,20 @@ function sanitize(raw: unknown): AppSettings {
         fontStep: clampStep(typeof v.fontStep === 'number' ? v.fontStep : DEFAULTS.fontStep),
         breaks: typeof v.breaks === 'boolean' ? v.breaks : DEFAULTS.breaks,
         remoteImages: typeof v.remoteImages === 'boolean' ? v.remoteImages : DEFAULTS.remoteImages,
-        fontStepInitialized: !!v.fontStepInitialized,
-        coachedHome: !!v.coachedHome,
-        coachedViewer: !!v.coachedViewer,
     };
 }
 
 export async function loadSettings(): Promise<AppSettings> {
     try {
-        const { value } = await Preferences.get({ key: KEY });
+        const value = localStorage.getItem(KEY);
         current = value ? sanitize(JSON.parse(value)) : { ...DEFAULTS };
     } catch {
-        // 브라우저(npm run dev)에는 Preferences 네이티브가 없다. 기본값으로 간다.
-        // ★ JSON 이 깨진 경우도 여기로 온다 — 그것도 기본값이 맞다.
+        // 저장소를 못 읽거나 JSON 이 깨진 경우다 — 둘 다 기본값이 맞다.
         current = { ...DEFAULTS };
     }
 
-    /*
-     * ★★★ OS 글꼴 배율을 여기서 읽지 마라. **웹뷰가 이미 적용한다.**
-     *
-     *   예전에는 첫 실행에서 getSystemFontScale() 을 읽어 fontStep 을 올렸다.
-     *   근거는 "본문에 text-size-adjust:none 을 걸어 OS 확대를 껐으니 우리가 보정해야
-     *   한다" 였는데, **그 전제가 틀렸다.** text-size-adjust 는 뷰포트 메타가 없는
-     *   페이지의 '자동 글자 확대' 를 다루는 것이고, 시스템 글꼴 배율은
-     *   WebSettings.setTextZoom 이 따로 먹인다 — CSS 로는 못 끈다.
-     *
-     *   그래서 배율이 **두 번** 곱해졌다(2026-08-06 실기기 실측, 시스템 배율 2.0):
-     *     지정 16px  → 실제 32px            (웹뷰가 이미 2배)
-     *     --md-font-size 24px → 본문 48px   (앱이 17→24 로 올린 뒤 또 2배)
-     *   사용자가 바란 것은 17×2 = 34px 인데 48px 가 나왔다. 어느 배율에서든 30% 초과다.
-     *
-     *   이제 fontStep 은 **사용자가 설정 화면에서 고른 값** 하나만 뜻한다.
-     *   OS 배율은 웹뷰에 맡긴다 — 그쪽이 정확하고, 사용자가 OS 설정을 바꾸면
-     *   앱을 다시 안 켜도 따라간다(예전 방식은 첫 실행에만 읽어서 못 따라갔다).
-     *
-     * ★ fontStepInitialized 는 남겨 둔다. 이미 저장된 설정에 들어 있어서
-     *   빼면 그 값이 DEFAULTS 로 되돌아간다 — 지금은 아무도 안 본다.
-     */
+    // ★ OS 글꼴 배율을 여기서 읽지 마라. 웹뷰가 이미 적용하므로 앱이 또 곱하면 두 번 곱해진다.
+    //   fontStep 은 저장된 값 하나만 뜻한다(확대 · 축소는 Rust 쪽 zoom 이 맡는다).
     applySettings();
     return current;
 }
@@ -131,12 +90,11 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<void>
     current = { ...current, ...patch };
     await persist();
     applySettings();
-    for (const fn of listeners) fn(current);
 }
 
 async function persist(): Promise<void> {
     try {
-        await Preferences.set({ key: KEY, value: JSON.stringify(current) });
+        localStorage.setItem(KEY, JSON.stringify(current));
     } catch (err) {
         console.error('설정 저장 실패:', err);
     }
@@ -165,21 +123,4 @@ export function applyTheme(theme: AppSettings['theme']): void {
     document
         .querySelector('meta[name="theme-color"]')
         ?.setAttribute('content', dark ? '#16181C' : '#FBFBF9');
-
-    // 상태바 아이콘 색. 실패해도 화면은 정상이므로 조용히 넘어간다(웹 환경).
-    void (async () => {
-        try {
-            const { StatusBar, Style } = await import('@capacitor/status-bar');
-            await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
-        } catch {
-            /* 웹 환경 또는 edge-to-edge 라 무시됨 */
-        }
-    })();
-}
-
-/** 시스템 테마가 바뀌면 따라간다. theme==='system' 일 때만 의미가 있다. */
-export function watchSystemTheme(): void {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if (current.theme === 'system') applyTheme('system');
-    });
 }

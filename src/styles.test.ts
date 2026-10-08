@@ -36,7 +36,7 @@ function rule(css: string, selector: string): string {
 
 describe('CSS import 순서', () => {
     it('utilities.css 가 마지막 CSS import 다', () => {
-        // 데스크톱 진입점(옛 모바일 src/main.ts 는 archive/ 로 옮겼다). 같은 규칙이 그대로 적용된다.
+        // 데스크톱 렌더러의 진입점이 CSS 를 불러오는 순서를 본다.
         const src = read('./desktop/main.ts');
         const imports = [...src.matchAll(/^import\s+'(\.\.\/styles\/[^']+)';\r?$/gm)].map(
             (m) => m[1],
@@ -162,87 +162,5 @@ describe('디자인 토큰 (2026-08-04 종합 점검)', () => {
             .map(([line]) => line.trim());
         // 목차 들여쓰기만 남는다.
         expect(offenders.filter((l) => !/padding-left:\s*(18|36|54|72)px/.test(l))).toEqual([]);
-    });
-});
-
-describe('⋮ 메뉴는 문서를 밀어내지 않는다 (2026-08-04 사용자 보고)', () => {
-    const css = readCss('./styles/components.css');
-
-    it('★★ .more-menu 가 흐름에서 빠져 있다 — sticky 면 열릴 때 본문이 아래로 밀린다', () => {
-        const menu = rule(css, '.more-menu');
-        expect(menu).toMatch(/position:\s*absolute/);
-        expect(menu).not.toMatch(/position:\s*sticky/);
-    });
-
-    it('메뉴 밖을 눌러 닫을 수 있는 판이 화면 전체를 덮는다', () => {
-        const scrim = rule(css, '.menu-scrim');
-        expect(scrim).toMatch(/position:\s*fixed/);
-        expect(scrim).toMatch(/inset:\s*0/);
-    });
-
-    it('★ 스크림이 메뉴보다 아래, 상단 바 버튼보다 위에 있다', () => {
-        const z = (sel: string) => Number(/z-index:\s*(\d+)/.exec(rule(css, sel))?.[1]);
-        expect(z('.menu-scrim')).toBeLessThan(z('.more-menu'));
-        expect(z('.menu-scrim')).toBeGreaterThan(0);
-    });
-
-    /**
-     * ★★★ 2026-08-06 실기기(배율 2.0). 메뉴 항목이 nowrap 이었다.
-     *
-     *   .more-menu 는 max-width 로 폭이 묶여 있고 overflow 는 visible 이다.
-     *   그 안에서 글자가 한 줄을 고집하면 갈 곳이 상자 밖밖에 없다 —
-     *   '마크다운 원문으로 공유'가 309px 를 요구해 256px 상자를 53px 뚫고 나갔다.
-     *
-     *   그리고 안드로이드 웹뷰는 넘친 만큼 **레이아웃 뷰포트를 넓히고 되돌리지 않는다.**
-     *   메뉴를 한 번 열면 앱 전체가 384 대신 429 폭으로 남아 옆으로 밀렸다.
-     *   기본 배율에서는 우연히 들어맞아 안 보였다.
-     *
-     *   폭이 묶인 상자 + 클립 장치 없음 + nowrap = 글자가 화면 밖으로 나간다.
-     *   셋 중 하나는 끊어야 한다.
-     */
-    it('★★ 폭이 묶인 메뉴 안에서 항목이 줄바꿈할 수 있다 (배율이 커도 밖으로 안 나간다)', () => {
-        const menu = rule(css, '.more-menu');
-        const item = rule(css, '.menu-item');
-
-        // 전제: 메뉴는 폭이 묶여 있고 스스로 잘라 내지 않는다
-        expect(menu, '이 테스트의 전제 — 메뉴 폭이 묶여 있다').toMatch(/max-width:/);
-        expect(menu).not.toMatch(/overflow:\s*(hidden|auto|scroll)/);
-
-        expect(item, '한 줄을 고집하면 상자 밖으로 나가는 수밖에 없다').not.toMatch(
-            /white-space:\s*(nowrap|pre)\b/,
-        );
-    });
-
-    /**
-     * ★★ 같은 고장이 설정 줄에도 있었다(2026-08-06 배율 2.0).
-     *   '이름 ↔ 조작부' 를 양끝으로 미는 줄인데 조작부(.seg)는 flex:0 0 auto 라 줄지 않는다.
-     *   언어 선택(시스템·한국어·English)이 410px 를 요구해 384px 화면을 뚫었다.
-     *   좁으면 조작부를 아랫줄로 내려야 한다 — 칸을 좁히면 글자가 잘리고 48dp 도 깨진다.
-     */
-    it('★★ 설정 줄은 좁으면 조작부를 아랫줄로 내린다', () => {
-        expect(rule(css, '.setting-row')).toMatch(/flex-wrap:\s*wrap/);
-        expect(rule(css, '.seg'), '세 칸이 한 줄에 안 들어가면 칸끼리도 접는다').toMatch(
-            /flex-wrap:\s*wrap/,
-        );
-        expect(rule(css, '.seg'), '칸을 좁히지는 않는다').toMatch(/flex:\s*0 0 auto/);
-        /*
-         * ★★★ flex:0 0 auto 인 상자는 제 내용만큼 넓어진다 — 칸들이 언제나 들어맞으므로
-         *   flex-wrap 이 **영원히 일하지 않는다.** 부모 폭으로 묶어야 비로소 접힌다.
-         *   어제 flex-wrap 만 넣고 411dp 기기에서 확인했는데 거기서는 우연히 들어가서
-         *   고쳐진 것처럼 보였다. 320dp(안드로이드 최소 폭) + 배율 2.0 에서 다시 뚫렸다.
-         */
-        expect(rule(css, '.seg'), 'max-width 가 없으면 flex-wrap 이 발동하지 않는다').toMatch(
-            /max-width:\s*100%/,
-        );
-    });
-
-    it('★ 폭이 묶인 세로 열의 자식은 컨테이너를 넘지 않는다 (배율 2.0 에서 배지가 화면 밖으로 나갔다)', () => {
-        // align-items:flex-start 인 세로 열은 자식을 fit-content 로 만든다 — 넓어질 수 있다.
-        expect(rule(css, '.list-main')).toMatch(/align-items:\s*flex-start/);
-        expect(rule(css, '.list-main > *'), '그래서 max-width 로 묶어 둔다').toMatch(
-            /max-width:\s*100%/,
-        );
-        // 잘라 내지 말고 접는다 — '읽기 전용 사본'은 사라지면 안 되는 표시다.
-        expect(rule(css, '.list-sub')).toMatch(/flex-wrap:\s*wrap/);
     });
 });

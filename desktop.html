@@ -1,21 +1,23 @@
 <!doctype html>
-<!-- ★ 데스크톱(Electron) 전용 진입점. 모바일은 index.html 이다. setLanguage() 가 lang 을 덮어쓴다. -->
+<!-- ★ 데스크톱 렌더러의 진입점. 수식 · Mermaid · 편집 · 인쇄처럼 네이티브 뷰어(src-tauri/src/preview)가 못 그리는 문서를 WebView2 가 그릴 때 쓴다.
+     스크립트는 tauri-entry.ts 를 거쳐 window.marklet 을 Tauri 명령으로 채운다. setLanguage() 가 lang 을 덮어쓴다. -->
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <!--
-          모바일(index.html)과 같은 3차 방어선. 차이는 img-src 의 marklet-local: 하나뿐이다 —
-          문서가 상대 경로로 가리킨 그림을 main.cjs 의 그 스킴으로 내준다(그림 확장자만).
+          3차 방어선이다(1차: 살균기 · 2차: 렌더러의 링크 규칙).
+            · img-src 의 marklet-local 은 윈도우에서 http://marklet-local.localhost 로 풀린다(src-tauri 의 스킴 핸들러가 내준다).
+            · connect-src 의 ipc: · http://ipc.localhost 는 렌더러 → Rust 명령(invoke)의 길이다.
         -->
         <meta
             http-equiv="Content-Security-Policy"
             content="default-src 'self';
                      script-src 'self';
                      style-src 'self' 'unsafe-inline';
-                     img-src 'self' data: https: marklet-local:;
+                     img-src 'self' data: https: http://marklet-local.localhost https://marklet-local.localhost;
                      font-src 'self' data:;
-                     connect-src 'self';
+                     connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost;
                      object-src 'none';
                      base-uri 'none';
                      form-action 'none'"
@@ -26,6 +28,6 @@
         <div id="app"></div>
         <div id="overlay-root"></div>
         <div id="toast-root" role="status" aria-live="polite" aria-atomic="true"></div>
-        <script type="module" src="/src/desktop/main.ts"></script>
+        <script type="module" src="/src/desktop/tauri-entry.ts"></script>
     </body>
 </html>

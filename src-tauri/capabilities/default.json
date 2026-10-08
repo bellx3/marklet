@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "문서 창. 렌더러가 부를 수 있는 것은 이벤트 듣기와, lib 에 내민 명령뿐이다.",
+  "windows": ["w*"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

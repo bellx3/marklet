@@ -123,6 +123,10 @@ describe('isSafeUrl — 허용 목록', () => {
         'file:///sdcard/x.md',
         'content://com.example/doc/1',
         'vbscript:msgbox(1)',
+        // ★ 프로토콜 상대 — 출처를 바꾼다. 모바일에서는 '원격 이미지 기본 차단'을 우회했다.
+        '//evil.example/track.png',
+        '/\\evil.example/track.png',
+        './/evil.example/track.png',
     ])('거부: %s', (url) => {
         expect(isSafeUrl(url)).toBe(false);
     });
@@ -272,12 +276,36 @@ describe('상대 주소 (데스크톱 전용 옵트인)', () => {
         for (const u of evil) expect(isSafeUrl(u), u).toBe(false);
     });
 
-    it('이 옵트인이 프로토콜 상대(//host)를 새로 열어 주지는 않는다', () => {
-        // ★ '//host' 는 **기존 SAFE_URL 이 이미 통과시킨다**(`\.{0,2}\/` 가 첫 '/' 에 맞는다).
-        //   옵트인이 한 일이 아니다 — 그래서 켜기 전후가 같아야 한다. 이 시험은 그 사실만 못 박는다.
-        const before = isSafeUrl('//evil.example/x.png');
-        allowRelativeUrls(true);
-        expect(isSafeUrl('//evil.example/x.png')).toBe(before);
+    it('★ 프로토콜 상대(//host)와 네트워크 경로(\\\\host)는 켜든 끄든 막는다', () => {
+        // 출처를 바꾸는 주소다. 모바일에서는 원격 이미지 차단을 우회하고, 윈도우에서는 UNC 경로가 되어
+        // 링크를 누르거나 그림을 그리는 것만으로 SMB 인증(NTLM 해시)이 나간다.
+        const nets = [
+            '//evil.example/x.png',
+            '/\\evil.example/x.png',
+            '\\\\evil.example\\share\\x.png',
+            '\\evil.example\\x.png',
+        ];
+        for (const on of [false, true]) {
+            allowRelativeUrls(on);
+            for (const u of nets) expect(isSafeUrl(u), `${u} (옵트인 ${on})`).toBe(false);
+        }
+    });
+
+    it('★ 살균기도 //host 를 지운다 — 그림 src 와 링크 href 모두', () => {
+        for (const on of [false, true]) {
+            allowRelativeUrls(on);
+            const host = document.createElement('div');
+            host.innerHTML = sanitize(
+                '<p><img src="//evil.example/x.png"><a href="//evil.example/a.md">x</a>' +
+                    '<a href="/\\evil.example/b.md">y</a><a href="\\\\evil.example\\s\\c.md">z</a></p>',
+            );
+            expect(host.querySelector('img')?.hasAttribute('src'), `img (옵트인 ${on})`).toBe(
+                false,
+            );
+            for (const a of host.querySelectorAll('a')) {
+                expect(a.hasAttribute('href'), `${a.textContent} (옵트인 ${on})`).toBe(false);
+            }
+        }
     });
 
     it('살균기도 같은 기준이다 — 그림 src 와 링크 href 가 살아남고 javascript: 는 지워진다', () => {

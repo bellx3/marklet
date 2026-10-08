@@ -9,7 +9,7 @@ import { t } from '../i18n';
  * ★ 픽셀오아시스에서 실제로 겪은 사고를 처음부터 막는 구조다. 열기는 10ms 뒤 클래스를
  *   붙이고 닫기는 300ms 뒤 display:none 을 걸었는데, 그 사이에 반대 동작이 들어오면
  *   뒤늦게 터진 타이머가 새 상태를 덮어썼다. 그때 화면에는 아무것도 없는데 isOpen 이
- *   true 라 안드로이드 뒤로가기 한 번을 잡아먹었다.
+ *   true 라 뒤로가기(Esc) 한 번을 잡아먹었다.
  *
  * ★ hidden 속성을 상태의 단일 소스로 쓴다. 컴포넌트 CSS 가 display 를 지정하면
  *   UA 의 [hidden]{display:none} 을 이기므로 utilities.css 에 강제 규칙을 두고
@@ -30,7 +30,7 @@ const CLOSE_DELAY_MS = 200;
  */
 const returnTo = new WeakMap<HTMLElement, HTMLElement | null>();
 
-const BACKDROP = '.dialog-backdrop, .sheet-backdrop, .coach-backdrop';
+const BACKDROP = '.dialog-backdrop, .sheet-backdrop';
 
 /** 지금 초점 자리를 보고, 닫힐 오버레이 안이면 그 오버레이가 돌려주려던 곳을 쓴다. */
 function resolveReturnTarget(): HTMLElement | null {

@@ -14,19 +14,10 @@ keystore.properties
 local.properties
 play-service-account.json
 
-# Desktop build outputs (Electron / electron-builder)
-dist-desktop/
-release-desktop/
-win-unpacked/
-*.blockmap
-
-# General build outputs
+# Build outputs (Rust 산출물은 src-tauri/.gitignore 가 맡는다)
 dist/
 build/
 out/
-www/
-*.apk
-*.aab
 
 # OS files
 .DS_Store
@@ -82,13 +73,3 @@ scripts/tmp-*
 *.tmp
 *.bak
 *.orig
-
-# Archived Android local artifacts
-archive/android/.gradle/
-archive/android/**/build/
-archive/android/capacitor-cordova-android-plugins/
-archive/android/local.properties
-archive/android/keystore.properties
-archive/android/play-service-account.json
-archive/android/*.keystore
-archive/.capacitor/

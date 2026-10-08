@@ -11,13 +11,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  *   어느 쪽으로 닫혀도 <mark> 가 남으면 안 된다.
  */
 
-vi.mock('@capacitor/app', () => ({
-    App: {
-        exitApp: vi.fn(async () => {}),
-        addListener: vi.fn(async () => ({ remove: async () => {} })),
-    },
-}));
-
 import { createSearchBar, type SearchBar } from './search-bar';
 import { __resetRouterForTest, __pressBackForTest, hasLayer } from '../router';
 import type { RenderHandle } from '../../markdown/render-pipeline';

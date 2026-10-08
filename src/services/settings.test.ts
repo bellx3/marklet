@@ -3,38 +3,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 /*
  * 11-2절 #22.
  *
- * 회귀: applyTheme 의 StatusBar 호출을 try/catch 밖으로 꺼내면
- *   "StatusBar 가 throw 해도 data-theme 은 적용된다" 가 실패하는 것을 확인함.
+ * 설정은 웹뷰의 localStorage 에 JSON 한 덩이로 저장된다(settings.ts). 시험은 jsdom 의 진짜 localStorage 를 쓴다.
  */
 
-const store = new Map<string, string>();
-const prefs = {
-    get: vi.fn(async ({ key }: { key: string }) => ({ value: store.get(key) ?? null })),
-    set: vi.fn(async ({ key, value }: { key: string; value: string }) => {
-        store.set(key, value);
-    }),
+const store = {
+    set: (key: string, value: string) => localStorage.setItem(`marklet.${key}`, value),
+    get: (key: string) => localStorage.getItem(`marklet.${key}`) ?? undefined,
+    clear: () => localStorage.clear(),
 };
-vi.mock('@capacitor/preferences', () => ({
-    Preferences: {
-        get: (o: { key: string }) => prefs.get(o),
-        set: (o: { key: string; value: string }) => prefs.set(o),
-    },
-}));
-
-const mdFile = { getSystemFontScale: vi.fn() };
-vi.mock('../plugins/md-file', () => ({
-    MdFile: { getSystemFontScale: () => mdFile.getSystemFontScale() },
-}));
-
-// ★ 네이티브 경계다. 여기서만 목을 만든다(11-1절 2번).
-vi.mock('@capacitor/status-bar', () => ({
-    StatusBar: {
-        setStyle: async () => {
-            throw new Error('SystemBars 가 없다');
-        },
-    },
-    Style: { Dark: 'DARK', Light: 'LIGHT' },
-}));
 
 beforeEach(() => {
     store.clear();
@@ -45,12 +21,12 @@ beforeEach(() => {
 });
 
 describe('applyTheme', () => {
-    it('★ StatusBar 가 throw 해도 data-theme 은 적용된다 (웹·플러그인 없는 환경)', async () => {
+    it('테마를 data-theme 에 적용한다', async () => {
         const { applyTheme } = await import('./settings');
-        expect(() => applyTheme('dark')).not.toThrow();
+        applyTheme('dark');
         expect(document.documentElement.dataset.theme).toBe('dark');
-        // 비동기 실패가 unhandled rejection 이 되지 않는지도 본다
-        await new Promise((r) => setTimeout(r, 0));
+        applyTheme('light');
+        expect(document.documentElement.dataset.theme).toBe('light');
     });
 
     it('system 이면 OS 설정을 따른다', async () => {
@@ -62,7 +38,7 @@ describe('applyTheme', () => {
         expect(document.documentElement.dataset.theme).toBe('dark');
     });
 
-    it('theme-color 메타도 함께 바꾼다 (상태바 색이 본문과 이어져야 한다)', async () => {
+    it('theme-color 메타도 함께 바꾼다', async () => {
         const { applyTheme } = await import('./settings');
         applyTheme('dark');
         expect(document.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe(
@@ -75,28 +51,16 @@ describe('applyTheme', () => {
     });
 });
 
-describe('★★ OS 글꼴 배율은 웹뷰에 맡긴다 (10-2절)', () => {
-    it('OS 배율을 읽지 않는다 — 읽으면 두 번 곱해진다', async () => {
-        mdFile.getSystemFontScale.mockResolvedValue({ scale: 1.3 });
+describe('글꼴 단계 (10-2절)', () => {
+    /*
+     * ★★ 앱은 OS 글꼴 배율을 읽지 않는다. 웹뷰가 이미 적용하므로 앱이 또 곱하면 두 번 곱해진다
+     *   (2026-08-06 실측: 시스템 배율 2.0 에서 지정 17px 가 34px 가 아니라 48px 로 나왔다).
+     *   그래서 fontStep 은 사용자가 설정에서 고른 값 하나만 뜻한다.
+     */
+    it('저장된 값이 없으면 기본 단계다', async () => {
         const { loadSettings, FONT_STEPS, DEFAULT_FONT_STEP } = await import('./settings');
-
         const s = await loadSettings();
-
-        /*
-         * ★★ 이 테스트는 예전에 정반대를 고정했다("배율을 읽어 가장 가까운 단계를 고른다").
-         *   근거는 "본문에 text-size-adjust:none 을 걸어 OS 확대를 껐으니 우리가 보정해야
-         *   한다" 였는데 **그 전제가 틀렸다.** 시스템 글꼴 배율은 WebSettings.setTextZoom
-         *   이 먹이는 것이라 CSS 로는 못 끈다.
-         *
-         *   그래서 배율이 두 번 곱해졌다(2026-08-06 실기기, 시스템 배율 2.0):
-         *     지정 16px → 실제 32px            (웹뷰가 이미 2배)
-         *     --md-font-size 24px → 본문 48px  (앱이 17→24 로 올린 뒤 또 2배)
-         *   사용자가 바란 것은 17×2 = 34px 였다.
-         */
-        expect(FONT_STEPS[s.fontStep], '앱이 배율을 또 곱하면 안 된다').toBe(
-            FONT_STEPS[DEFAULT_FONT_STEP],
-        );
-        expect(mdFile.getSystemFontScale, 'OS 배율을 읽으면 안 된다').not.toHaveBeenCalled();
+        expect(FONT_STEPS[s.fontStep]).toBe(FONT_STEPS[DEFAULT_FONT_STEP]);
     });
 
     it('사용자가 고른 값은 그대로 쓴다', async () => {
@@ -108,18 +72,10 @@ describe('★★ OS 글꼴 배율은 웹뷰에 맡긴다 (10-2절)', () => {
 
         const s = await loadSettings();
         expect(s.fontStep).toBe(1);
-        expect(mdFile.getSystemFontScale).not.toHaveBeenCalled();
-    });
-
-    it('네이티브가 없으면 기본 단계로 간다', async () => {
-        mdFile.getSystemFontScale.mockRejectedValue(new Error('not implemented'));
-        const { loadSettings, DEFAULT_FONT_STEP } = await import('./settings');
-        expect((await loadSettings()).fontStep).toBe(DEFAULT_FONT_STEP);
     });
 
     it('저장된 값이 깨져 있어도 기본값으로 살아난다', async () => {
         store.set('settings', '{깨진 JSON');
-        mdFile.getSystemFontScale.mockResolvedValue({ scale: 1 });
         const { loadSettings, DEFAULT_FONT_STEP } = await import('./settings');
         expect((await loadSettings()).fontStep).toBe(DEFAULT_FONT_STEP);
     });
@@ -135,19 +91,15 @@ describe('clampStep', () => {
 });
 
 describe('updateSettings', () => {
-    it('구독자에게 알리고 저장한다', async () => {
-        mdFile.getSystemFontScale.mockResolvedValue({ scale: 1 });
-        const { loadSettings, updateSettings, onSettingsChange } = await import('./settings');
+    it('바꾼 값을 저장하고 화면에 반영한다', async () => {
+        const { loadSettings, updateSettings } = await import('./settings');
         await loadSettings();
 
-        const seen: number[] = [];
-        const off = onSettingsChange((s) => seen.push(s.fontStep));
         await updateSettings({ fontStep: 5 });
-        off();
-        await updateSettings({ fontStep: 6 });
+        await updateSettings({ fontStep: 6, theme: 'dark' });
 
-        expect(seen).toEqual([5]); // 구독 해제 뒤에는 안 온다
-        expect(JSON.parse(store.get('settings')!).fontStep).toBe(6);
+        expect(JSON.parse(store.get('settings')!)).toMatchObject({ fontStep: 6, theme: 'dark' });
+        expect(document.documentElement.dataset.theme).toBe('dark');
     });
 });
 
@@ -176,7 +128,7 @@ describe('★★ 망가진 설정으로도 켜진다', () => {
         expect(s.language).toBe('system');
 
         const { t } = await import('../i18n');
-        expect(t?.common?.confirm, '카탈로그가 사라졌다 — 여기서 부팅이 죽는다').toBeTruthy();
+        expect(t?.common?.close, '카탈로그가 사라졌다 — 여기서 부팅이 죽는다').toBeTruthy();
     });
 
     it.each([

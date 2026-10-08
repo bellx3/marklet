@@ -5,7 +5,7 @@ import prettierConfig from 'eslint-config-prettier';
 
 export default [
     {
-        ignores: ['node_modules/', 'android/', 'www/', 'dist/', 'scripts/'],
+        ignores: ['node_modules/', 'dist/', 'scripts/', 'src-tauri/'],
     },
     {
         files: ['src/**/*.ts'],

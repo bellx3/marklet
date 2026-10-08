@@ -8,26 +8,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  *   다이어그램만 접으려던 사용자가 문서까지 잃는다. 카톡에서 들어왔다면 앱이 꺼진다.
  */
 
-const h = vi.hoisted(() => ({
-    backListeners: [] as Array<() => void>,
-    exitApp: vi.fn(async () => {}),
-}));
-
-vi.mock('@capacitor/app', () => ({
-    App: {
-        exitApp: () => h.exitApp(),
-        addListener: async (name: string, fn: () => void) => {
-            if (name === 'backButton') h.backListeners.push(fn);
-            return {
-                remove: async () => {
-                    const i = h.backListeners.indexOf(fn);
-                    if (i >= 0) h.backListeners.splice(i, 1);
-                },
-            };
-        },
-    },
-}));
-
 import {
     openDiagramViewer,
     closeDiagramViewer,
@@ -57,8 +37,6 @@ function barButton(text: string): HTMLButtonElement | undefined {
 }
 
 beforeEach(() => {
-    h.backListeners.length = 0;
-    h.exitApp.mockClear();
     __resetRouterForTest();
     // pointer capture — jsdom 에 없다. 실제 WebView 에는 있으므로 환경 메우기다.
     if (!Element.prototype.setPointerCapture) {
@@ -208,17 +186,6 @@ describe('★ 뒤로가기는 한 겹만 닫는다', () => {
         expect(hasLayer('diagram')).toBe(false);
         expect(await __pressBackForTest()).toBe('viewer');
         expect(closeDocument).toHaveBeenCalledOnce();
-    });
-
-    it('★ 네이티브 뒤로가기 리스너를 따로 달지 않는다', async () => {
-        openDiagramViewer(makeSvg(), '그림');
-        await Promise.resolve();
-
-        /*
-         * ★★ Capacitor 는 등록된 backButton 리스너를 **전부** 부른다.
-         *   라우터가 이미 하나 갖고 있으므로 여기서 또 달면 한 번 누를 때 둘 다 돈다.
-         */
-        expect(h.backListeners, '뒤로가기 리스너가 중복 등록됐다').toHaveLength(0);
     });
 
     it('Esc 로도 닫힌다 — 브라우저에서 확인할 때 쓴다', () => {

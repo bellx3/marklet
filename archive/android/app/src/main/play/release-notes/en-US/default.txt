@@ -1,8 +1,0 @@
-When the app cannot start, it now tells you what to do instead of showing a blank screen.
-
-• If this device's system WebView is too old to run the app, the app says so and how to fix it
-• Before, the same situation left you looking at an empty screen
-
-The first-run walkthrough (Settings → Show the tutorial again) and the table/formula fitting from the last release are still here.
-
-Report anything odd to the address in Settings.

@@ -52,7 +52,7 @@ const PLAIN_LIMIT = 4 * 1024 * 1024;
 const bridge = window.marklet;
 
 async function boot(): Promise<void> {
-    // 같은 폴더의 그림과 다른 .md 를 가리키는 상대 주소를 살린다. 모바일은 켜지 않는다(sanitize.ts).
+    // 문서 폴더 기준 상대 주소(그림 · 다른 .md 로 거는 링크)를 살린다(sanitize.ts).
     allowRelativeUrls(true);
     await loadSettings();
 
@@ -373,8 +373,45 @@ async function boot(): Promise<void> {
         }
     }
 
+    /**
+     * 문서를 다 치우고 맨 처음 모습(안내 화면)으로 돌아간다.
+     * Rust 가 마지막 창을 닫는 대신 숨겨 두었다가 다음 문서에 다시 쓸 때(빠른 시작) 보낸다. 이 창의 웹뷰는 이미 떠서 코드가 다 올라가 있으므로
+     * 다음 문서는 부팅 없이 바로 그려진다 — 그러려면 앞 문서의 흔적(편집 · 찾기 · 목차 · 열린 확대 보기)이 하나도 남지 않아야 한다.
+     */
+    async function resetView(): Promise<void> {
+        seq++; // 렌더가 await 를 지나는 중이면 물러난다
+        handle?.cancel();
+        handle = null;
+        // 열려 있는 것(찾기 · 목차 · 다이어그램 확대)을 위에서부터 닫는다. 무한 루프를 막으려 상한을 둔다.
+        for (let i = 0; i < 8 && (await pressBack()) !== null; i++);
+        search.close();
+        popup.close();
+        if (editing) {
+            editing = false;
+            controls.setEditing(false);
+            editor.hidden = true;
+            dock.suspend(false);
+        }
+        editor.value = '';
+        current = null;
+        saved = '';
+        draft = '';
+        reportedDirty = false;
+        showSource = false;
+        frontmatterSlot.replaceChildren();
+        target.replaceChildren();
+        body.hidden = true;
+        empty.hidden = false;
+        dock.setHeadings([]);
+        controls.setActive(false);
+        window.scrollTo(0, 0);
+    }
+
     function command(cmd: DesktopCommand): void {
         switch (cmd.name) {
+            case 'reset':
+                void resetView();
+                break;
             case 'edit':
                 if (current) setEditing(!editing);
                 break;
@@ -418,9 +455,7 @@ async function boot(): Promise<void> {
     }
 
     /*
-     * Esc = 뒤로가기. 열려 있는 목차·찾기·다이어그램 확대를 위에서부터 하나씩 닫는다.
-     * ★ 모바일은 initRouter() 가 안드로이드 뒤로가기 버튼을 건다. 데스크톱에는 그 버튼이
-     *   없으므로 라우터는 초기화하지 않고 스택(pushLayer)만 그대로 쓴다.
+     * Esc = 뒤로가기. 열려 있는 목차·찾기·다이어그램 확대를 위에서부터 하나씩 닫는다(router.ts 의 레이어 스택).
      */
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !e.isComposing) void pressBack();

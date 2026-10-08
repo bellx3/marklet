@@ -1,10 +1,8 @@
 /**
  * 영어 문자열 — **카탈로그의 원본이다.**
  *
- * ★ 왜 영어가 원본인가. 안드로이드 리소스와 같은 규칙으로 맞췄다 —
- *   `res/values/` 가 영어(기본)이고 `res/values-ko/` 가 한국어 덮어쓰기다.
- *   Play 스토어 기본 언어도 en-US 다(01_제품_결정서.md 7.4절).
- *   한 곳에서만 규칙이 뒤집히면 나중에 어느 쪽이 기준인지 헷갈린다.
+ * ★ 왜 영어가 원본인가. 언어를 못 정했을 때(알 수 없는 설정 · 모르는 로케일) 떨어지는 곳이 영어라서,
+ *   카탈로그의 기준도 영어로 둔다. 한국어는 이 모양을 그대로 따라가는 덮어쓰기다.
  *
  * ★★ 여기에 키를 더하면 `ko.ts` 는 **컴파일 오류가 난다.** 그게 의도다.
  *   번역이 빠진 채로 배포되면 한국어 화면에 영어가 섞여 나오고, 그건 조용히 지나간다.
@@ -15,60 +13,12 @@
  */
 
 export const en = {
-    common: {
-        cancel: 'Cancel',
-        confirm: 'OK',
-        close: 'Close',
-        back: 'Back',
-        settings: 'Settings',
-        share: 'Share',
-        open: 'Open',
-        unknownError: 'An unknown error occurred.',
-    },
-
-    home: {
-        /** ★ 한국어에만 초성 안내가 붙는다. 영어에는 그런 개념이 없다. */
-        searchPlaceholder: 'Search by name',
-        searchLabel: 'Search documents by name',
-        openFile: 'Open file',
-        addFolder: 'Add folder',
-        example: 'Example',
-        recents: 'RECENT',
-        myFolders: 'MY FOLDERS',
-        nothingYet:
-            'No documents yet. Open a file or add a folder above. Tap [Example] to see what this app does.',
-        noMatchingDoc: 'No document matches that name.',
-        noMatchingFile: 'No file matches that name.',
-        emptyFolder: 'This folder has no Markdown files.',
-        readOnlyCopy: 'Read-only copy',
-        cannotReopen: 'Cannot reopen',
-        removeFromList: (name: string) => `Remove ${name} from the list`,
-        removeFolder: (name: string) => `Remove folder ${name}`,
-    },
-
-    time: {
-        justNow: 'just now',
-        minutesAgo: (n: number) => `${n} min ago`,
-        hoursAgo: (n: number) => `${n} hr ago`,
-        daysAgo: (n: number) => (n === 1 ? 'yesterday' : `${n} days ago`),
-    },
-
+    common: { close: 'Close' },
     viewer: {
         toc: 'Table of contents',
         find: 'Find in document',
         edit: 'Edit',
         more: 'More',
-        shareFile: 'Share as file',
-        viewSettings: 'Reading options',
-        openAnother: 'Open another document',
-        sharePlain: 'Share as plain text',
-        shareSource: 'Share Markdown source',
-        renderingAll: 'Rendering the whole document…',
-        renderingDoc: 'Rendering…',
-        preparingText: 'Preparing the text to share…',
-        snapshotNotice:
-            'You are viewing a copy. To edit the original, choose it again with [Open file].',
-        readOnlyNotice: 'This document is read-only. Editing it will save under a new name.',
     },
 
     search: {
@@ -85,21 +35,9 @@ export const en = {
         untitled: '(untitled)',
     },
 
-    view: {
-        title: 'Reading options',
-        theme: 'Theme',
-        themeSystem: 'System',
-        themeLight: 'Light',
-        themeDark: 'Dark',
-        fontSize: 'Text size',
-        smaller: 'Smaller text',
-        bigger: 'Larger text',
-        breaks: 'Keep single line breaks',
-        breaksHint:
-            'Treat one Enter as a line break, so notes written in a memo app do not collapse into one paragraph.',
-    },
+    view: { theme: 'Theme' },
 
-    /** 데스크톱(Electron) 화면 전용. 모바일에서는 쓰이지 않는다. */
+    /** 떠오르는 컨트롤 · 팝업 메뉴 · 빈 화면 */
     desktop: {
         menuCopy: 'Copy',
         menuSelectAll: 'Select all',
@@ -109,123 +47,6 @@ export const en = {
         menuPdf: 'Export as PDF…',
         emptyHint: 'Drop a Markdown file here\nor press Ctrl+O to open one',
     },
-
-    settings: {
-        title: 'Settings',
-        /** ★ 글자 크기 미리보기. 한국어는 한글 판구름(pangram)을 쓴다. */
-        sizePreview:
-            'This is how documents will read. The quick brown fox jumps over the lazy dog.',
-        remoteImages: 'Load remote images',
-        remoteImagesHint:
-            'Off by default. Opening a document never reaches out to an external server on its own.',
-        language: 'Language',
-        languageSystem: 'System',
-        tip: 'Support the app',
-        supporter: 'Supporter',
-        clearRecents: 'Clear recent documents',
-        clearTitle: 'Clear recent documents?',
-        clearBody:
-            'This only clears the list and the copies the app kept. Your original files stay.',
-        clearConfirm: 'Clear',
-        cleared: 'Recent documents cleared.',
-        about: 'ABOUT',
-        version: 'Version',
-        licenses: 'Open-source licenses',
-        privacy: 'Privacy policy',
-        tipNote: 'Supporter status is stored on this device only. It is lost if you uninstall.',
-        showTutorial: 'Show the tutorial again',
-    },
-
-    /*
-     * 스포트라이트 안내 (coach.ts).
-     *
-     * ★★ 여기 문장은 **마크다운을 한 번도 안 써 본 사람**에게 하는 말이다.
-     *   테스터 피드백이 그것이었다. 'frontmatter', 'render' 같은 말을 쓰면
-     *   안내가 아니라 또 하나의 장벽이 된다. 무엇을 눌러 무엇이 되는지만 적는다.
-     */
-    coach: {
-        skip: 'Skip',
-        next: 'Next',
-        done: 'Got it',
-        progress: (i: number, n: number) => `${i} / ${n}`,
-
-        homeExampleTitle: 'New to Markdown?',
-        homeExampleBody:
-            'A .md file is a plain text file where symbols stand for headings, lists and tables. Open the example to see what those symbols turn into.',
-        homeOpenTitle: 'Open your own file',
-        homeOpenBody:
-            'Pick any .md file on this device. Files you received by message or email work too.',
-        homeFolderTitle: 'Keep a folder handy',
-        homeFolderBody:
-            'Add a folder once and its .md files stay listed here. Files you add later from a PC show up on their own.',
-        homeSearchTitle: 'Find by name',
-        homeSearchBody: 'Once documents pile up, search them by file name here.',
-
-        viewerIntroTitle: 'This is your document',
-        viewerIntroBody:
-            'Symbols like # and | are drawn as headings and tables. To see the original text, tap the pencil.',
-        viewerTocTitle: 'Jump around long documents',
-        viewerTocBody: 'Tap here for the list of headings and go straight to a section.',
-        viewerFindTitle: 'Search inside the document',
-        viewerFindBody: 'Type a word and step through every place it appears.',
-        viewerMoreTitle: 'Text size and theme',
-        viewerMoreBody:
-            'Open [View settings] here to change text size and theme. Sharing lives here too.',
-    },
-
-    tip: {
-        title: 'Support',
-        intro:
-            'Marklet has no ads and locks nothing behind a paywall. I would like to keep it that way. ' +
-            'Only if you feel like it, and with no pressure at all.',
-        note:
-            'Prices come from the store. Payment goes through Google Play, and ' +
-            'Marklet never receives or stores your payment details.',
-        thanks: (n: number) =>
-            n === 1
-                ? 'You have supported this app once. Thank you so much. ☕'
-                : `You have supported this app ${n} times. Thank you so much. ☕`,
-        /*
-         * ★ Play Console 에 등록한 **상품 이름과 글자를 맞춘다.**
-         *   결제 확인창은 우리 라벨이 아니라 콘솔 이름을 보여 주므로,
-         *   버튼에 'A coffee' 라고 써 놓고 구글 창에 'Buy me a coffee' 가 뜨면
-         *   사용자는 다른 걸 누른 줄 안다. 한국어는 양쪽 다 '커피 한 잔' 이라 문제없다.
-         */
-        coffee: 'Buy me a coffee',
-        lunch: 'Buy me lunch',
-        dinner: 'Buy me dinner',
-        thanksToast: 'Thank you! It really helps ☕',
-        cancelled: 'Cancelled.',
-        pending: 'A previous purchase is still being settled. Please try again in a moment.',
-        appOnly: 'Supporting is only available in the app.',
-        noProducts: 'Could not load the products. Please try again in a moment.',
-        requestFailed: (msg: string) => `Purchase request failed: ${msg}`,
-    },
-
-    editor: {
-        title: 'Edit document',
-        exitEdit: 'Finish editing',
-        save: 'Save',
-        breaksHint: 'A single Enter will not show as a line break in the viewer.',
-        breaksHintButton: 'Turn on line breaks',
-    },
-
-    diagnostics: {
-        title: 'Diagnostics',
-        copy: 'Copy',
-        clear: 'Clear',
-        copied: 'Copied.',
-        copyFailed: 'Could not copy, so the values are shown below. Long-press to select them.',
-        empty: 'No measurements yet. Try opening a document first.',
-        storage: 'Copies kept by the app',
-        storageHint: 'Including these numbers in a report helps a lot.',
-        errors: 'Uncaught errors',
-        noErrors: 'No errors recorded.',
-        bucketSnapshot: 'Copies of documents that cannot be reopened',
-        bucketBackup: 'Backups taken before saving',
-        bucketDraft: 'Unsaved edits',
-    },
-
     diagram: {
         /*
          * ★ 확대·축소 단추는 화면에 '−' '+' 만 보인다. 그대로 두면 스크린 리더가
@@ -235,8 +56,8 @@ export const en = {
         zoomIn: 'Zoom in',
         fit: 'Fit',
         label: 'Diagram',
-        /** ★ CSS ::after 로 들어간다. setLanguage() 가 --i18n-zoom-hint 에 넣는다. */
-        zoomHint: 'Tap to enlarge',
+        /** ★ CSS ::after 로 들어간다. setLanguage() 가 --i18n-zoom-hint 에 넣는다(styles/markdown.css). */
+        zoomHint: 'Click to enlarge',
     },
 
     frontmatter: {
@@ -265,137 +86,7 @@ export const en = {
         loadRemoteImage: (alt: string) => `Load image — ${alt}`,
         loadRemoteImageLabel: (alt: string) => `Load remote image: ${alt}`,
     },
-
-    plain: {
-        image: (alt: string) => `[Image: ${alt}]`,
-        noAlt: 'no description',
-        diagram: '[Diagram]',
-    },
-
-    gate: {
-        notText: 'This file is not a text document. Please choose a Markdown file.',
-        cp949: 'Read using the legacy Korean encoding (CP949). Saving will convert it to UTF-8.',
-        tooBigTitle: 'Document is too large',
-        tooBigBody: (mb: string) =>
-            `This document is ${mb} MB. Because of a limit in the Android rendering engine, ` +
-            `formatting it would cut off the end of the document.\n` +
-            `It can be opened as plain source instead.`,
-        tooBigConfirm: 'View as plain text',
-        longTitle: 'Long document',
-        longBody: (mb: string) =>
-            `This document is ${mb} MB. It will take a while to open and may slow the device down.`,
-        noPermission: 'No permission to read this file. Please choose it again with [Open file].',
-        notFound: 'File not found. It looks like it was moved or deleted.',
-        tooBig: 'The file is too large to open. (over 8 MB)',
-        openError: (msg: string) => `Something went wrong while opening the file. (${msg})`,
-        unknown: 'unknown',
-        googleDoc:
-            'This file has been converted to a Google Doc, so it cannot be read as text.\n' +
-            'Please export it from Drive with [Download → Plain text] and open that.',
-    },
-
-    save: {
-        readOnly: 'This file cannot be modified here. Please save it under a new name.',
-        backupFailed:
-            'Saving was stopped because the original could not be backed up. This app did not touch your original file.',
-        mismatch:
-            'The file was written but the contents do not match. A cloud sync may be in progress.',
-        verifyFailed:
-            'Could not verify the file after saving. Please reopen it and check the contents.',
-        noPermission: 'No permission to write this file. Please open it again.',
-        readOnlyLocation: 'This location cannot be written to. Please save under a new name.',
-        gone: 'The file is gone. It looks like it was deleted or moved. Please save it under a new name.',
-        ioError: 'Something went wrong while saving. Please check your storage space.',
-        failed: (msg: string) => `Saving failed. (${msg})`,
-        unknownError: 'unknown error',
-    },
-
-    folders: {
-        noPermission: 'This folder did not grant lasting access. Please choose a different folder.',
-        expired: 'Folder access expired. Please add the folder again.',
-        /** ★ 상한은 네이티브가 정한다. 여기에 숫자를 박으면 둘이 어긋난다. */
-        truncated: (n: number) =>
-            `Too many files — showing the first ${n.toLocaleString()}. Split them into subfolders to see all.`,
-        depthLimited: (n: number) =>
-            `Only ${n} levels of subfolders are scanned. Files deeper than that are not listed.`,
-        readFailed: 'Could not read the folder.',
-        notFound: 'Folder not found. It looks like it was moved or deleted.',
-        listUnavailable: 'Could not read the folder list. Please try again in a moment.',
-    },
-
-    shell: {
-        sharedText: 'Shared text',
-        cannotOpen: 'Cannot open the document',
-        unsavedTitle: 'You have unsaved edits',
-        unsavedOpenBody:
-            'Opening another document now will clear your edits from the screen. (The draft stays in the app.)',
-        openNew: 'Open the new document',
-        keepEditing: 'Keep editing',
-        openOriginal: 'Open the original',
-        /*
-         * ★ 시각 어구를 **문장 뒤에** 붙인다. 한국어 카탈로그를 그대로 옮겨
-         *   앞에 붙였더니 "just now You have edits left in the app." 이 나왔다
-         *   (2026-08-06 실기기). 한국어는 '방금 편집하던…' 이 자연스럽지만
-         *   영어는 시각이 뒤로 가야 문장이 된다. 어순은 언어마다 다르다 —
-         *   틀을 베끼지 말고 그 언어로 읽어 봐라.
-         */
-        draftBody: (when: string) =>
-            `You have edits left in the app${when ? ` from ${when}` : ''}.
-Which one would you like to open?`,
-        resumeEditing: 'Resume editing',
-        noOriginal:
-            'The original is gone and no copy is left in the app. Please choose it again with [Open file].',
-        pickFailed: (msg: string) => `Could not choose a file. (${msg})`,
-        folderAdded: (name: string) => `Added the folder '${name}'.`,
-        folderAddFailed: 'Could not add the folder',
-        guideTitle: 'Marklet guide',
-        cannotEditTitle: 'Cannot edit',
-        cannotEditBody:
-            'This document is shared text, not a file. Save it as a file first to edit it.',
-        cloudTitle: 'This is a cloud document',
-        cloudBody:
-            'Do not edit it on two devices at once. Whichever saves last overwrites the other.',
-        exitEditTitle: 'You have unsaved edits',
-        exitEditBody:
-            'Finishing will clear them from the screen. The draft stays in the app and we will ask again next time.',
-        saved: 'Saved.',
-        viewBackup: 'View the backup',
-        saveAsNew: 'Save under a new name',
-        saveFailedTitle: 'Could not save',
-        saveAsFailedTitle: 'Could not save to a new file either',
-        savedAsNew: (name: string) => `Saved to a new file: ${name}`,
-        createFailedTitle: 'Could not create the new file',
-        copySuffix: 'copy',
-        backupReadFailedTitle: 'Could not read the backup',
-        backupNotFound: 'The backup file could not be found.',
-        backupTitle: 'Backup contents',
-        cannotShareFileTitle: 'Cannot share as a file',
-        cannotShareFileBody:
-            'This document is a built-in example or shared text, so there is no file to send.',
-        shareDialogTitle: 'Share document',
-        shareFileFailedTitle: 'Could not share the file',
-        tooBigTextTitle: 'Too large to share as text',
-        tooBigTextBody: (limitKb: number, sizeKb: string) =>
-            `Text sharing works up to ${limitKb} KB. This document is ${sizeKb} KB.\n` +
-            'Use [Share as file] to send it without a size limit.',
-        tooBigTextBodyNoFile: (limitKb: number, sizeKb: string) =>
-            `Text sharing works up to ${limitKb} KB. This document is ${sizeKb} KB.\n` +
-            'There is no file to send for this document, so it cannot be sent as a file either.',
-        plainNoticeTitle: 'Sending it as it looks',
-        plainNoticeBody:
-            'Symbols like #, |, and ``` are stripped, and only the text you see is sent.\n' +
-            'Diagrams and images cannot be turned into text, so they appear as [Diagram] and [Image].',
-        sourceNoticeTitle: 'The raw source is sent',
-        sourceNoticeBody:
-            'The recipient gets the Markdown source (#, |, ```) as literal text, ' +
-            'not the rendered view.\n' +
-            'To send it without the symbols, use [Share as plain text].',
-        shareAsIs: 'Share as-is',
-    },
-
-    fatal: {
-        bootFailed: 'The app could not start. Please close it completely and open it again.',
-    },
+    shell: { saved: 'Saved.' },
 } as const;
 
 /**

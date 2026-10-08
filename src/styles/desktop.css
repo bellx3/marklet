@@ -1,5 +1,5 @@
 /*
- * 데스크톱(Electron) 전용 — src/desktop/main.ts 만 불러온다. 모바일 번들에는 들어가지 않는다.
+ * 데스크톱 렌더러 전용 — src/desktop/main.ts 가 불러온다.
  *
  * 목표는 '사진 뷰어'다. 화면에는 문서밖에 없다. 상단 바도 버튼도 없고,
  * 필요한 것은 메뉴(Alt) · 우클릭 · 단축키로 닿는다.
@@ -89,6 +89,10 @@
     .desktop .md-body {
         max-width: none;
         padding: 0;
+    }
+    /* 화면용 안내('클릭하면 크게 보기')는 종이에 찍지 않는다 */
+    .mermaid-block[data-mermaid-state='done'] .mermaid-svg::after {
+        content: none;
     }
     /* 쪽 끝에서 표 · 그림 · 코드가 반으로 잘리지 않게 */
     .md-body pre,

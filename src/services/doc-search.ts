@@ -91,13 +91,11 @@ function normalizeQuery(raw: string): { needle: string; choseong: boolean } | nu
      *   변환본의 인덱스를 원문 인덱스로 쓰는 이 코드에서 하이라이트가 어긋난다.
      *   그래서 **본문 자체가 NFD 인 문서는 여전히 안 잡힌다** — 알고 남겨 둔 한계다.
      *   맥은 파일 **이름**을 NFD 로 만들지 내용까지 바꾸지는 않으므로 드물다.
-     *   (이름 쪽은 hangul.ts matchesName 이 모아서 처리한다.)
      */
     const q = raw.normalize('NFC').trim();
     if (!q) return null;
     if (isChoseongQuery(q)) {
         // ★ 공백을 지우지 않는다. 지우면 본문 오프셋과 어긋난다.
-        //   (8-5절 matchesName 은 짧은 파일 이름이라 공백을 지워도 안전하다.)
         const t = q.replace(/\s+/g, '');
         if (t.length < MIN_CHOSEONG_LEN) return null;
         return { needle: lowerSameLength(q), choseong: true };
