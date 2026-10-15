@@ -236,8 +236,9 @@ pub fn viewer_ok(app: &AppHandle, path: &Path, text: &str, len: usize) -> bool {
     if !preview::native_wanted(native, len) {
         return false;
     }
+    // .txt 는 바로 편집 상태로 열린다 — 편집기는 웹 창에 있으므로 네이티브 뷰어를 거치지 않는다.
     if has_ext(path, &["txt"]) {
-        return true;
+        return false;
     }
     let f = preview::md::parse(text).features;
     !(f.needs_web() || (f.remote_images && remote))

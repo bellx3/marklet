@@ -21,6 +21,11 @@ interface TauriGlobal {
     event: {
         listen<T>(event: string, cb: (e: { payload: T }) => void): Promise<() => void>;
     };
+    webviewWindow?: {
+        getCurrentWebviewWindow(): {
+            listen<T>(event: string, cb: (e: { payload: T }) => void): Promise<() => void>;
+        };
+    };
 }
 
 declare global {
@@ -34,7 +39,11 @@ export function installTauriBridge(): void {
     // Tauri 밖(브라우저에서 열었거나 Electron)에서는 아무것도 하지 않는다. Electron 은 이미 window.marklet 이 있다.
     if (!tauri || window.marklet) return;
     const { invoke, convertFileSrc } = tauri.core;
-    const { listen } = tauri.event;
+    // ★ 전역 listen 은 다른 창을 겨냥한 emit_to 도 받는다 — 창이 둘이면 한 창의 편집 명령이 다른 창에도 닿는다.
+    //   이 창에 온 이벤트만 받도록 현재 창의 listen 을 쓴다.
+    const listen = (tauri.webviewWindow?.getCurrentWebviewWindow().listen ?? tauri.event.listen).bind(
+        tauri.webviewWindow?.getCurrentWebviewWindow() ?? tauri.event,
+    );
 
     /** listen 은 비동기다. 등록이 끝나기 전에 ready 를 부르면 첫 문서를 놓친다. */
     const listening: Promise<unknown>[] = [];
@@ -53,7 +62,11 @@ export function installTauriBridge(): void {
     function firstPaint(): Promise<void> {
         return new Promise((resolve) => {
             // 글이 붙는 조각(.md-chunk) 자체를 본다. 서식 없이 보는 문서(.txt)는 조각이 <pre> 하나라 그 안에 자식 요소가 없다.
-            const content = () => document.querySelector('.md-target .md-chunk, .md-frontmatter');
+            // 바로 편집 상태로 열린 문서(.txt)는 조각 대신 편집기가 화면에 있다 — 이것도 기다리지 않으면 2.5초 상한까지 간다.
+            const content = () =>
+                document.querySelector(
+                    '.md-target .md-chunk, .md-frontmatter, .desktop-editor:not([hidden])',
+                );
             const name = `marklet-first-block-${++docSeq}`;
             const watch = (root: Element) => {
                 let po: PerformanceObserver | null = null;

@@ -2409,7 +2409,8 @@ unsafe fn run(mut p: Params, handle: Handle) {
             } else {
                 md::parse(&src_prep)
             };
-            let mode = if native_ok && !needs_web(&doc, remote_on) {
+            // .txt 는 바로 편집 상태로 열린다 — 편집기는 웹 창에 있으므로 뷰어가 맡지 않는다.
+            let mode = if native_ok && !plain && !needs_web(&doc, remote_on) {
                 Mode::Viewer
             } else {
                 Mode::Preview

@@ -302,6 +302,11 @@ async function boot(): Promise<void> {
             editor.value = draft;
             return;
         }
+        if (!sameFile && showSource) {
+            // .txt 는 읽을 것이 없으니 바로 편집 상태로 연다.
+            setEditing(true);
+            return;
+        }
         body.hidden = false;
         await render(sameFile);
     }
