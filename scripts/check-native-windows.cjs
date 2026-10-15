@@ -141,15 +141,12 @@ const txt = doc('t.txt', Array.from({ length: 40 }, (_, i) => `줄 ${i + 1}: 서
     check('3 마지막 창을 닫으면 앱이 끝난다', waitFor(() => !alive(first.pid), 3000));
     kill(first.pid);
 }
-// 4. .txt 도 네이티브로 보인다(서식 없이)
+// 4. .txt 는 바로 편집 상태로 열린다 — 편집기는 웹 창에 있으니 네이티브 뷰어가 아니라 웹 창이 맡는다
 {
     freshState();
     const p = launch([txt]);
-    const ok = waitFor(() => views(p.pid).length === 1, 3000);
-    sleep(500);
-    const r = act(p.pid, 'clearclip;chord:ctrl+a;chord:ctrl+c;clip');
-    const clip = (r.clip?.[0] ?? '').replace(/\\n/g, '\n');
-    check('4 .txt 가 네이티브 창에 원문으로 보이고 전체 복사가 된다', ok && clip.startsWith('줄 1: 서식 없이') && clip.includes('줄 40:') && webviewProcs(p.pid) === 0, `${clip.split('\n').length}줄`);
+    sleep(3500);
+    check('4 .txt 는 웹 창이 맡는다(뷰어 · 미리보기는 걷혔다)', webs(p.pid).length === 1 && views(p.pid).length === 0 && previews(p.pid).length === 0 && webviewProcs(p.pid) > 0, `웹 ${webs(p.pid).length} · 네이티브 ${views(p.pid).length} · 미리보기 ${previews(p.pid).length}`);
     kill(p.pid);
 }
 // 5. 수식이 있는 문서는 웹 창으로 간다(미리보기 → 웹)
